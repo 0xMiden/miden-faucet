@@ -1,13 +1,13 @@
-# Contributing to Miden Faucet
+# Contributing to Miden Base
 
 #### First off, thanks for taking the time to contribute!
 
 We want to make contributing to this project as easy and transparent as possible, whether it's:
 
-- Reporting a [bug](https://github.com/0xMiden/miden-faucet/issues/new?assignees=&labels=bug&projects=&template=1-bugreport.yml)
-- Taking part in [discussions](https://github.com/0xMiden/miden-faucet/discussions)
-- Submitting a [fix](https://github.com/0xMiden/miden-faucet/pulls)
-- Proposing new [features](https://github.com/0xMiden/miden-faucet/issues/new?assignees=&labels=enhancement&projects=&template=2-feature-request.yml)
+- Reporting a [bug](https://github.com/0xMiden/miden-base/issues/new?assignees=&labels=bug&projects=&template=1-bugreport.yml)
+- Taking part in [discussions](https://github.com/0xMiden/miden-base/discussions)
+- Submitting a [fix](https://github.com/0xMiden/miden-base/pulls)
+- Proposing new [features](https://github.com/0xMiden/miden-base/issues/new?assignees=&labels=enhancement&projects=&template=2-feature-request.yml)
 
 &nbsp;
 
@@ -23,7 +23,8 @@ We are using [Github Flow](https://docs.github.com/en/get-started/quickstart/git
 
   For example, if the issue title is `Fix functionality X in component Y` then the branch name will be something like: `fix-x-in-y`.
 
-- New branch should be rebased from `next` before submitting a PR in case there have been changes to avoid merge commits. i.e. this branches state:
+- New branch should be rebased from `next` before submitting a PR in case there have been changes to avoid merge commits.
+  i.e. this branches state:
 
   ```
           A---B---C fix-x-in-y
@@ -45,7 +46,8 @@ We are using [Github Flow](https://docs.github.com/en/get-started/quickstart/git
 
 ### Commit messages
 
-- Commit messages should be written in a short, descriptive manner and be prefixed with tags for the change type and scope (if possible) according to the [semantic commit](https://gist.github.com/joshbuchea/6f47e86d2510bce28f8e7f42ae84c716) scheme. For example, a new change to the `pow` crate might have the following message: `feat(pow): make cleanup interval configurable`
+- Commit messages should be written in a short, descriptive manner and be prefixed with tags for the change type and scope (if possible) according to the [semantic commit](https://gist.github.com/joshbuchea/6f47e86d2510bce28f8e7f42ae84c716) scheme.
+  For example, a new change to the `miden-objects` crate might have the following message: `feat(miden-objects): Added Account deserialization`
 
 - Also squash commits to logically separated, distinguishable stages to keep git log clean:
 
@@ -74,7 +76,13 @@ We are using [Github Flow](https://docs.github.com/en/get-started/quickstart/git
   // ================================================================================
   ```
 
-- [Rustfmt](https://github.com/rust-lang/rustfmt), [Clippy](https://github.com/rust-lang/rust-clippy) and [Rustdoc](https://doc.rust-lang.org/rustdoc/index.html) linting is included in CI pipeline. Anyways it's preferable to run linting locally before push. To simplify running these commands in a reproducible manner we use `make` commands, you can run:
+- [Rustfmt](https://github.com/rust-lang/rustfmt), [Clippy](https://github.com/rust-lang/rust-clippy), [Rustdoc](https://doc.rust-lang.org/rustdoc/index.html), [Typos](https://github.com/crate-ci/typos) and [Taplo](https://github.com/tamasfe/taplo) linting is included in CI pipeline. Anyways it's preferable to run linting locally before push. To simplify running these commands in a reproducible manner we use `make` commands, you can install the required tools by running:
+
+  ```
+  make install-tools
+  ```
+
+  and then run:
 
   ```
   make lint
@@ -98,13 +106,13 @@ We use [semver](https://semver.org/) naming convention.
 
 ## Pre-PR checklist
 
-To make sure all commits adhere to our programming standards please follow the checklist:
+To make sure all commits adhere to our programming standards we use [pre-commit](https://pre-commit.com/) ([file](.pre-commit-config.yaml)) to run automatic commands on each commit. Please install it and follow the setup instructions for your machine.
 
 1. Repo forked and branch created from `next` according to the naming convention.
 2. Commit messages and code style follow conventions.
 3. Tests added for new functionality.
 4. Documentation/comments updated for all changes according to our documentation convention.
-5. Spellchecking ([typos](https://github.com/crate-ci/typos/tree/master?tab=readme-ov-file#install)), Rustfmt, Clippy and Rustdoc linting passed (run with `make lint`).
+5. Rustfmt, Clippy, Rustdoc, Typos and TOML-formatting linting passed (Will be run automatically by pre-commit).
 6. New branch rebased from `next`.
 
 &nbsp;
