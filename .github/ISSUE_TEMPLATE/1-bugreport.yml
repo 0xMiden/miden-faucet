@@ -6,36 +6,20 @@ body:
     attributes:
       value: |
         Thank you for taking the time to fill out this bug report!
-  - type: input
+  - type: textarea
     id: version
     attributes:
-      label: "Version"
-      description: "Which faucet version are you running?"
-      placeholder: "v0.9.0"
+      label: "Packages versions"
+      description: "Let us know the versions of any other packages used. For example, which version of the protocol are you using?"
+      placeholder: "miden-base: 0.1.0"
     validations:
       required: true
   - type: textarea
-    id: other-version
+    id: bug-description
     attributes:
-      label: "Other packages versions"
-      description: "Let us know of the versions of any other packages used. For example, which version of the client are you using?"
-      placeholder: "miden-client: v0.9.0"
-    validations:
-      required: false
-  - type: textarea
-    id: what-happened
-    attributes:
-      label: "What happened?"
+      label: "Bug description"
       description: "Describe the behavior you are experiencing."
-      placeholder: "Tell us what you see!"
-    validations:
-      required: true
-  - type: textarea
-    id: expected-to-happen
-    attributes:
-      label: "What should have happened?"
-      description: "Describe the behavior you expected to see."
-      placeholder: "Tell us what should have happened!"
+      placeholder: "Tell us what happened and what should have happened."
     validations:
       required: true
   - type: textarea
@@ -45,7 +29,7 @@ body:
       description: "If possible, describe how to replicate the unexpected behavior that you see."
       placeholder: "Steps!"
     validations:
-      required: true
+      required: false
   - type: textarea
     id: logs
     attributes:

@@ -96,19 +96,3 @@ jobs:
       - name: machete
         uses: bnjbvr/cargo-machete@main
 
-  proto:
-    name: proto check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@main
-      - name: Rustup
-        run: rustup update --no-self-update
-      - name: Install protobuf
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/next' }}
-      - name: Rebuild protos
-        run: make check
-      - name: Diff check
-        run: git diff --exit-code
