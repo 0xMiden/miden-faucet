@@ -1,4 +1,4 @@
-# Miden node
+# Miden faucet
 
 This crate contains a binary for running a Miden rollup faucet.
 
