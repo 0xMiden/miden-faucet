@@ -10,8 +10,8 @@ body:
     id: version
     attributes:
       label: "Packages versions"
-      description: "Let us know the versions of any other packages used. For example, which version of the protocol are you using?"
-      placeholder: "miden-base: 0.1.0"
+      description: "Let us know the versions of any other packages used. For example, which version of the faucet are you using?"
+      placeholder: "miden-faucet: 0.1.0"
     validations:
       required: true
   - type: textarea
