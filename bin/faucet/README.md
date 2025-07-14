@@ -1,6 +1,6 @@
 # Miden faucet
 
-This crate contains a binary for running a Miden rollup faucet.
+This crate contains a binary for running a Miden testnet faucet.
 
 ## Running the faucet
 
@@ -21,10 +21,12 @@ miden-faucet create-faucet-account \
 > [!TIP]
 > This account will not be created on chain yet, creation on chain will happen on the first minting transaction.
 
-
 3. Start the faucet server:
 ```bash
-miden-faucet start --endpoint http://localhost:8080 --node-url https://rpc.testnet.miden.io:443 --account <path to faucet.mac>
+miden-faucet start \
+  --endpoint http://localhost:8080 \
+  --node-url https://rpc.testnet.miden.io:443 \
+  --account <path to faucet.mac>
 ```
 
 After a few seconds you may go to `http://localhost:8080` and see the faucet UI.
@@ -33,18 +35,18 @@ After a few seconds you may go to `http://localhost:8080` and see the faucet UI.
 ## Faucet security features:
 The faucet implements several security measures to prevent abuse:
 
-1. **Proof of Work requests**:
+- **Proof of Work requests**:
   - Users must complete a computational challenge before their request is processed.
   - The challenge difficulty increases with the load. The load is measured by the amount of challenges that were submitted but still haven't expired.
   - **Rate limiting**: if an account submitted a challenge, it can't submit another one until the previous one is expired. The challenge lifetime duration is fixed and set when running the faucet.
   - **API Keys**: the faucet is initialized with a set of API Keys that can be distributed to developers. The difficulty of the challenges requested using the API Key will increase only with the load of that key, it won't be influenced by the overall load of the faucet.
 
-2. **Requests batching**:
+- **Requests batching**:
   - Maximum batch size: 100 requests
   - Requests are processed in batches to optimize performance
   - Failed requests within a batch are handled individually
 
-3. **Account rollbacks**:
+- **Account rollbacks**:
   - Faucet maintains the last 1000 account states for potential rollbacks
   - Is used in case a desync is detected
 
