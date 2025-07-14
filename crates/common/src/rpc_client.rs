@@ -13,7 +13,7 @@ use miden_objects::{
 use miden_tx::utils::{Deserializable, Serializable};
 use url::Url;
 
-use crate::faucet::FaucetId;
+use crate::FaucetId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcError {

@@ -2,8 +2,6 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::server::get_tokens::MintRequestError;
-
 // API KEY
 // ================================================================================================
 
@@ -40,14 +38,14 @@ impl ApiKey {
     }
 
     /// Decodes the API key from a string.
-    pub fn decode(api_key_str: &str) -> Result<Self, MintRequestError> {
+    pub fn decode(api_key_str: &str) -> Result<Self, anyhow::Error> {
         let api_key_str = api_key_str.trim_start_matches(API_KEY_PREFIX).to_string();
-        let bytes = BASE64_STANDARD
-            .decode(api_key_str.as_bytes())
-            .map_err(|_| MintRequestError::InvalidApiKey(api_key_str.clone()))?;
-
-        let api_key =
-            Self(bytes.try_into().map_err(|_| MintRequestError::InvalidApiKey(api_key_str))?);
+        let bytes = BASE64_STANDARD.decode(api_key_str.as_bytes())?;
+        let api_key = Self(
+            bytes
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("invalid API key: {api_key_str}"))?,
+        );
         Ok(api_key)
     }
 }
@@ -57,7 +55,7 @@ mod tests {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::server::{ApiKey, api_key::API_KEY_PREFIX};
+    use crate::server::api_key::{API_KEY_PREFIX, ApiKey};
 
     #[test]
     fn api_key_encode_and_decode() {

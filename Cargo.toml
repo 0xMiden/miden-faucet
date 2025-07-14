@@ -1,5 +1,5 @@
 [workspace]
-members = ["bin/faucet"]
+members = ["bin/faucet", "crates/backend", "crates/common", "crates/frontend"]
 
 resolver = "2"
 
@@ -19,32 +19,42 @@ version      = "0.10.0"
 opt-level = 2
 
 [workspace.dependencies]
+miden-faucet-backend  = { path = "crates/backend" }
+miden-faucet-common   = { path = "crates/common" }
+miden-faucet-frontend = { path = "crates/frontend" }
+
 # miden-node dependencies.
-miden-node-block-producer  = { version = "0.10.0" }
-miden-node-proto           = { version = "0.10.0" }
-miden-node-rpc             = { version = "0.10.0" }
-miden-node-utils           = { version = "0.10.0" }
-miden-remote-prover-client = { version = "0.10.0" }
+miden-node-block-producer  = { version = "0.10" }
+miden-node-proto           = { version = "0.10" }
+miden-node-rpc             = { version = "0.10" }
+miden-node-utils           = { version = "0.10" }
+miden-remote-prover-client = { version = "0.10" }
 
 # miden-base aka protocol dependencies. These should be updated in sync.
-miden-lib     = { version = "0.10.0" }
-miden-objects = { default-features = false, version = "0.10.0" }
-miden-testing = { version = "0.10.0" }
-miden-tx      = { default-features = false, version = "0.10.0" }
+miden-lib     = { version = "0.10" }
+miden-objects = { default-features = false, version = "0.10" }
+miden-testing = { version = "0.10" }
+miden-tx      = { default-features = false, version = "0.10" }
 
 # External dependencies
 anyhow       = { version = "1.0" }
+async-trait  = { version = "0.1" }
+axum         = { version = "0.8" }
+base64       = { version = "0.22" }
 http         = { version = "1.3" }
 humantime    = { version = "2.2" }
 rand         = { version = "0.9" }
+rand_chacha  = { version = "0.9" }
+serde        = { version = "1.0" }
+serde_json   = { version = "1.0" }
 thiserror    = { default-features = false, version = "2.0" }
-tokio        = { features = ["rt-multi-thread"], version = "1.46" }
+tokio        = { version = "1.46" }
 tokio-stream = { version = "0.1" }
 tonic        = { version = "0.13" }
 tower        = { version = "0.5" }
 tower-http   = { features = ["cors", "trace"], version = "0.6" }
 tracing      = { version = "0.1" }
-url          = { features = ["serde"], version = "2.5" }
+url          = { version = "2.5" }
 
 # Lints are set to warn for development, which are promoted to errors in CI.
 [workspace.lints.clippy]

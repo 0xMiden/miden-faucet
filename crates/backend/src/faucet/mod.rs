@@ -1,6 +1,10 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use anyhow::{Context, anyhow};
+use miden_faucet_common::{
+    AssetAmount, FaucetId,
+    rpc_client::{RpcClient, RpcError},
+};
 use miden_lib::{
     account::{
         faucets::BasicFungibleFaucet,
@@ -31,7 +35,6 @@ use miden_tx::{
     utils::parse_hex_string_as_word,
 };
 use rand::{Rng, rng, rngs::StdRng};
-use serde::Serialize;
 use store::FaucetDataStore;
 use tokio::sync::mpsc::Receiver;
 use tonic::Code;
@@ -39,10 +42,7 @@ use tracing::{error, info, instrument, warn};
 use updates::{ClientUpdater, MintUpdate, ResponseSender};
 use url::Url;
 
-use crate::{
-    rpc_client::{RpcClient, RpcError},
-    types::{AssetAmount, NoteType},
-};
+use crate::types::NoteType;
 
 mod store;
 mod updates;
@@ -97,31 +97,6 @@ impl FaucetProver {
 
 // FAUCET CLIENT
 // ================================================================================================
-
-/// The faucet's account ID and network ID.
-///
-/// Used as a type safety mechanism to avoid confusion with user account IDs, and allows us to
-/// implement traits.
-#[derive(Clone, Copy)]
-pub struct FaucetId {
-    pub account_id: AccountId,
-    pub network_id: NetworkId,
-}
-
-impl FaucetId {
-    pub fn new(account_id: AccountId, network_id: NetworkId) -> Self {
-        Self { account_id, network_id }
-    }
-}
-
-impl Serialize for FaucetId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.account_id.to_bech32(self.network_id))
-    }
-}
 
 /// A request for minting to the [`Faucet`].
 pub struct MintRequest {
@@ -333,7 +308,7 @@ impl Faucet {
             // This can occur if the node restarts (dropping inflight txs), or if inflight txs got
             // dropped.
             MintError::Submission(RpcError::Transport(err))
-                if err.code() == tonic::Code::InvalidArgument
+                if err.code() == Code::InvalidArgument
                     && err.message().contains("incorrect initial state commitment") =>
             {
                 self.handle_desync(err.message()).with_context(|| {
@@ -524,6 +499,7 @@ impl P2IdNotes {
 mod tests {
     use std::{str::FromStr, sync::Mutex, time::Duration};
 
+    use miden_faucet_common::{AssetOptions, stub_rpc_api::serve_stub};
     use miden_lib::{AuthScheme, account::faucets::create_basic_fungible_faucet};
     use miden_node_block_producer::errors::{AddTransactionError, VerifyTxError};
     use miden_node_utils::crypto::get_rpo_random_coin;
@@ -538,7 +514,6 @@ mod tests {
     use url::Url;
 
     use super::*;
-    use crate::{stub_rpc_api::serve_stub, types::AssetOptions};
 
     /// This test ensures that the we are able to parse account mismatch errors
     /// provided by the block-producer.

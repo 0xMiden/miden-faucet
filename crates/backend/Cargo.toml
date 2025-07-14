@@ -1,0 +1,51 @@
+[package]
+authors.workspace      = true
+description            = "Miden faucet's backend component"
+edition.workspace      = true
+homepage.workspace     = true
+keywords               = ["backend", "faucet", "miden"]
+license.workspace      = true
+name                   = "miden-faucet-backend"
+readme                 = "README.md"
+repository.workspace   = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Workspace dependencies.
+miden-faucet-common = { workspace = true }
+
+# Miden dependencies.
+miden-lib                  = { workspace = true }
+miden-node-utils           = { workspace = true }
+miden-objects              = { workspace = true }
+miden-remote-prover-client = { features = ["tx-prover"], workspace = true }
+miden-tx                   = { features = ["async", "concurrent"], workspace = true }
+
+# External dependencies.
+anyhow       = { workspace = true }
+async-trait  = { workspace = true }
+axum         = { features = ["tokio"], workspace = true }
+base64       = { workspace = true }
+http         = { workspace = true }
+rand         = { features = ["thread_rng"], workspace = true }
+rand_chacha  = { workspace = true }
+serde        = { features = ["derive"], workspace = true }
+serde_json   = { workspace = true }
+sha3         = { version = "0.10" }
+thiserror    = { workspace = true }
+tokio        = { features = ["fs"], workspace = true }
+tokio-stream = { features = ["net"], workspace = true }
+tonic        = { workspace = true }
+tower        = { workspace = true }
+tower-http   = { features = ["cors", "set-header", "trace"], workspace = true }
+tracing      = { workspace = true }
+url          = { workspace = true }
+
+[dev-dependencies]
+fantoccini                = { version = "0.22" }
+miden-faucet-common       = { features = ["testing"], workspace = true }
+miden-node-block-producer = { features = ["testing"], workspace = true }

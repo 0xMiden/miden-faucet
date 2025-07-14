@@ -2,6 +2,7 @@ use std::convert::Infallible;
 
 use axum::response::sse::Event;
 use base64::{Engine, engine::general_purpose};
+use miden_faucet_common::network::ExplorerUrl;
 use miden_objects::{
     account::{AccountId, NetworkId},
     block::BlockNumber,
@@ -10,8 +11,6 @@ use miden_objects::{
     utils::Serializable,
 };
 use tokio::sync::mpsc::Sender;
-
-use crate::network::ExplorerUrl;
 
 pub type ResponseSender = Sender<Result<Event, Infallible>>;
 
