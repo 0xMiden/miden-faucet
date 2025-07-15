@@ -1,5 +1,4 @@
 mod faucet;
-mod rpc_client;
 mod server;
 mod types;
 
@@ -22,7 +21,6 @@ use miden_objects::{
 };
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use rpc_client::RpcClient;
 use server::Server;
 use tokio::sync::mpsc;
 use types::AssetOptions;
@@ -206,8 +204,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             api_keys,
             open_telemetry: _,
         } => {
-            let mut rpc_client = RpcClient::connect_lazy(&node_url, timeout.as_millis() as u64)
-                .context("failed to create RPC client")?;
             let account_file = AccountFile::read(&faucet_account_path).context(format!(
                 "failed to load faucet account from file ({})",
                 faucet_account_path.display()
@@ -216,7 +212,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let faucet = Faucet::load(
                 network.to_network_id()?,
                 account_file,
-                &mut rpc_client,
+                &node_url,
+                timeout,
                 remote_tx_prover_url,
             )
             .await?;
@@ -249,7 +246,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             // Use select to concurrently:
             // - Run and wait for the faucet (on current thread)
             // - Run and wait for server (in a spawned task)
-            let faucet_future = faucet.run(rpc_client, rx_requests);
+            let faucet_future = faucet.run(rx_requests);
             let server_future = async {
                 let server_handle =
                     tokio::spawn(

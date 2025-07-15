@@ -20,17 +20,16 @@ opt-level = 2
 
 [workspace.dependencies]
 # miden-node dependencies.
-miden-node-block-producer  = { version = "0.10.0" }
-miden-node-proto           = { version = "0.10.0" }
-miden-node-rpc             = { version = "0.10.0" }
 miden-node-utils           = { version = "0.10.0" }
 miden-remote-prover-client = { version = "0.10.0" }
 
 # miden-base aka protocol dependencies. These should be updated in sync.
 miden-lib     = { version = "0.10.0" }
 miden-objects = { default-features = false, version = "0.10.0" }
-miden-testing = { version = "0.10.0" }
 miden-tx      = { default-features = false, version = "0.10.0" }
+
+# miden-client dependencies.
+miden-client = { features = ["tonic"], version = "0.10.0" }
 
 # External dependencies
 anyhow       = { version = "1.0" }

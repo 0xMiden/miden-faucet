@@ -62,7 +62,6 @@ impl ClientUpdater {
 pub enum MintUpdate<'a> {
     Built,
     Executed,
-    Proven,
     Submitted,
     Minted(&'a Note, BlockNumber, TransactionId, NetworkId),
 }
@@ -72,7 +71,6 @@ impl MintUpdate<'_> {
     /// Event types:
     /// - `MintUpdate::Built`: event type "update"
     /// - `MintUpdate::Executed`: event type "update"
-    /// - `MintUpdate::Proven`: event type "update"
     /// - `MintUpdate::Submitted`: event type "update"
     /// - `MintUpdate::Minted`: event type "note". Contains the note encoded in base64 if it is
     ///   private.
@@ -114,7 +112,6 @@ impl MintUpdate<'_> {
             },
             MintUpdate::Built => Event::default().event("update").data("Built"),
             MintUpdate::Executed => Event::default().event("update").data("Executed"),
-            MintUpdate::Proven => Event::default().event("update").data("Proven"),
             MintUpdate::Submitted => Event::default().event("update").data("Submitted"),
         }
     }

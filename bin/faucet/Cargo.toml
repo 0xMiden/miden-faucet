@@ -16,9 +16,8 @@ workspace = true
 
 [dependencies]
 # Miden dependencies.
+miden-client               = { features = ["sqlite", "tonic"], workspace = true }
 miden-lib                  = { workspace = true }
-miden-node-proto           = { workspace = true }
-miden-node-rpc             = { workspace = true }
 miden-node-utils           = { workspace = true }
 miden-objects              = { workspace = true }
 miden-remote-prover-client = { features = ["tx-prover"], workspace = true }
@@ -53,9 +52,10 @@ miden-node-utils = { features = ["vergen"], workspace = true }
 
 [dev-dependencies]
 fantoccini                = { version = "0.22" }
-miden-node-block-producer = { features = ["testing"], workspace = true }
+miden-node-block-producer = { features = ["testing"], version = "0.10.0" }
+miden-node-proto          = { version = "0.10.0" }
 miden-objects             = { features = ["testing"], workspace = true }
-miden-testing             = { features = ["async"], workspace = true }
+miden-testing             = { features = ["async"], version = "0.10.0" }
 serde_json                = { version = "1.0" }
 tokio                     = { features = ["process"], workspace = true }
 tokio-stream              = { features = ["net"], workspace = true }
