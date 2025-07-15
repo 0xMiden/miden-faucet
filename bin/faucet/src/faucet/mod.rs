@@ -18,7 +18,7 @@ use miden_objects::{
     transaction::TransactionId,
 };
 use miden_remote_prover_client::remote_prover::tx_prover::RemoteTransactionProver;
-use miden_tx::{LocalTransactionProver, ProvingOptions, TransactionProver};
+use miden_tx::{LocalTransactionProver, ProvingOptions, TransactionProver, TransactionProverError};
 use rand::{Rng, rng, rngs::StdRng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
@@ -68,8 +68,6 @@ pub struct MintRequest {
     pub asset_amount: AssetAmount,
 }
 
-type MintResult<T> = Result<T, ClientError>;
-
 /// Stores the current faucet state and handles minting requests.
 pub struct Faucet {
     id: FaucetId,
@@ -82,6 +80,7 @@ impl Faucet {
     /// Loads the faucet state from the node and the account file.
     #[instrument(name = "faucet.load", fields(id), skip_all)]
     pub async fn load(
+        store_path: PathBuf,
         network_id: NetworkId,
         account_file: AccountFile,
         node_url: &Url,
@@ -96,15 +95,13 @@ impl Faucet {
         keystore.add_key(
             account_file.auth_secret_keys.first().context("account file has no auth keys")?,
         )?;
-        let store_path = PathBuf::from("store.sqlite3");
         let endpoint = Endpoint::try_from(node_url.as_str())
             .map_err(|e| anyhow::anyhow!("failed to parse node url: {e}"))?;
 
-        let mut client = ClientBuilder::new()
-            .sqlite_store(store_path.to_str().context("invalid store path")?)
+        let mut client = ClientBuilder::default()
             .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
-            .tx_graceful_blocks(Some(100))  // TODO: make it constant or config?
+            .sqlite_store(store_path.to_str().context("invalid store path")?)
             .build()
             .await?;
 
@@ -194,23 +191,20 @@ impl Faucet {
         Ok(())
     }
 
-    /// Fully handles a batch of requests _without_ changing local state.
-    ///
-    /// Caller should update the local state based on the returned result.
+    /// Fully handles a batch of requests to create and submit a transaction, and updates the local
+    /// db.
     async fn handle_request_batch(
         &mut self,
         requests: &[MintRequest],
         updater: &ClientUpdater,
-    ) -> MintResult<(Vec<Note>, TransactionId)> {
+    ) -> Result<(Vec<Note>, TransactionId), ClientError> {
         let mut thread_rng = rng();
         let coin_seed: [u64; 4] = thread_rng.random();
 
         let mut rng = RpoRandomCoin::new(coin_seed.map(Felt::new));
 
         // Build the notes
-        let p2_id_notes = P2IdNotes::build(self.id, self.decimals, requests, &mut rng)?;
-        // TODO: remove p2id notes wrapper?
-        let notes = p2_id_notes.into_inner();
+        let notes = build_p2id_notes(self.id, self.decimals, requests, &mut rng)?;
         let output_notes: Vec<OutputNote> =
             notes.clone().into_iter().map(OutputNote::Full).collect();
         let tx = TransactionRequestBuilder::new().own_output_notes(output_notes).build()?;
@@ -218,14 +212,24 @@ impl Faucet {
 
         // Execute the transaction
         let tx_result = self.client.new_transaction(self.id.account_id, tx).await?;
+        let tx_id = tx_result.executed_transaction().id();
         updater.send_updates(MintUpdate::Executed).await;
 
-        let tx_id = tx_result.executed_transaction().id();
         // Prove and submit the transaction
-        // TODO: fallback to local prover if remote fails
-        self.client
-            .submit_transaction_with_prover(tx_result, self.tx_prover.clone())
-            .await?;
+        match self
+            .client
+            .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone())
+            .await
+        {
+            Err(ClientError::TransactionProvingError(TransactionProverError::Other { .. })) => {
+                info!(
+                    "Failed to prove transaction with remote prover, falling back to local prover"
+                );
+                self.client.submit_transaction(tx_result).await?;
+            },
+            Ok(()) => {},
+            Err(err) => return Err(err),
+        }
         updater.send_updates(MintUpdate::Submitted).await;
 
         Ok((notes, tx_id))
@@ -240,30 +244,25 @@ impl Faucet {
 // HELPER FUNCTIONS
 // ================================================================================================
 
-/// A collection of `P2Id` notes.
-#[derive(Clone)]
-struct P2IdNotes(Vec<Note>);
-
-impl P2IdNotes {
-    /// Builds a collection of `P2Id` notes from a set of mint requests.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if creating any p2id note fails.
-    fn build(
-        source: FaucetId,
-        decimals: u8,
-        requests: &[MintRequest],
-        rng: &mut RpoRandomCoin,
-    ) -> Result<Self, NoteError> {
-        // If building a note fails, we discard the whole batch. Should never happen, since account
-        // ids are validated on the request level.
-        let mut notes = Vec::new();
-        for request in requests {
-            let amount = request.asset_amount.inner() * 10u64.pow(decimals.into());
-            // SAFETY: source is definitely a faucet account, and the amount is valid.
-            let asset = FungibleAsset::new(source.account_id, amount).unwrap();
-            let note = create_p2id_note(
+/// Builds a collection of `P2Id` notes from a set of mint requests.
+///
+/// # Errors
+///
+/// Returns an error if creating any p2id note fails.
+fn build_p2id_notes(
+    source: FaucetId,
+    decimals: u8,
+    requests: &[MintRequest],
+    rng: &mut RpoRandomCoin,
+) -> Result<Vec<Note>, NoteError> {
+    // If building a note fails, we discard the whole batch. Should never happen, since account
+    // ids are validated on the request level.
+    let mut notes = Vec::new();
+    for request in requests {
+        let amount = request.asset_amount.inner() * 10u64.pow(decimals.into());
+        // SAFETY: source is definitely a faucet account, and the amount is valid.
+        let asset = FungibleAsset::new(source.account_id, amount).unwrap();
+        let note = create_p2id_note(
                 source.account_id,
                 request.account_id,
                 vec![asset.into()],
@@ -271,14 +270,9 @@ impl P2IdNotes {
                 Felt::default(),
                 rng,
             ).inspect_err(|err| tracing::error!(request.account_id=%request.account_id, ?err, "failed to build note"))?;
-            notes.push(note);
-        }
-        Ok(Self(notes))
+        notes.push(note);
     }
-
-    fn into_inner(self) -> Vec<Note> {
-        self.0
-    }
+    Ok(notes)
 }
 
 #[cfg(test)]
@@ -349,6 +343,7 @@ mod tests {
             );
 
             Faucet::load(
+                PathBuf::from("store.sqlite3"),
                 NetworkId::Testnet,
                 account_file,
                 &stub_node_url,

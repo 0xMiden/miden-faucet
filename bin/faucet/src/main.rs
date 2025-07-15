@@ -51,6 +51,7 @@ const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
 const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
+const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 
 // COMMANDS
 // ================================================================================================
@@ -132,6 +133,10 @@ pub enum Command {
         /// OpenTelemetry documentation. See our operator manual for further details.
         #[arg(long = "enable-otel", value_name = "BOOL", default_value_t = false, env = ENV_ENABLE_OTEL)]
         open_telemetry: bool,
+
+        /// Path to the `SQLite` store.
+        #[arg(long = "store", value_name = "FILE", default_value = "store.sqlite3", env = ENV_STORE)]
+        store_path: PathBuf,
     },
 
     /// Create a new public faucet account and save to the specified file.
@@ -203,6 +208,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             pow_baseline,
             api_keys,
             open_telemetry: _,
+            store_path,
         } => {
             let account_file = AccountFile::read(&faucet_account_path).context(format!(
                 "failed to load faucet account from file ({})",
@@ -210,6 +216,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             ))?;
 
             let faucet = Faucet::load(
+                store_path,
                 network.to_network_id()?,
                 account_file,
                 &node_url,
@@ -343,6 +350,7 @@ mod test {
     use std::{
         env::temp_dir,
         num::NonZeroUsize,
+        path::PathBuf,
         process::Stdio,
         str::FromStr,
         time::{Duration, Instant},
@@ -520,6 +528,7 @@ mod test {
                         faucet_account_path: faucet_account_path.clone(),
                         remote_tx_prover_url: None,
                         open_telemetry: false,
+                        store_path: PathBuf::from("store.sqlite3"),
                     },
                 })
                 .await
