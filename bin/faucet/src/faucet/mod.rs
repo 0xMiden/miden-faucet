@@ -109,7 +109,7 @@ impl Faucet {
 
         match client.import_account_by_id(account.id()).await {
             Ok(()) => {
-                // SAFETY: if import was successful, the account is in the client
+                // SAFETY: if import was successful, the account is tracked by the client
                 let record = client.get_account(account.id()).await?.unwrap();
                 info!(
                     commitment = %record.account().commitment(),
@@ -134,7 +134,7 @@ impl Faucet {
                         "Loaded state from existing local client db"
                     );
                 },
-                Err(err) => anyhow::bail!("failed to load account from file: {err}"),
+                Err(err) => anyhow::bail!("failed to add account from file: {err}"),
             },
         }
 
