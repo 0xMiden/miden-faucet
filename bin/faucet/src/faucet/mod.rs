@@ -18,7 +18,7 @@ use miden_objects::{
     transaction::TransactionId,
 };
 use miden_remote_prover_client::remote_prover::tx_prover::RemoteTransactionProver;
-use miden_tx::{LocalTransactionProver, ProvingOptions, TransactionProver, TransactionProverError};
+use miden_tx::{LocalTransactionProver, ProvingOptions, TransactionProver};
 use rand::{Rng, rng, rngs::StdRng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
