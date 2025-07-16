@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const loading = document.getElementById('loading');
     const status = document.getElementById("loading-status");
     const txLink = document.getElementById('tx-link');
+    const downloadNoteButton = document.getElementById('download-note');
 
     // Check if SHA3 is available right from the start
     if (typeof sha3_256 === 'undefined') {
@@ -26,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     privateButton.addEventListener('click', () => { handleButtonClick(true) });
     publicButton.addEventListener('click', () => { handleButtonClick(false) });
+    downloadNoteButton.addEventListener('click', () => { requestNote() });
 
     function fetchMetadata() {
         fetch(window.location.href + 'get_metadata')
@@ -84,6 +86,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function handleButtonClick(isPrivateNote) {
         let accountAddress = accountAddressInput.value.trim();
+        accountIdElem.textContent = accountAddress;
         hideError();
 
         if (!validateAccountAddress(accountAddress)) {
@@ -164,7 +167,7 @@ document.addEventListener('DOMContentLoaded', function () {
             status.textContent = event.data;
         });
 
-        evtSource.addEventListener("note", function (event) {
+        evtSource.addEventListener("minted", function (event) {
             evtSource.close();
 
             let data = JSON.parse(event.data);
@@ -172,27 +175,11 @@ document.addEventListener('DOMContentLoaded', function () {
             setLoadingState(false);
 
             noteIdElem.textContent = data.note_id;
-            accountIdElem.textContent = data.account_id;
-            if (isPrivateNote) {
-                importCommand.style.display = 'block';
-
-                // Decode base64
-                const binaryString = atob(data.data_base64);
-                const byteArray = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                    byteArray[i] = binaryString.charCodeAt(i);
-                }
-
-                const blob = new Blob([byteArray], { type: 'application/octet-stream' });
-                downloadBlob(blob, 'note.mno');
-            } else {
-                importCommand.style.display = 'none';
-            }
-
+            importCommand.style.display = isPrivateNote ? 'block' : 'none';
+            downloadNoteButton.style.display = isPrivateNote ? 'block' : 'none';
             txLink.textContent = data.transaction_id;
             info.style.visibility = 'visible';
             importCommand.style.visibility = 'visible';
-            // If the explorer URL is available, set the link.
             if (data.explorer_url) {
                 txLink.href = data.explorer_url + '/tx/' + data.transaction_id;
             }
@@ -255,5 +242,26 @@ document.addEventListener('DOMContentLoaded', function () {
         a.click();
         a.remove();
         window.URL.revokeObjectURL(url);
+    }
+
+    async function requestNote() {
+        const response = await fetch(window.location.href + 'get_notes?' + new URLSearchParams({
+            note_id: noteIdElem.textContent
+        }));
+        if (!response.ok) {
+            showError('Failed to download note: ' + await response.text());
+            info.style.visibility = 'visible';
+            return;
+        }
+        const data = await response.json();
+        // Decode base64
+        const binaryString = atob(data.data_base64);
+        const byteArray = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            byteArray[i] = binaryString.charCodeAt(i);
+        }
+
+        const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+        downloadBlob(blob, 'note.mno');
     }
 });

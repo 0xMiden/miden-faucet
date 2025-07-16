@@ -8,7 +8,7 @@ use miden_client::{
     builder::ClientBuilder,
     crypto::RpoRandomCoin,
     keystore::FilesystemKeyStore,
-    note::{Note, NoteError, create_p2id_note},
+    note::{NoteError, NoteId, create_p2id_note},
     rpc::Endpoint,
     transaction::{
         LocalTransactionProver, OutputNote, TransactionId, TransactionProver,
@@ -20,12 +20,14 @@ use rand::{rng, rngs::StdRng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
 use tracing::{info, instrument, warn};
-use updates::{ClientUpdater, MintUpdate, ResponseSender};
+use updates::{ClientUpdater, MintUpdate};
 use url::Url;
 
 use crate::types::{AssetAmount, NoteType};
 
 mod updates;
+
+pub use updates::MintResponseSender;
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -80,7 +82,7 @@ impl Faucet {
         store_path: PathBuf,
         network_id: NetworkId,
         account_file: AccountFile,
-        node_url: &Url,
+        endpoint: &Endpoint,
         timeout: Duration,
         remote_tx_prover_url: Option<Url>,
     ) -> anyhow::Result<Self> {
@@ -92,11 +94,8 @@ impl Faucet {
         keystore.add_key(
             account_file.auth_secret_keys.first().context("account file has no auth keys")?,
         )?;
-        let endpoint = Endpoint::try_from(node_url.as_str())
-            .map_err(|e| anyhow::anyhow!("failed to parse node url: {e}"))?;
-
-        let mut client = ClientBuilder::new()
-            .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
+        let mut client = ClientBuilder::default()
+            .tonic_rpc_client(endpoint, Some(timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
             .sqlite_store(store_path.to_str().context("invalid store path")?)
             .build()
@@ -156,14 +155,14 @@ impl Faucet {
     /// error.
     pub async fn run(
         mut self,
-        mut requests: Receiver<(MintRequest, ResponseSender)>,
+        mut requests: Receiver<(MintRequest, MintResponseSender)>,
     ) -> anyhow::Result<()> {
         let mut buffer = Vec::new();
-        let limit = 100; // we could include 256 notes per tx, but requests channel is limited to 100 atm
+        let limit = 256; // also limited by the queue size `REQUESTS_QUEUE_SIZE`
 
         while requests.recv_many(&mut buffer, limit).await > 0 {
             // Skip requests where the user no longer cares about the result.
-            let (requests, response_senders): (Vec<MintRequest>, Vec<ResponseSender>) = buffer
+            let (requests, response_senders): (Vec<MintRequest>, Vec<MintResponseSender>) = buffer
                 .drain(..)
                 .filter(|(request, response_sender)| {
                     if response_sender.is_closed() {
@@ -175,12 +174,17 @@ impl Faucet {
                 })
                 .unzip();
 
-            let updater = ClientUpdater::new(response_senders, self.id.network_id);
+            let updater = ClientUpdater::new(response_senders);
 
-            let (notes, tx_id) = self.handle_request_batch(&requests, &updater).await?;
+            let (tx_id, note_ids) = self.handle_request_batch(&requests, &updater).await?;
 
-            let block_height = self.client.get_sync_height().await?;
-            updater.send_notes(block_height, &notes, tx_id).await;
+            for note_id in note_ids {
+                updater
+                    .send_updates(MintUpdate::Minted(note_id, tx_id, self.id.network_id))
+                    .await;
+            }
+
+            self.client.sync_state().await?;
         }
 
         tracing::info!("Request stream closed, shutting down minter");
@@ -194,14 +198,13 @@ impl Faucet {
         &mut self,
         requests: &[MintRequest],
         updater: &ClientUpdater,
-    ) -> Result<(Vec<Note>, TransactionId), ClientError> {
+    ) -> Result<(TransactionId, Vec<NoteId>), ClientError> {
         let mut rng = get_rpo_random_coin(&mut rng());
 
         // Build the notes
         let notes = build_p2id_notes(self.id, self.decimals, requests, &mut rng)?;
-        let output_notes: Vec<OutputNote> =
-            notes.clone().into_iter().map(OutputNote::Full).collect();
-        let tx = TransactionRequestBuilder::new().own_output_notes(output_notes).build()?;
+        let note_ids = notes.iter().map(OutputNote::id).collect();
+        let tx = TransactionRequestBuilder::new().own_output_notes(notes).build()?;
         updater.send_updates(MintUpdate::Built).await;
 
         // Execute the transaction
@@ -221,7 +224,7 @@ impl Faucet {
         }
         updater.send_updates(MintUpdate::Submitted).await;
 
-        Ok((notes, tx_id))
+        Ok((tx_id, note_ids))
     }
 
     /// Returns the id of the faucet account.
@@ -243,7 +246,7 @@ fn build_p2id_notes(
     decimals: u8,
     requests: &[MintRequest],
     rng: &mut RpoRandomCoin,
-) -> Result<Vec<Note>, NoteError> {
+) -> Result<Vec<OutputNote>, NoteError> {
     // If building a note fails, we discard the whole batch. Should never happen, since account
     // ids are validated on the request level.
     let mut notes = Vec::new();
@@ -259,7 +262,7 @@ fn build_p2id_notes(
                 Felt::default(),
                 rng,
             ).inspect_err(|err| tracing::error!(request.account_id=%request.account_id, ?err, "failed to build note"))?;
-        notes.push(note);
+        notes.push(OutputNote::Full(note));
     }
     Ok(notes)
 }
@@ -334,7 +337,7 @@ mod tests {
                 PathBuf::from("store.sqlite3"),
                 NetworkId::Testnet,
                 account_file,
-                &stub_node_url,
+                &Endpoint::try_from(stub_node_url.as_str()).unwrap(),
                 Duration::from_secs(10),
                 None,
             )
@@ -355,8 +358,8 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let (notes, tx_id) = faucet
-            .handle_request_batch(&requests, &ClientUpdater::new(vec![], NetworkId::Testnet))
+        let (tx_id, note_ids) = faucet
+            .handle_request_batch(&requests, &ClientUpdater::new(vec![]))
             .await
             .unwrap();
 
@@ -369,6 +372,9 @@ mod tests {
             .unwrap()
             .clone();
         assert_eq!(tx.details.output_notes.num_notes(), num_requests as usize);
-        assert_eq!(notes.len(), num_requests as usize);
+        assert_eq!(
+            tx.details.output_notes.iter().map(OutputNote::id).collect::<Vec<_>>(),
+            note_ids
+        );
     }
 }
