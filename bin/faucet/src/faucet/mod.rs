@@ -2,21 +2,17 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use miden_client::{
-    Client, ClientError,
-    builder::ClientBuilder,
-    keystore::FilesystemKeyStore,
-    rpc::Endpoint,
-    transaction::{OutputNote, TransactionRequestBuilder},
-};
-use miden_lib::{account::faucets::BasicFungibleFaucet, note::create_p2id_note};
-use miden_objects::{
-    Felt, NoteError,
-    account::{AccountFile, AccountId, NetworkId},
+    Client, ClientError, Felt,
+    account::{AccountFile, AccountId, component::BasicFungibleFaucet},
     asset::FungibleAsset,
-    crypto::rand::RpoRandomCoin,
-    note::Note,
-    transaction::TransactionId,
+    builder::ClientBuilder,
+    crypto::RpoRandomCoin,
+    keystore::FilesystemKeyStore,
+    note::{Note, NoteError, create_p2id_note},
+    rpc::Endpoint,
+    transaction::{OutputNote, TransactionId, TransactionRequestBuilder},
 };
+use miden_objects::account::NetworkId;
 use miden_remote_prover_client::remote_prover::tx_prover::RemoteTransactionProver;
 use miden_tx::{LocalTransactionProver, ProvingOptions, TransactionProver};
 use rand::{Rng, rng, rngs::StdRng};
@@ -275,18 +271,15 @@ mod tests {
     use std::{str::FromStr, time::Duration};
 
     use miden_client::{
+        account::{AccountBuilder, AccountStorageMode, AccountType, component::RpoFalcon512},
+        asset::TokenSymbol,
         auth::AuthSecretKey,
+        crypto::SecretKey,
         note::BlockNumber,
         rpc::{NodeRpcClient, TonicRpcClient},
         store::TransactionFilter,
     };
-    use miden_lib::{AuthScheme, account::faucets::create_basic_fungible_faucet};
     use miden_node_utils::crypto::get_rpo_random_coin;
-    use miden_objects::{
-        account::{AccountIdVersion, AccountStorageMode, AccountType},
-        asset::TokenSymbol,
-        crypto::dsa::rpo_falcon512::SecretKey,
-    };
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
     use tokio::time::{Instant, sleep};
@@ -296,6 +289,7 @@ mod tests {
     use crate::{stub_rpc_api::serve_stub, types::AssetOptions};
 
     // This test ensures that the faucet can create a transaction that outputs a batch of notes.
+    #[allow(clippy::cast_sign_loss)]
     #[tokio::test]
     async fn faucet_batches_requests() {
         let stub_node_url = Url::from_str("http://localhost:50052").unwrap();
@@ -322,15 +316,16 @@ mod tests {
         let mut faucet = {
             let mut rng = ChaCha20Rng::from_seed(rand::random());
             let secret = SecretKey::with_rng(&mut get_rpo_random_coin(&mut rng));
-            let (account, account_seed) = create_basic_fungible_faucet(
-                rng.random(),
-                TokenSymbol::try_from("POL").unwrap(),
-                2,
-                Felt::try_from(1_000_000_000_000u64).unwrap(),
-                AccountStorageMode::Public,
-                AuthScheme::RpoFalcon512 { pub_key: secret.public_key() },
-            )
-            .unwrap();
+            let symbol = TokenSymbol::try_from("POL").unwrap();
+            let decimals = 2;
+            let max_supply = Felt::try_from(1_000_000_000_000u64).unwrap();
+            let (account, account_seed) = AccountBuilder::new(rng.random())
+                .account_type(AccountType::FungibleFaucet)
+                .storage_mode(AccountStorageMode::Public)
+                .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply).unwrap())
+                .with_auth_component(RpoFalcon512::new(secret.public_key()))
+                .build()
+                .unwrap();
             let account_file = AccountFile::new(
                 account,
                 Some(account_seed),
@@ -353,12 +348,7 @@ mod tests {
         let num_requests = 5;
         let requests = (0..num_requests)
             .map(|i| {
-                let account_id = AccountId::dummy(
-                    [i; 15],
-                    AccountIdVersion::Version0,
-                    AccountType::RegularAccountImmutableCode,
-                    AccountStorageMode::Private,
-                );
+                let account_id = (i as u128).try_into().unwrap();
                 MintRequest {
                     account_id,
                     asset_amount: AssetOptions::new(vec![100]).unwrap().validate(100).unwrap(),

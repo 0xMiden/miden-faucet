@@ -11,14 +11,17 @@ use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use faucet::Faucet;
-use miden_lib::{AuthScheme, account::faucets::create_basic_fungible_faucet};
-use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
-use miden_objects::{
+use miden_client::{
     Felt,
-    account::{AccountFile, AccountStorageMode, AuthSecretKey},
+    account::{
+        AccountBuilder, AccountFile, AccountStorageMode, AccountType,
+        component::{BasicFungibleFaucet, RpoFalcon512},
+    },
     asset::TokenSymbol,
-    crypto::dsa::rpo_falcon512::SecretKey,
+    auth::AuthSecretKey,
+    crypto::SecretKey,
 };
+use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use server::Server;
@@ -289,17 +292,18 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             let secret = SecretKey::with_rng(&mut get_rpo_random_coin(&mut rng));
 
-            let (account, account_seed) = create_basic_fungible_faucet(
-                rng.random(),
-                TokenSymbol::try_from(token_symbol.as_str())
-                    .context("failed to parse token symbol")?,
-                decimals,
-                Felt::try_from(max_supply)
-                    .expect("max supply value is greater than or equal to the field modulus"),
-                AccountStorageMode::Public,
-                AuthScheme::RpoFalcon512 { pub_key: secret.public_key() },
-            )
-            .context("failed to create basic fungible faucet account")?;
+            let symbol = TokenSymbol::try_from(token_symbol.as_str())
+                .context("failed to parse token symbol")?;
+            let max_supply = Felt::try_from(max_supply)
+                .expect("max supply value is greater than or equal to the field modulus");
+
+            let (account, account_seed) = AccountBuilder::new(rng.random())
+                .account_type(AccountType::FungibleFaucet)
+                .storage_mode(AccountStorageMode::Public)
+                .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
+                .with_auth_component(RpoFalcon512::new(secret.public_key()))
+                .build()
+                .context("failed to create basic fungible faucet account")?;
 
             let account_data = AccountFile::new(
                 account,

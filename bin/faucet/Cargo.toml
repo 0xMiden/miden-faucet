@@ -17,7 +17,6 @@ workspace = true
 [dependencies]
 # Miden dependencies.
 miden-client               = { features = ["sqlite", "tonic"], workspace = true }
-miden-lib                  = { workspace = true }
 miden-node-utils           = { workspace = true }
 miden-objects              = { workspace = true }
 miden-remote-prover-client = { features = ["tx-prover"], workspace = true }

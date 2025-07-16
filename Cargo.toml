@@ -27,7 +27,6 @@ miden-node-utils           = { version = "0.10" }
 miden-remote-prover-client = { version = "0.10" }
 
 # miden-base aka protocol dependencies. These should be updated in sync.
-miden-lib     = { version = "0.10" }
 miden-objects = { default-features = false, version = "0.10" }
 miden-tx      = { default-features = false, version = "0.10" }
 

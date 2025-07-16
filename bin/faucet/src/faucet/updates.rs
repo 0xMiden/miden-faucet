@@ -2,13 +2,13 @@ use std::convert::Infallible;
 
 use axum::response::sse::Event;
 use base64::{Engine, engine::general_purpose};
-use miden_objects::{
-    account::{AccountId, NetworkId},
-    block::BlockNumber,
-    note::{Note, NoteDetails, NoteFile, NoteTag, NoteType},
+use miden_client::{
+    account::AccountId,
+    note::{BlockNumber, Note, NoteFile, NoteTag, NoteType},
     transaction::TransactionId,
     utils::Serializable,
 };
+use miden_objects::{account::NetworkId, note::NoteDetails};
 use tokio::sync::mpsc::Sender;
 
 use crate::network::ExplorerUrl;

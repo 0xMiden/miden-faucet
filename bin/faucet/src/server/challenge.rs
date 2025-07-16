@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use miden_objects::{
+use miden_client::{
     account::AccountId,
     utils::{Deserializable, Serializable},
 };
