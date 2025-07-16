@@ -316,7 +316,7 @@ mod tests {
         let mut faucet = {
             let mut rng = ChaCha20Rng::from_seed(rand::random());
             let secret = SecretKey::with_rng(&mut get_rpo_random_coin(&mut rng));
-            let symbol = TokenSymbol::try_from("POL").unwrap();
+            let symbol = TokenSymbol::try_from("MIDEN").unwrap();
             let decimals = 2;
             let max_supply = Felt::try_from(1_000_000_000_000u64).unwrap();
             let (account, account_seed) = AccountBuilder::new(rng.random())
