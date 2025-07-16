@@ -22,7 +22,7 @@ use miden_tx::{LocalTransactionProver, ProvingOptions, TransactionProver, Transa
 use rand::{Rng, rng, rngs::StdRng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 use updates::{ClientUpdater, MintUpdate, ResponseSender};
 use url::Url;
 
@@ -216,19 +216,14 @@ impl Faucet {
         updater.send_updates(MintUpdate::Executed).await;
 
         // Prove and submit the transaction
-        match self
+        let prover_failed = self
             .client
             .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone())
             .await
-        {
-            Err(ClientError::TransactionProvingError(TransactionProverError::Other { .. })) => {
-                info!(
-                    "Failed to prove transaction with remote prover, falling back to local prover"
-                );
-                self.client.submit_transaction(tx_result).await?;
-            },
-            Ok(()) => {},
-            Err(err) => return Err(err),
+            .is_err();
+        if prover_failed {
+            warn!("Failed to prove transaction with remote prover, falling back to local prover");
+            self.client.submit_transaction(tx_result).await?;
         }
         updater.send_updates(MintUpdate::Submitted).await;
 
