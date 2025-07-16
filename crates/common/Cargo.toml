@@ -1,0 +1,36 @@
+[package]
+authors.workspace      = true
+description            = "Miden faucet's common types"
+edition.workspace      = true
+homepage.workspace     = true
+keywords               = ["common", "faucet", "miden"]
+license.workspace      = true
+name                   = "miden-faucet-common"
+readme                 = "README.md"
+repository.workspace   = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[features]
+testing = ["miden-testing", "tokio", "tokio-stream", "tonic-web"]
+
+[dependencies]
+# Miden dependencies.
+miden-node-proto = { workspace = true }
+miden-node-rpc   = { workspace = true }
+miden-objects    = { workspace = true }
+miden-testing    = { features = ["async"], optional = true, workspace = true }
+miden-tx         = { features = ["async", "concurrent"], workspace = true }
+
+# External dependencies.
+anyhow       = { workspace = true }
+serde        = { features = ["derive"], workspace = true }
+thiserror    = { workspace = true }
+tokio        = { features = ["net"], optional = true, workspace = true }
+tokio-stream = { optional = true, workspace = true }
+tonic        = { workspace = true }
+tonic-web    = { optional = true, version = "0.13" }
+url          = { workspace = true }

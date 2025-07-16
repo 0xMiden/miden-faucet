@@ -1,8 +1,15 @@
 //! A collection of new types and safety wrappers used throughout the faucet.
+pub mod network;
+pub mod rpc_client;
+#[cfg(feature = "testing")]
+pub mod stub_rpc_api;
 
 use std::fmt::Debug;
 
-use miden_objects::asset::FungibleAsset;
+use miden_objects::{
+    account::{AccountId, NetworkId},
+    asset::FungibleAsset,
+};
 use serde::{Deserialize, Deserializer, Serialize, de};
 
 /// Describes the asset amounts allowed by the faucet.
@@ -96,27 +103,27 @@ impl<'de> Deserialize<'de> for AssetOptions {
     }
 }
 
-/// Type of note to generate for a mint request.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum NoteType {
-    Private,
-    Public,
+/// The faucet's account ID and network ID.
+///
+/// Used as a type safety mechanism to avoid confusion with user account IDs, and allows us to
+/// implement traits.
+#[derive(Clone, Copy)]
+pub struct FaucetId {
+    pub account_id: AccountId,
+    pub network_id: NetworkId,
 }
 
-impl From<NoteType> for miden_objects::note::NoteType {
-    fn from(value: NoteType) -> Self {
-        match value {
-            NoteType::Private => Self::Private,
-            NoteType::Public => Self::Public,
-        }
+impl FaucetId {
+    pub fn new(account_id: AccountId, network_id: NetworkId) -> Self {
+        Self { account_id, network_id }
     }
 }
 
-impl std::fmt::Display for NoteType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Private => f.write_str("private"),
-            Self::Public => f.write_str("public"),
-        }
+impl Serialize for FaucetId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.account_id.to_bech32(self.network_id))
     }
 }

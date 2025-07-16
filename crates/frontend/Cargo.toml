@@ -1,0 +1,25 @@
+[package]
+authors.workspace      = true
+description            = "Miden faucet's frontend component"
+edition.workspace      = true
+homepage.workspace     = true
+keywords               = ["faucet", "frontend", "miden"]
+license.workspace      = true
+name                   = "miden-faucet-frontend"
+readme                 = "README.md"
+repository.workspace   = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Workspace dependencies.
+miden-faucet-common = { workspace = true }
+
+# External dependencies.
+axum       = { features = ["tokio"], workspace = true }
+axum-extra = { version = "0.10" }
+http       = { workspace = true }
+serde      = { features = ["derive"], workspace = true }

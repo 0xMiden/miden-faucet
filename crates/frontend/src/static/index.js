@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Get the PoW challenge from the new /pow endpoint
         let powResponse;
         try {
-            powResponse = await fetch(window.location.href + 'pow?' + new URLSearchParams({
+            powResponse = await fetch(window.location.href + 'api/pow?' + new URLSearchParams({
                 account_id: accountAddress
             }), {
                 method: "GET"
@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function () {
             nonce: nonce
         };
 
-        const evtSource = new EventSource(window.location.href + 'get_tokens?' + new URLSearchParams(params));
+        const evtSource = new EventSource(window.location.href + 'api/get_tokens?' + new URLSearchParams(params));
 
         evtSource.onopen = function () {
             status.textContent = "Request on queue...";

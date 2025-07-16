@@ -8,6 +8,7 @@ use axum::{
         sse::{Event, KeepAlive},
     },
 };
+use miden_faucet_common::AssetOptions;
 use miden_node_utils::ErrorReport;
 use miden_objects::{AccountIdError, account::AccountId};
 use serde::Deserialize;
@@ -16,12 +17,7 @@ use tokio_stream::{Stream, wrappers::ReceiverStream};
 use tracing::{error, instrument};
 
 use super::Server;
-use crate::{
-    COMPONENT,
-    faucet::MintRequest,
-    server::ApiKey,
-    types::{AssetOptions, NoteType},
-};
+use crate::{COMPONENT, faucet::MintRequest, server::ApiKey, types::NoteType};
 
 type RequestSender = mpsc::Sender<(MintRequest, mpsc::Sender<Result<Event, Infallible>>)>;
 
@@ -170,7 +166,12 @@ impl RawMintRequest {
             .ok_or(MintRequestError::AssetAmount(self.asset_amount))?;
 
         // Check the API key, if provided
-        let api_key = self.api_key.as_deref().map(ApiKey::decode).transpose()?;
+        let api_key = self
+            .api_key
+            .as_deref()
+            .map(ApiKey::decode)
+            .transpose()
+            .map_err(|_| MintRequestError::InvalidApiKey(self.api_key.unwrap_or_default()))?;
         if let Some(api_key) = &api_key {
             if !server.api_keys.contains(api_key) {
                 return Err(MintRequestError::InvalidApiKey(api_key.encode()));
