@@ -199,8 +199,8 @@ pub async fn get_tokens(
     State(server): State<Server>,
     Query(request): Query<RawMintRequest>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    // Response channel with buffer size 5 since there are currently 5 possible updates
-    let (tx_result_notifier, rx_result) = mpsc::channel(5);
+    // Response channel with buffer size 4 since there are currently 4 possible updates
+    let (tx_result_notifier, rx_result) = mpsc::channel(4);
 
     let mint_error = request
         .validate(&server)
