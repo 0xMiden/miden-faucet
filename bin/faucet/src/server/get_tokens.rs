@@ -8,8 +8,8 @@ use axum::{
         sse::{Event, KeepAlive},
     },
 };
+use miden_client::account::{AccountId, AccountIdError};
 use miden_node_utils::ErrorReport;
-use miden_objects::{AccountIdError, account::AccountId};
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio_stream::{Stream, wrappers::ReceiverStream};

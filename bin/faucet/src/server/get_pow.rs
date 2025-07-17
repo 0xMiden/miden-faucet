@@ -4,8 +4,7 @@ use axum::{
     response::IntoResponse,
 };
 use http::StatusCode;
-use miden_client::account::AccountId;
-use miden_objects::AccountIdError;
+use miden_client::account::{AccountId, AccountIdError};
 use serde::Deserialize;
 
 use crate::server::{ApiKey, pow::PoW};

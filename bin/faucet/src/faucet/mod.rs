@@ -2,19 +2,19 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use miden_client::{
-    Client, ClientError, Felt,
-    account::{AccountFile, AccountId, component::BasicFungibleFaucet},
+    Client, ClientError, Felt, RemoteTransactionProver,
+    account::{AccountFile, AccountId, NetworkId, component::BasicFungibleFaucet},
     asset::FungibleAsset,
     builder::ClientBuilder,
     crypto::RpoRandomCoin,
     keystore::FilesystemKeyStore,
     note::{Note, NoteError, create_p2id_note},
     rpc::Endpoint,
-    transaction::{OutputNote, TransactionId, TransactionRequestBuilder},
+    transaction::{
+        LocalTransactionProver, OutputNote, TransactionId, TransactionProver,
+        TransactionRequestBuilder,
+    },
 };
-use miden_objects::account::NetworkId;
-use miden_remote_prover_client::remote_prover::tx_prover::RemoteTransactionProver;
-use miden_tx::{LocalTransactionProver, ProvingOptions, TransactionProver};
 use rand::{Rng, rng, rngs::StdRng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
@@ -139,7 +139,7 @@ impl Faucet {
         let faucet = BasicFungibleFaucet::try_from(&account)?;
         let tx_prover: Arc<dyn TransactionProver> = match remote_tx_prover_url {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
-            None => Arc::new(LocalTransactionProver::new(ProvingOptions::default())),
+            None => Arc::new(LocalTransactionProver::default()),
         };
         let id = FaucetId::new(account.id(), network_id);
 

@@ -20,15 +20,10 @@ opt-level = 2
 
 [workspace.dependencies]
 # miden-client dependencies.
-miden-client = { version = "0.10" }
+miden-client = { git = "https://github.com/0xMiden/miden-client", branch = "next" }
 
 # miden-node dependencies.
 miden-node-utils           = { version = "0.10" }
-miden-remote-prover-client = { version = "0.10" }
-
-# miden-base aka protocol dependencies. These should be updated in sync.
-miden-objects = { default-features = false, version = "0.10" }
-miden-tx      = { default-features = false, version = "0.10" }
 
 # External dependencies
 anyhow       = { version = "1.0" }

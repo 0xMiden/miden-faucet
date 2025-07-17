@@ -3,12 +3,11 @@ use std::convert::Infallible;
 use axum::response::sse::Event;
 use base64::{Engine, engine::general_purpose};
 use miden_client::{
-    account::AccountId,
+    account::{AccountId, NetworkId},
     note::{BlockNumber, Note, NoteFile, NoteTag, NoteType},
     transaction::TransactionId,
     utils::Serializable,
 };
-use miden_objects::{account::NetworkId, note::NoteDetails};
 use tokio::sync::mpsc::Sender;
 
 use crate::network::ExplorerUrl;
@@ -78,8 +77,7 @@ impl MintUpdate<'_> {
         match self {
             MintUpdate::Minted(note, block_height, tx_id, network_id) => {
                 let note_id = note.id();
-                let note_details =
-                    NoteDetails::new(note.assets().clone(), note.recipient().clone());
+                let note_details = note.clone().into();
                 // SAFETY: in a valid p2id note, the account id is the encoded in the first two note
                 // inputs
                 let account_id =
