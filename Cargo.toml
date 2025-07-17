@@ -20,10 +20,10 @@ opt-level = 2
 
 [workspace.dependencies]
 # miden-client dependencies.
-miden-client = { git = "https://github.com/0xMiden/miden-client", branch = "next" }
+miden-client = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
 
 # miden-node dependencies.
-miden-node-utils           = { version = "0.10" }
+miden-node-utils = { branch = "next", git = "https://github.com/0xMiden/miden-node" }
 
 # External dependencies
 anyhow       = { version = "1.0" }

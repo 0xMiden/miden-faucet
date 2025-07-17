@@ -16,8 +16,8 @@ workspace = true
 
 [dependencies]
 # Miden dependencies.
-miden-client               = { features = ["sqlite", "tonic"], workspace = true }
-miden-node-utils           = { workspace = true }
+miden-client     = { features = ["sqlite", "tonic"], workspace = true }
+miden-node-utils = { workspace = true }
 
 # External dependencies.
 anyhow       = { workspace = true }
@@ -48,8 +48,8 @@ miden-node-utils = { features = ["vergen"], workspace = true }
 
 [dev-dependencies]
 fantoccini       = { version = "0.22" }
-miden-node-proto = { version = "0.10" }
-miden-testing    = { features = ["async"], version = "0.10" }
+miden-node-proto = { branch = "next", git = "https://github.com/0xMiden/miden-node" }
+miden-testing    = { branch = "next", features = ["async"], git = "https://github.com/0xMiden/miden-base" }
 serde_json       = { version = "1.0" }
 tokio            = { features = ["process"], workspace = true }
 tonic-web        = { version = "0.13" }
