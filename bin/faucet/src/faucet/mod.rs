@@ -15,7 +15,8 @@ use miden_client::{
         TransactionRequestBuilder,
     },
 };
-use rand::{Rng, rng, rngs::StdRng};
+use miden_node_utils::crypto::get_rpo_random_coin;
+use rand::{rng, rngs::StdRng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
 use tracing::{info, instrument, warn};
@@ -94,7 +95,7 @@ impl Faucet {
         let endpoint = Endpoint::try_from(node_url.as_str())
             .map_err(|e| anyhow::anyhow!("failed to parse node url: {e}"))?;
 
-        let mut client = ClientBuilder::default()
+        let mut client = ClientBuilder::new()
             .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
             .sqlite_store(store_path.to_str().context("invalid store path")?)
@@ -194,10 +195,7 @@ impl Faucet {
         requests: &[MintRequest],
         updater: &ClientUpdater,
     ) -> Result<(Vec<Note>, TransactionId), ClientError> {
-        let mut thread_rng = rng();
-        let coin_seed: [u64; 4] = thread_rng.random();
-
-        let mut rng = RpoRandomCoin::new(coin_seed.map(Felt::new));
+        let mut rng = get_rpo_random_coin(&mut rng());
 
         // Build the notes
         let notes = build_p2id_notes(self.id, self.decimals, requests, &mut rng)?;
