@@ -1,259 +1,175 @@
-document.addEventListener('DOMContentLoaded', function () {
-    const faucetIdElem = document.getElementById('faucet-id');
-    const privateButton = document.getElementById('button-private');
-    const publicButton = document.getElementById('button-public');
-    const accountAddressInput = document.getElementById('account-address');
-    const errorMessage = document.getElementById('error-message');
-    const info = document.getElementById('info');
-    const importCommand = document.getElementById('import-command');
-    const noteIdElem = document.getElementById('note-id');
-    const accountIdElem = document.getElementById('command-account-id');
-    const assetSelect = document.getElementById('asset-amount');
-    const loading = document.getElementById('loading');
-    const status = document.getElementById("loading-status");
-    const txLink = document.getElementById('tx-link');
+class MidenFaucet {
+    constructor() {
+        this.form = document.getElementById('faucetForm');
+        this.recipientInput = document.getElementById('recipientAddress');
+        this.tokenSelect = document.getElementById('tokenAmount');
+        this.privateBtn = document.getElementById('sendPrivateBtn');
+        this.publicBtn = document.getElementById('sendPublicBtn');
+        this.successMessage = document.getElementById('successMessage');
+        this.errorMessage = document.getElementById('errorMessage');
 
-    // Check if SHA3 is available right from the start
-    if (typeof sha3_256 === 'undefined') {
-        console.error("SHA3 library not loaded initially");
-        errorMessage.textContent = 'Cryptographic library not loaded. Please refresh the page.';
-        errorMessage.style.display = 'block';
-    } else {
-        console.log("SHA3 library is available at page load");
+        this.initEventListeners();
+        this.validateForm(); // Initial validation
     }
 
-    fetchMetadata();
+    initEventListeners() {
+        this.privateBtn.addEventListener('click', () => this.handleSendTokens('private'));
+        this.publicBtn.addEventListener('click', () => this.handleSendTokens('public'));
 
-    privateButton.addEventListener('click', () => { handleButtonClick(true) });
-    publicButton.addEventListener('click', () => { handleButtonClick(false) });
+        this.recipientInput.addEventListener('input', () => this.validateForm());
+        this.tokenSelect.addEventListener('change', () => this.validateForm());
 
-    function fetchMetadata() {
-        fetch(window.location.href + 'get_metadata')
-            .then(response => response.json())
-            .then(data => {
-                faucetIdElem.textContent = data.id;
-                for (const amount of data.asset_amount_options) {
-                    const option = document.createElement('option');
-                    option.value = amount;
-                    option.textContent = amount;
-                    assetSelect.appendChild(option);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching metadata:', error);
-                faucetIdElem.textContent = 'Error loading Faucet ID.';
-                showError('Failed to load metadata. Please try again.');
-            });
+        // Prevent form submission
+        this.form.addEventListener('submit', (e) => e.preventDefault());
     }
 
-    function showError(message) {
-        errorMessage.textContent = message;
-        errorMessage.style.visibility = 'visible';
-        info.style.visibility = 'hidden';
+    validateForm() {
+        const isValid = this.recipientInput.value.trim() && this.tokenSelect.value;
+        this.privateBtn.disabled = !isValid;
+        this.publicBtn.disabled = !isValid;
     }
 
-    function hideError() {
-        errorMessage.style.visibility = 'hidden';
-    }
+    async handleSendTokens(type) {
+        const recipient = this.recipientInput.value.trim();
+        const amount = this.tokenSelect.value;
 
-    function validateAccountAddress(accountAddress) {
-        if (!accountAddress) {
-            showError("Account address is required.");
-            return false;
-        }
-
-        const isValidFormat = /^(0x[0-9a-fA-F]{30}|[a-z]{1,4}1[a-z0-9]{32})$/i.test(accountAddress);
-        if (!isValidFormat) {
-            showError("Invalid Account address.");
-            return false;
-        }
-
-        return true;
-    }
-
-    function setLoadingState(isLoading) {
-        privateButton.disabled = isLoading;
-        publicButton.disabled = isLoading;
-        loading.style.display = isLoading ? 'flex' : 'none';
-        status.textContent = "";
-        if (isLoading) {
-            info.style.visibility = 'hidden';
-            importCommand.style.visibility = 'hidden';
-        }
-    }
-
-    async function handleButtonClick(isPrivateNote) {
-        let accountAddress = accountAddressInput.value.trim();
-        hideError();
-
-        if (!validateAccountAddress(accountAddress)) {
-            setLoadingState(false);
+        if (!recipient || !amount) {
+            this.showError('Please fill in all required fields');
             return;
         }
 
-        // Check if SHA3 library is loaded
-        if (typeof sha3_256 === 'undefined') {
-            console.error("SHA3 UNDEFINED when trying to handle button click");
-            errorMessage.textContent = "Cryptographic library not loaded. Please refresh the page and try again.";
-            errorMessage.style.display = 'block';
+        if (!this.isValidAddress(recipient)) {
+            this.showError('Please enter a valid recipient address');
             return;
         }
 
-        // Get the PoW challenge from the new /pow endpoint
-        let powResponse;
+        this.setLoading(type, true);
+        this.hideMessages();
+
         try {
-            powResponse = await fetch(window.location.href + 'pow?' + new URLSearchParams({
-                account_id: accountAddress
-            }), {
-                method: "GET"
-            });
+            await this.simulateTokenSend(recipient, amount, type);
+            this.showSuccess(`Successfully sent ${amount} tokens to ${this.truncateAddress(recipient)} via ${type} note`);
+            this.resetForm();
         } catch (error) {
-            showError('Connection failed.');
-            return;
-        }
-
-        if (!powResponse.ok) {
-            const message = await powResponse.text();
-            showError(message);
-            setLoadingState(false);
-            return;
-        }
-        setLoadingState(true);
-
-        status.textContent = "Received Proof of Work challenge";
-
-        const powData = await powResponse.json();
-
-        // Search for a nonce that satisfies the proof of work
-        status.textContent = "Solving Proof of Work...";
-
-        const nonce = await findValidNonce(powData.challenge, powData.target);
-
-        // Build query parameters for the request using new challenge format
-        const params = {
-            account_id: accountAddress,
-            is_private_note: isPrivateNote,
-            asset_amount: parseInt(assetSelect.value),
-            challenge: powData.challenge,
-            nonce: nonce
-        };
-
-        const evtSource = new EventSource(window.location.href + 'get_tokens?' + new URLSearchParams(params));
-
-        evtSource.onopen = function () {
-            status.textContent = "Request on queue...";
-        };
-
-        evtSource.onerror = function (_) {
-            // Either rate limit exceeded or invalid account id. The error event does not contain the reason.
-            evtSource.close();
-            setLoadingState(false);
-            showError('Please try again soon.');
-        };
-
-        evtSource.addEventListener("get-tokens-error", function (event) {
-            console.error('EventSource failed:', event.data);
-            evtSource.close();
-
-            const data = JSON.parse(event.data);
-            showError('Failed to receive tokens: ' + data.message);
-            setLoadingState(false);
-        });
-
-        evtSource.addEventListener("update", function (event) {
-            status.textContent = event.data;
-        });
-
-        evtSource.addEventListener("note", function (event) {
-            evtSource.close();
-
-            let data = JSON.parse(event.data);
-
-            setLoadingState(false);
-
-            noteIdElem.textContent = data.note_id;
-            accountIdElem.textContent = data.account_id;
-            if (isPrivateNote) {
-                importCommand.style.display = 'block';
-
-                // Decode base64
-                const binaryString = atob(data.data_base64);
-                const byteArray = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                    byteArray[i] = binaryString.charCodeAt(i);
-                }
-
-                const blob = new Blob([byteArray], { type: 'application/octet-stream' });
-                downloadBlob(blob, 'note.mno');
-            } else {
-                importCommand.style.display = 'none';
-            }
-
-            txLink.textContent = data.transaction_id;
-            info.style.visibility = 'visible';
-            importCommand.style.visibility = 'visible';
-            // If the explorer URL is available, set the link.
-            if (data.explorer_url) {
-                txLink.href = data.explorer_url + '/tx/' + data.transaction_id;
-            }
-        });
-    }
-
-    // Function to find a valid nonce for proof of work using the new challenge format
-    async function findValidNonce(challenge, target) {
-        // Check again if SHA3 is available
-        if (typeof sha3_256 === 'undefined') {
-            console.error("SHA3 library not properly loaded. SHA3 object:", sha3_256);
-            throw new Error('SHA3 library not properly loaded. Please refresh the page.');
-        }
-
-        let nonce = 0;
-        let targetNum = BigInt(target);
-
-        while (true) {
-            // Generate a random nonce
-            nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
-
-            try {
-                // Compute hash using SHA3 with the challenge and nonce
-                let hash = sha3_256.create();
-                hash.update(challenge);  // Use the hex-encoded challenge string directly
-
-                // Convert nonce to 8-byte big-endian format to match backend
-                const nonceBytes = new ArrayBuffer(8);
-                const nonceView = new DataView(nonceBytes);
-                nonceView.setBigUint64(0, BigInt(nonce), false); // false = big-endian
-                const nonceByteArray = new Uint8Array(nonceBytes);
-                hash.update(nonceByteArray);
-
-                // Take the first 8 bytes of the hash and parse them as u64 in big-endian
-                let digest = BigInt("0x" + hash.hex().slice(0, 16));
-
-                // Check if the hash is less than the target
-                if (digest < targetNum) {
-                    return nonce;
-                }
-            } catch (error) {
-                console.error('Error computing hash:', error);
-                throw new Error('Failed to compute hash: ' + error.message);
-            }
-
-            // Yield to browser to prevent freezing
-            if (nonce % 1000 === 0) {
-                await new Promise(resolve => setTimeout(resolve, 0));
-            }
+            this.showError(`Failed to send tokens: ${error.message}`);
+        } finally {
+            this.setLoading(type, false);
         }
     }
 
-    function downloadBlob(blob, filename) {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
+    async simulateTokenSend(recipient, amount, type) {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Simulate random failure (10% chance)
+        if (Math.random() < 0.1) {
+            throw new Error('Network timeout');
+        }
+
+        // Simulate successful response
+        return {
+            success: true,
+            txHash: '0x' + Math.random().toString(16).substr(2, 64),
+            recipient,
+            amount,
+            type,
+            timestamp: new Date().toISOString()
+        };
     }
+
+    setLoading(type, isLoading) {
+        const btn = type === 'private' ? this.privateBtn : this.publicBtn;
+        const originalContent = btn.innerHTML;
+
+        if (isLoading) {
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+
+            // Store original content and show loading state
+            btn.dataset.originalContent = originalContent;
+            btn.innerHTML = originalContent.replace(/Send/, 'Sending...');
+        } else {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+
+            // Restore original content
+            if (btn.dataset.originalContent) {
+                btn.innerHTML = btn.dataset.originalContent;
+                delete btn.dataset.originalContent;
+            }
+
+            // Re-validate form
+            this.validateForm();
+        }
+    }
+
+    showSuccess(message) {
+        this.successMessage.textContent = message;
+        this.successMessage.style.display = 'block';
+        this.errorMessage.style.display = 'none';
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            this.hideMessages();
+        }, 5000);
+    }
+
+    showError(message) {
+        this.errorMessage.textContent = message;
+        this.errorMessage.style.display = 'block';
+        this.successMessage.style.display = 'none';
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            this.hideMessages();
+        }, 5000);
+    }
+
+    hideMessages() {
+        this.successMessage.style.display = 'none';
+        this.errorMessage.style.display = 'none';
+    }
+
+    resetForm() {
+        this.recipientInput.value = '';
+        this.tokenSelect.value = '';
+        this.validateForm();
+    }
+
+    isValidAddress(address) {
+        // Basic validation for hex address (Ethereum-style)
+        return /^0x[a-fA-F0-9]{40}$/.test(address);
+    }
+
+    truncateAddress(address) {
+        if (address.length <= 10) return address;
+        return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    }
+}
+
+// Initialize the application when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    new MidenFaucet();
 });
+
+// Add some utility functions for potential future use
+const Utils = {
+    formatNumber: (num) => {
+        return new Intl.NumberFormat().format(num);
+    },
+
+    copyToClipboard: async (text) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            return false;
+        }
+    },
+
+    validateTokenAmount: (amount) => {
+        const num = parseInt(amount);
+        return !isNaN(num) && num > 0 && num <= 10000;
+    }
+};
