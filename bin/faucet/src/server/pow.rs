@@ -5,7 +5,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use miden_objects::account::AccountId;
+use miden_client::account::AccountId;
 use tokio::time::{Duration, interval};
 
 use super::challenge::Challenge;

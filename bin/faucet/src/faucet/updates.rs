@@ -2,10 +2,9 @@ use std::convert::Infallible;
 
 use axum::response::sse::Event;
 use base64::{Engine, engine::general_purpose};
-use miden_objects::{
+use miden_client::{
     account::{AccountId, NetworkId},
-    block::BlockNumber,
-    note::{Note, NoteDetails, NoteFile, NoteTag, NoteType},
+    note::{BlockNumber, Note, NoteFile, NoteTag, NoteType},
     transaction::TransactionId,
     utils::Serializable,
 };
@@ -62,7 +61,6 @@ impl ClientUpdater {
 pub enum MintUpdate<'a> {
     Built,
     Executed,
-    Proven,
     Submitted,
     Minted(&'a Note, BlockNumber, TransactionId, NetworkId),
 }
@@ -72,7 +70,6 @@ impl MintUpdate<'_> {
     /// Event types:
     /// - `MintUpdate::Built`: event type "update"
     /// - `MintUpdate::Executed`: event type "update"
-    /// - `MintUpdate::Proven`: event type "update"
     /// - `MintUpdate::Submitted`: event type "update"
     /// - `MintUpdate::Minted`: event type "note". Contains the note encoded in base64 if it is
     ///   private.
@@ -80,8 +77,7 @@ impl MintUpdate<'_> {
         match self {
             MintUpdate::Minted(note, block_height, tx_id, network_id) => {
                 let note_id = note.id();
-                let note_details =
-                    NoteDetails::new(note.assets().clone(), note.recipient().clone());
+                let note_details = note.clone().into();
                 // SAFETY: in a valid p2id note, the account id is the encoded in the first two note
                 // inputs
                 let account_id =
@@ -114,7 +110,6 @@ impl MintUpdate<'_> {
             },
             MintUpdate::Built => Event::default().event("update").data("Built"),
             MintUpdate::Executed => Event::default().event("update").data("Executed"),
-            MintUpdate::Proven => Event::default().event("update").data("Proven"),
             MintUpdate::Submitted => Event::default().event("update").data("Submitted"),
         }
     }
