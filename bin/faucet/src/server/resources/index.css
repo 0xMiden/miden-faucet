@@ -130,6 +130,19 @@ body::before {
     text-align: center;
 }
 
+.download-button {
+    color: white;
+    background-color: #FF5500;
+    font-weight: bold;
+    border-radius: 8px;
+    padding: 10px;
+    padding-left: 20px;
+    padding-right: 20px;
+    margin-top: 10px;
+    font-size: 14px;
+    margin: 0 auto 0 auto;
+}
+
 .loader-overlay {
     position: absolute;
     flex-direction: column;

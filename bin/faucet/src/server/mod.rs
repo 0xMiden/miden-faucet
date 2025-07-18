@@ -1,15 +1,15 @@
 use std::{
     collections::HashSet,
-    convert::Infallible,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::Context;
-use axum::{Router, extract::FromRef, response::sse::Event, routing::get};
+use axum::{Router, extract::FromRef, routing::get};
 use frontend::Metadata;
 use get_tokens::{GetTokensState, get_tokens};
 use http::{HeaderValue, Request};
-use miden_client::account::AccountId;
+use miden_client::{account::AccountId, store::Store};
 use miden_node_utils::grpc::UrlExt;
 use pow::PoW;
 use sha3::{Digest, Sha3_256};
@@ -25,14 +25,15 @@ use url::Url;
 
 use crate::{
     COMPONENT,
-    faucet::{FaucetId, MintRequest},
-    server::{get_pow::get_pow, get_tokens::MintRequestError},
+    faucet::{FaucetId, MintRequest, MintResponseSender},
+    server::{get_notes::get_notes, get_pow::get_pow, get_tokens::MintRequestError},
     types::AssetOptions,
 };
 
 mod api_key;
 mod challenge;
 mod frontend;
+mod get_notes;
 mod get_pow;
 mod get_tokens;
 mod pow;
@@ -42,7 +43,7 @@ pub use pow::PoWConfig;
 // FAUCET STATE
 // ================================================================================================
 
-type RequestSender = mpsc::Sender<(MintRequest, mpsc::Sender<Result<Event, Infallible>>)>;
+type MintRequestSender = mpsc::Sender<(MintRequest, MintResponseSender)>;
 
 /// Serves the faucet's website and handles token requests.
 #[derive(Clone)]
@@ -51,18 +52,20 @@ pub struct Server {
     metadata: &'static Metadata,
     pow: PoW,
     api_keys: HashSet<ApiKey>,
+    store: Arc<dyn Store>,
 }
 
 impl Server {
     pub fn new(
         faucet_id: FaucetId,
         asset_options: AssetOptions,
-        request_sender: RequestSender,
+        mint_request_sender: MintRequestSender,
         pow_secret: &str,
         pow_config: PoWConfig,
         api_keys: &[ApiKey],
+        store: Arc<dyn Store>,
     ) -> Self {
-        let mint_state = GetTokensState::new(request_sender, asset_options.clone());
+        let mint_state = GetTokensState::new(mint_request_sender, asset_options.clone());
         let metadata = Metadata {
             id: faucet_id,
             asset_amount_options: asset_options,
@@ -82,6 +85,7 @@ impl Server {
             metadata,
             pow,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
+            store,
         }
     }
 
@@ -121,6 +125,7 @@ impl Server {
                                         .on_failure(())
                                 ))
                 )
+                .route("/get_notes", get(get_notes))
                 .layer(
                     ServiceBuilder::new()
                         .layer(SetResponseHeaderLayer::if_not_present(

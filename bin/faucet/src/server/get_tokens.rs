@@ -19,20 +19,18 @@ use super::Server;
 use crate::{
     COMPONENT,
     faucet::MintRequest,
-    server::ApiKey,
+    server::{ApiKey, MintRequestSender},
     types::{AssetOptions, NoteType},
 };
 
-type RequestSender = mpsc::Sender<(MintRequest, mpsc::Sender<Result<Event, Infallible>>)>;
-
 #[derive(Clone)]
 pub struct GetTokensState {
-    request_sender: RequestSender,
-    asset_options: AssetOptions,
+    pub request_sender: MintRequestSender,
+    pub asset_options: AssetOptions,
 }
 
 impl GetTokensState {
-    pub fn new(request_sender: RequestSender, asset_options: AssetOptions) -> Self {
+    pub fn new(request_sender: MintRequestSender, asset_options: AssetOptions) -> Self {
         Self { request_sender, asset_options }
     }
 }
