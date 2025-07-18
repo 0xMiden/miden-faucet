@@ -5,46 +5,85 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Miden Faucet</title>
-    <link rel="stylesheet" href="./index.css">
-    <!-- Load SHA3 library directly -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.8.0/sha3.min.js"
-        integrity="sha384-NKbaJKqJPrFeb86qfU2iNy4KO3oyIe6F5xm1PBYMpAkiVTxHjjafUKlebp0mAeNC"
-        crossorigin="anonymous"></script>
-    <!-- Load our JavaScript after SHA3 library -->
-    <script src="./index.js"></script>
+    <link rel="stylesheet" href="index.css">
 </head>
 
 <body>
-    <div id="navbar">
-        <h1 id="title">Miden Faucet</h1>
-        <div id="faucet-id"></div>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon"></div>
+                <div class="logo-text">Miden<span class="highlight">Faucet</span></div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <h1 class="form-title">Request Test Tokens</h1>
+
+            <form id="faucetForm">
+                <div class="form-group">
+                    <label for="recipientAddress" class="form-label">Recipient Address</label>
+                    <input type="text" id="recipientAddress" class="form-input" placeholder="">
+                </div>
+
+                <div class="form-group">
+                    <label for="tokenAmount" class="form-label">Token Amount</label>
+                    <select id="tokenAmount" class="form-select">
+                        <option value=""></option>
+                        <option value="10">10</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                    </select>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn" id="sendPrivateBtn">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                        </svg>
+                        Send Private Note
+                    </button>
+
+                    <button type="button" class="btn" id="sendPublicBtn">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        Send Public Note
+                    </button>
+                </div>
+
+                <div class="note">
+                    Private note data is not visible on-chain
+                </div>
+
+                <div class="success-message" id="successMessage"></div>
+                <div class="error-message" id="errorMessage"></div>
+            </form>
+        </main>
     </div>
-    <div id="center-container">
-        <h2 id="subtitle">Request test tokens</h2>
-        <span id="error-message"></span>
-        <div id="form-container">
-            <input type="text" id="account-address" placeholder="Miden Account address" required>
-            <select id="asset-amount"></select>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <div class="footer-label">Faucet Address</div>
+                <div class="footer-value">0x548e7cdF0C841fd5aC2660C2B0415Dc7Dd7728FF</div>
+            </div>
+            <div class="footer-section tokens-section">
+                <div class="footer-label">Tokens Claimed</div>
+                <div class="footer-value">112,678,322 / 213,122,324,434</div>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
         </div>
-        <div id="visibility-buttons">
-            <button id="button-private">Send Private Note</button>
-            <br>
-            <button id="button-public">Send Public Note</button>
-        </div>
-        <div id="loading" class="loader-overlay">
-            <div class="loader"></div>
-            <div id="loading-status" class="loader-status"></div>
-        </div>
-    </div>
-    <div id="info" class="info-container">
-        <p class="info-message">Note created in transaction: <a id="tx-link"></a></p>
-        <p class="info-message">You can consume the note by running the following commands in your shell</p>
-        <p id="client-commands">
-            <span id="import-command" style="display: none;">miden-client import ./path/to/downloaded/note<br></span>
-            miden-client sync <br>
-            miden-client consume-notes --account <span id="command-account-id"></span> <span id="note-id"></span>
-        </p>
-    </div>
+        <div class="footer-line"></div>
+    </footer>
+
+    <script src="index.js"></script>
 </body>
 
 </html>
