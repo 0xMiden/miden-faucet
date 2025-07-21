@@ -222,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn test_challenge_encode_decode() {
+    fn challenge_encode_decode() {
         let secret = create_test_secret();
         let target = 3;
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -239,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn test_timestamp_validation() {
+    fn timestamp_validation() {
         let secret = create_test_secret();
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();
@@ -255,5 +255,16 @@ mod tests {
         let old_timestamp = current_time - challenge_lifetime.as_secs() - 10;
         let challenge = Challenge::new(12, old_timestamp, account_id, api_key, secret);
         assert!(challenge.is_expired(current_time, challenge_lifetime));
+    }
+
+    #[test]
+    fn hex_encode_decode() {
+        let bytes = "arbitrary bytes".as_bytes();
+
+        let encoded = Challenge::hex_encode(bytes);
+        assert_eq!(encoded.len(), bytes.len() * 2);
+
+        let decoded = Challenge::hex_decode(&encoded).unwrap();
+        assert_eq!(decoded, bytes);
     }
 }
