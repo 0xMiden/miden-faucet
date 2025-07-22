@@ -188,8 +188,11 @@ impl Faucet {
         Ok(())
     }
 
-    /// Fully handles a batch of requests to create and submit a transaction, and updates the local
-    /// db.
+    /// Fully handles a batch of requests to create and submit a transaction.
+    ///
+    /// For each mint request, a mint note is built. Then, with these notes, a transaction is
+    /// created, executed, and submitted using the local miden-client. This results in submitting
+    /// the transaction to the node and updating the local db to track the created notes.
     async fn handle_request_batch(
         &mut self,
         requests: &[MintRequest],
@@ -233,7 +236,7 @@ impl Faucet {
 // HELPER FUNCTIONS
 // ================================================================================================
 
-/// Builds a collection of `P2Id` notes from a set of mint requests.
+/// Builds a collection of `P2ID` notes from a set of mint requests.
 ///
 /// # Errors
 ///
@@ -331,7 +334,7 @@ mod tests {
             );
 
             Faucet::load(
-                PathBuf::from("store.sqlite3"),
+                PathBuf::from("faucet_client_store.sqlite3"),
                 NetworkId::Testnet,
                 account_file,
                 &stub_node_url,

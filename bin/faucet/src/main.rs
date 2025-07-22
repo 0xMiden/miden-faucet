@@ -138,7 +138,7 @@ pub enum Command {
         open_telemetry: bool,
 
         /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = "store.sqlite3", env = ENV_STORE)]
+        #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
         store_path: PathBuf,
     },
 
@@ -532,7 +532,7 @@ mod test {
                         faucet_account_path: faucet_account_path.clone(),
                         remote_tx_prover_url: None,
                         open_telemetry: false,
-                        store_path: PathBuf::from("store.sqlite3"),
+                        store_path: PathBuf::from("faucet_client_store.sqlite3"),
                     },
                 })
                 .await
