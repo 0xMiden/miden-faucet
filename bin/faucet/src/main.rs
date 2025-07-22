@@ -295,7 +295,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let symbol = TokenSymbol::try_from(token_symbol.as_str())
                 .context("failed to parse token symbol")?;
             let max_supply = Felt::try_from(max_supply)
-                .expect("max supply value is greater than or equal to the field modulus");
+                .map_err(anyhow::Error::msg)
+                .context("max supply value is greater than or equal to the field modulus")?;
 
             let (account, account_seed) = AccountBuilder::new(rng.random())
                 .account_type(AccountType::FungibleFaucet)

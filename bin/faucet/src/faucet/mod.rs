@@ -93,7 +93,8 @@ impl Faucet {
             account_file.auth_secret_keys.first().context("account file has no auth keys")?,
         )?;
         let endpoint = Endpoint::try_from(node_url.as_str())
-            .map_err(|e| anyhow::anyhow!("failed to parse node url: {e}"))?;
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("failed to parse node url: {node_url}"))?;
 
         let mut client = ClientBuilder::new()
             .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
