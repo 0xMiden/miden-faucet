@@ -24,7 +24,7 @@ use crate::{COMPONENT, server::Server};
         note_id = %request.note_id,
     )
 )]
-pub async fn get_notes(
+pub async fn get_note(
     State(server): State<Server>,
     Query(request): Query<RawNoteRequest>,
 ) -> Result<impl IntoResponse, NoteRequestError> {
@@ -52,7 +52,7 @@ pub async fn get_notes(
 // REQUEST VALIDATION
 // ================================================================================================
 
-/// Used to receive the initial `get_pow` request from the user.
+/// Used to receive the initial `get_note` request from the user.
 #[derive(Deserialize)]
 pub struct RawNoteRequest {
     pub note_id: String,
@@ -66,7 +66,7 @@ impl RawNoteRequest {
     }
 }
 
-/// Validated and parsed `RawPowRequest`.
+/// Validated and parsed `RawNoteRequest`.
 pub struct NoteRequest {
     pub note_id: NoteId,
 }

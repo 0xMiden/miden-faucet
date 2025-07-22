@@ -26,14 +26,14 @@ use url::Url;
 use crate::{
     COMPONENT,
     faucet::{FaucetId, MintRequest, MintResponseSender},
-    server::{get_notes::get_notes, get_pow::get_pow, get_tokens::MintRequestError},
+    server::{get_note::get_note, get_pow::get_pow, get_tokens::MintRequestError},
     types::AssetOptions,
 };
 
 mod api_key;
 mod challenge;
 mod frontend;
-mod get_notes;
+mod get_note;
 mod get_pow;
 mod get_tokens;
 mod pow;
@@ -125,7 +125,7 @@ impl Server {
                                         .on_failure(())
                                 ))
                 )
-                .route("/get_notes", get(get_notes))
+                .route("/get_note", get(get_note))
                 .layer(
                     ServiceBuilder::new()
                         .layer(SetResponseHeaderLayer::if_not_present(

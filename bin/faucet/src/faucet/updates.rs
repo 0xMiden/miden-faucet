@@ -45,8 +45,8 @@ impl MintUpdate {
     /// - `MintUpdate::Built`: event type "update"
     /// - `MintUpdate::Executed`: event type "update"
     /// - `MintUpdate::Submitted`: event type "update"
-    /// - `MintUpdate::Minted`: event type "minted". Contains the note encoded in base64 if it is
-    ///   private.
+    /// - `MintUpdate::Minted`: event type "minted". Contains the note id, transaction id and
+    ///   explorer url.
     pub fn into_event(self) -> Event {
         match self {
             MintUpdate::Minted(note_id, tx_id, network_id) => {
