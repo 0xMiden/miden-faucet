@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Miden Faucet</title>
+    <link rel="stylesheet" href="index.css">
+    <!-- Load SHA3 library directly -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.8.0/sha3.min.js"
+        integrity="sha384-NKbaJKqJPrFeb86qfU2iNy4KO3oyIe6F5xm1PBYMpAkiVTxHjjafUKlebp0mAeNC"
+        crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <img src="favicon.ico" alt="Miden Faucet" class="logo-icon">
+                <div class="logo-text">MIDEN <span class="highlight">FAUCET</span></div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="modal-overlay" id="completedPublicModal" style="display: block; visibility: visible;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">
+                            <span class="highlight">PUBLIC</span> REQUEST COMPLETE!
+                        </h2>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="token-info">
+                            <span id="completedModalTokenAmount"></span> TOKENS TO: <span
+                                id="completedModalRecipientAddress"></span>
+                        </div>
+
+                        <!-- <div class="download-button" id="downloadButton">
+                                    <button class="btn" id="downloadBtn">
+                                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                            stroke-width="2">
+                                            <path d="M12 3v12m0 0l-5-5m5 5l5-5" />
+                                            <path d="M5 19h2v2h10v-2h2" />
+                                        </svg> DOWNLOAD NOTE
+                                    </button>
+                                </div> -->
+
+                        <div class="loading-section">
+                            <div class="success-tick-css">
+                                <div class="checkmark"></div>
+                            </div>
+                        </div>
+
+                        <div class="minting-text">
+                            <div class="minting-title">TOKENS MINTED!</div>
+                            <div class="minting-subtitle" style="color: #000000;">Go to you <span class="highlight"
+                                    style="color: #ff5500;">Miden Wallet</span> to claim.
+                            </div>
+                        </div>
+
+                        <div class="progress-container">
+                            <div class="progress-bar-modal">
+                                <div class="progress-fill-modal" style="width: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- <div class="next-steps">
+                        <span class="highlight">NEXT STEPS:</span>
+                        <p>STEP 1: Save the downloaded note file somewhere safe. You'll need this file
+                            to import the note into your wallet.</p>
+                        <p>STEP 2: Open your wallet and go to the “Import Note” section.</p>
+                        <p>STEP 3: Upload the note file to make the tokens available in your wallet.</p>
+                    </div> -->
+                </div>
+
+                <button class="explorer-btn" id="explorerBtn">
+                    VIEW TRANSACTION ON EXPLORER
+                </button>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

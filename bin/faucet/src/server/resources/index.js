@@ -3,9 +3,8 @@ class MidenFaucet {
         this.form = document.getElementById('faucetForm');
         this.recipientInput = document.getElementById('recipientAddress');
         this.tokenSelect = document.getElementById('tokenAmount');
-        this.privateBtn = document.getElementById('sendPrivateBtn');
-        this.publicBtn = document.getElementById('sendPublicBtn');
-        this.successMessage = document.getElementById('successMessage');
+        this.privateButton = document.getElementById('sendPrivateButton');
+        this.publicButton = document.getElementById('sendPublicButton');
         this.errorMessage = document.getElementById('errorMessage');
         this.faucetAddress = document.getElementById('faucetAddress');
         this.progressFill = document.getElementById('progressFill');
@@ -17,34 +16,23 @@ class MidenFaucet {
             console.error("SHA3 library not loaded initially");
             this.showError('Cryptographic library not loaded. Please refresh the page.');
         }
+
         this.fetchMetadata();
-        this.initEventListeners();
-        this.validateForm();
-    }
-
-    initEventListeners() {
-        this.privateBtn.addEventListener('click', () => this.handleSendTokens(true));
-        this.publicBtn.addEventListener('click', () => this.handleSendTokens(false));
-
-        this.recipientInput.addEventListener('input', () => this.validateForm());
-        this.tokenSelect.addEventListener('change', () => this.validateForm());
-
-        // Prevent form submission
-        this.form.addEventListener('submit', (e) => e.preventDefault());
-    }
-
-    validateForm() {
-        const isValid = this.recipientInput.value.trim() && this.tokenSelect.value;
-        this.privateBtn.disabled = !isValid;
-        this.publicBtn.disabled = !isValid;
+        this.privateButton.addEventListener('click', () => this.handleSendTokens(true));
+        this.publicButton.addEventListener('click', () => this.handleSendTokens(false));
     }
 
     async handleSendTokens(isPrivateNote) {
         const recipient = this.recipientInput.value.trim();
         const amount = this.tokenSelect.value;
 
-        if (!recipient || !amount) {
-            this.showError('Please fill in all required fields.');
+        if (!recipient) {
+            this.showError('Recipient address is required.');
+            return;
+        }
+
+        if (!amount || amount === '0') {
+            this.showError('Amount is required.');
             return;
         }
 
@@ -53,19 +41,25 @@ class MidenFaucet {
             return;
         }
 
-        this.setLoading(true);
         this.hideMessages();
+        this.showMintingModal(recipient, amount, isPrivateNote);
+
+        this.updateMintingTitle('PREPARING THE REQUEST');
 
         const powData = await this.getPowChallenge(recipient);
+        if (!powData) {
+            this.hideModals();
+            return;
+        }
         const nonce = await Utils.findValidNonce(powData.challenge, powData.target);
+
+        this.updateMintingTitle('MINTING TOKENS');
 
         try {
             await this.getTokens(powData.challenge, nonce, recipient, amount, isPrivateNote);
             this.resetForm();
         } catch (error) {
             this.showError(`Failed to send tokens: ${error.message}`);
-        } finally {
-            this.setLoading(false);
         }
     }
 
@@ -123,85 +117,120 @@ class MidenFaucet {
         };
         const evtSource = new EventSource(window.location.href + 'get_tokens?' + new URLSearchParams(params));
 
-        evtSource.onopen = () => {
-            this.showSuccess("Request on queue...");
-        };
-
         evtSource.onerror = (_) => {
             // Either rate limit exceeded or invalid account id. The error event does not contain the reason.
             evtSource.close();
+            this.hideModals();
             this.showError('Please try again soon.');
-            this.setLoading(false);
+            return;
         };
 
         evtSource.addEventListener("get-tokens-error", (event) => {
             console.error('EventSource failed:', event.data);
+            this.hideModals();
             evtSource.close();
 
             const data = JSON.parse(event.data);
             this.showError('Failed to receive tokens: ' + data.message);
-            this.setLoading(false);
-        });
-
-        evtSource.addEventListener("update", (event) => {
-            this.showSuccess(event.data);
+            return;
         });
 
         evtSource.addEventListener("note", (event) => {
             evtSource.close();
-            this.setLoading(false);
 
-            let data = JSON.parse(event.data);
+            // TODO: this state should wait until note is committed - use web-client for this
+            this.showCompletedModal(recipient, amount, isPrivateNote);
 
-            // TODO: this is temporary, will be redesigned later
-            this.showSuccess(`Created note ${data.note_id} for account ${data.account_id}. See transaction ${data.explorer_url + '/tx/' + data.transaction_id} on the explorer.`);
             if (isPrivateNote) {
+                // TODO: use download button
+                let data = JSON.parse(event.data);
                 const blob = Utils.base64ToBlob(data.data_base64);
                 Utils.downloadBlob(blob, 'note.mno');
             }
         });
     }
 
-    setLoading(isLoading) {
-        if (isLoading) {
-            this.privateBtn.disabled = true;
-            this.publicBtn.disabled = true;
-            this.privateBtn.style.opacity = '0.6';
-            this.publicBtn.style.opacity = '0.6';
-        } else {
-            this.privateBtn.disabled = true;
-            this.publicBtn.disabled = true;
-            this.privateBtn.style.opacity = '1';
-            this.publicBtn.style.opacity = '1';
-            this.validateForm();
-        }
+    hideModals() {
+        const mintingModal = document.getElementById('mintingModal');
+        mintingModal.classList.remove('active');
+
+        const completedPrivateModal = document.getElementById('completedPrivateModal');
+        completedPrivateModal.classList.remove('active');
+
+        const completedPublicModal = document.getElementById('completedPublicModal');
+        completedPublicModal.classList.remove('active');
     }
 
-    showSuccess(message) {
-        this.successMessage.textContent = message;
-        this.successMessage.style.display = 'block';
-        this.errorMessage.style.display = 'none';
+    showMintingModal(recipient, amount, isPrivateNote) {
+        const modal = document.getElementById('mintingModal');
+        const tokenAmount = document.getElementById('modalTokenAmount');
+        const recipientAddress = document.getElementById('modalRecipientAddress');
+        const noteType = document.getElementById('modalNoteType');
+
+        // Update modal content
+        tokenAmount.textContent = amount;
+        recipientAddress.textContent = recipient;
+        noteType.textContent = isPrivateNote ? 'PRIVATE' : 'PUBLIC';
+
+        modal.classList.add('active');
+    }
+
+    showCompletedModal(recipient, amount, isPrivateNote) {
+        const mintingModal = document.getElementById('mintingModal');
+        mintingModal.classList.remove('active');
+
+        document.getElementById('completedPublicTokenAmount').textContent = amount;
+        document.getElementById('completedPublicRecipientAddress').textContent = recipient;
+        document.getElementById('completedPrivateTokenAmount').textContent = amount;
+        document.getElementById('completedPrivateRecipientAddress').textContent = recipient;
+
+        this.updateMintingTitle('TOKENS MINTED!');
+        const completedPrivateModal = document.getElementById('completedPrivateModal');
+        const completedPublicModal = document.getElementById('completedPublicModal');
+
+        if (isPrivateNote) {
+            completedPrivateModal.classList.add('active');
+
+            const downloadButton = document.getElementById('downloadButton');
+            downloadButton.onclick = () => console.log('download clicked');
+        } else {
+            completedPublicModal.classList.add('active');
+            // TODO: enable explorer button
+            const explorerButton = document.getElementById('explorerButton');
+            explorerButton.onclick = () => this.openExplorer();
+        }
+
+        // Add click anywhere to continue
+        completedPublicModal.onclick = (_) => {
+            this.hideModals();
+            this.resetForm();
+        }
+        completedPrivateModal.onclick = (_) => {
+            this.hideModals();
+            this.resetForm();
+        };
+    }
+
+    openExplorer() {
+        window.open('https://testnet.midenscan.com', '_blank');
+    }
+
+    updateMintingTitle(title) {
+        const mintingTitle = document.getElementById('mintingTitle');
+        mintingTitle.textContent = title;
     }
 
     showError(message) {
         this.errorMessage.textContent = message;
         this.errorMessage.style.display = 'block';
-        this.successMessage.style.display = 'none';
     }
 
     hideMessages() {
-        this.successMessage.style.display = 'none';
         this.errorMessage.style.display = 'none';
     }
 
     resetForm() {
         this.recipientInput.value = '';
-        this.validateForm();
-    }
-
-    truncateAddress(address) {
-        if (address.length <= 10) return address;
-        return `${address.slice(0, 6)}...${address.slice(-4)}`;
     }
 }
 

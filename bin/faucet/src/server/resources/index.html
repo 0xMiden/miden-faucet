@@ -36,8 +36,8 @@
                 </div>
 
                 <div class="button-group">
-                    <button type="button" class="btn" id="sendPrivateBtn">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button type="button" class="button" id="sendPrivateButton">
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="transparent"></path>
                             <circle cx="12" cy="12" r="3" />
                             <line x1="2" y1="2" x2="22" y2="22" stroke-width="3" />
@@ -46,8 +46,8 @@
                         SEND PRIVATE NOTE
                     </button>
 
-                    <button type="button" class="btn" id="sendPublicBtn">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button type="button" class="button" id="sendPublicButton">
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="transparent"></path>
                             <circle cx="12" cy="12" r="3"></circle>
                         </svg>
@@ -59,8 +59,146 @@
                     Private note data is not visible on-chain
                 </div>
 
-                <div class="success-message" id="successMessage"></div>
                 <div class="error-message" id="errorMessage"></div>
+                <div class="modal-overlay" id="mintingModal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title">
+                                <span class="highlight" id="modalNoteType"></span> NOTE REQUEST
+                            </h2>
+                        </div>
+
+                        <div class="modal-body">
+                            <div class="token-info">
+                                <span id="modalTokenAmount"></span> TOKENS TO: <span id="modalRecipientAddress"></span>
+                            </div>
+
+                            <div class="loading-section">
+                                <div class="loader"></div>
+                            </div>
+
+                            <div class="minting-text">
+                                <div class="minting-title" id="mintingTitle">MINTING TOKENS</div>
+                                <div class="minting-subtitle">This may take a few seconds depending
+                                    on server load.
+                                </div>
+                            </div>
+
+                            <div class="progress-container">
+                                <div class="progress-bar-modal">
+                                    <div class="progress-fill-modal" style="width: 50%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-overlay" id="completedPublicModal">
+                    <div class="modal-content completed-modal">
+                        <div class="modal-header">
+                            <h2 class="modal-title">
+                                <span class="highlight">PUBLIC</span> NOTE REQUEST COMPLETE!
+                            </h2>
+                        </div>
+
+                        <div class="modal-body">
+                            <div class="token-info">
+                                <span id="completedPublicTokenAmount"></span> TOKENS TO: <span
+                                    id="completedPublicRecipientAddress"></span>
+                            </div>
+
+                            <div class="loading-section">
+                                <div class="success-tick-css">
+                                    <div class="checkmark"></div>
+                                </div>
+                            </div>
+
+                            <div class="minting-text">
+                                <div class="minting-title">TOKENS MINTED!</div>
+                                <div class="minting-subtitle" style="color: #000000;">Go to you <span class="highlight"
+                                        style="color: #ff5500;">Miden Wallet</span> to claim.
+                                </div>
+                            </div>
+
+                            <div class="progress-container">
+                                <div class="progress-bar-modal">
+                                    <div class="progress-fill-modal" style="width: 100%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="explorer-button" id="explorerButton">
+                        VIEW TRANSACTION ON EXPLORER
+                    </button>
+                    <div class="continue-text">CLICK ANYWHERE TO CONTINUE</div>
+                </div>
+
+                <div class="modal-overlay" id="completedPrivateModal">
+                    <div class="modal-content completed-modal">
+                        <div class="modal-header">
+                            <h2 class="modal-title">
+                                <span class="highlight">PRIVATE</span> NOTE CREATED!
+                            </h2>
+                        </div>
+
+                        <div class="modal-body">
+                            <div class="token-info">
+                                <span id="completedPrivateTokenAmount"></span> TOKENS TO: <span
+                                    id="completedPrivateRecipientAddress"></span>
+                            </div>
+
+                            <div class="loading-section">
+                                <button class="download-button" id="downloadButton">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                        xmlns="http://www.w3.org/2000/svg">
+                                        <path
+                                            d="M11 5C11 4.44772 11.4477 4 12 4C12.5523 4 13 4.44772 13 5V12.1578L16.2428 8.91501L17.657 10.3292L12.0001 15.9861L6.34326 10.3292L7.75748 8.91501L11 12.1575V5Z"
+                                            fill="currentColor" />
+                                        <path
+                                            d="M4 14H6V18H18V14H20V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V14Z"
+                                            fill="currentColor" />
+                                    </svg>
+                                    DOWNLOAD NOTE
+                                </button>
+                            </div>
+
+                            <div class="minting-text">
+                                <div class="minting-title">TOKENS MINTED!</div>
+                                <div class="minting-subtitle" style="color: #000000;">Go to you <span class="highlight"
+                                        style="color: #ff5500;">Miden Wallet</span> to claim.
+                                </div>
+                            </div>
+
+                            <div class="progress-container">
+                                <div class="progress-bar-modal">
+                                    <div class="progress-fill-modal" style="width: 100%;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="next-steps">
+                        <div class="step">
+                            <div class="highlight">NEXT STEPS:</div>
+                        </div>
+                        <div class="step">
+                            <strong>STEP 1:</strong> Save the downloaded note file somewhere safe. You'll need this file
+                            to import the note into your wallet.
+                        </div>
+                        <div class="step">
+                            <strong>STEP 2:</strong> Open your wallet and go to the "Import Note" section.
+                        </div>
+                        <div class="step">
+                            <strong>STEP 3:</strong> Upload the note file to make the tokens available in your wallet.
+                        </div>
+                    </div>
+
+                    <div class="warning-text">
+                        ⚠️ Important: If you lose this note file, your tokens cannot be recovered. Keep it safe and do
+                        not share it.
+                    </div>
+                    <div class="continue-text" style="top: 31vh;">CLICK ANYWHERE TO CONTINUE</div>
+                </div>
             </form>
         </main>
     </div>

@@ -432,7 +432,7 @@ mod test {
 
         // Click the public note button
         client
-            .find(fantoccini::Locator::Css("#sendPublicBtn"))
+            .find(fantoccini::Locator::Css("#sendPublicButton"))
             .await
             .unwrap()
             .click()
@@ -460,7 +460,6 @@ mod test {
 
         // Verify the received events
         assert!(!captured_events.is_empty(), "Took too long to capture any events");
-        assert!(captured_events.iter().any(|event| event["type"] == "update"));
         let note_event = captured_events.iter().find(|event| event["type"] == "note").unwrap();
         let note_data: serde_json::Value =
             serde_json::from_str(note_event["data"].as_str().unwrap()).unwrap();
