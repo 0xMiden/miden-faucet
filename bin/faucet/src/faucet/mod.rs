@@ -89,9 +89,9 @@ impl Faucet {
 
         let keystore = FilesystemKeyStore::<StdRng>::new(PathBuf::from("keystore"))
             .context("failed to create keystore")?;
-        keystore.add_key(
-            account_file.auth_secret_keys.first().context("account file has no auth keys")?,
-        )?;
+        for key in account_file.auth_secret_keys {
+            keystore.add_key(&key)?;
+        }
         let endpoint = Endpoint::try_from(node_url.as_str())
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("failed to parse node url: {node_url}"))?;
