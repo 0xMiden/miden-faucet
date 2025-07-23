@@ -1,8 +1,8 @@
-use std::{fmt::Write, time::Duration};
+use std::time::Duration;
 
 use miden_client::{
     account::AccountId,
-    utils::{Deserializable, Serializable},
+    utils::{Deserializable, Serializable, ToHex, hex_to_bytes},
 };
 use serde::{Serialize, Serializer};
 use sha3::{Digest, Sha3_256};
@@ -86,7 +86,8 @@ impl Challenge {
     /// in the context of the specified secret.
     pub fn decode(value: &str, secret: [u8; 32]) -> Result<Self, MintRequestError> {
         // Parse the hex-encoded challenge string
-        let bytes = Self::hex_decode(value).map_err(|_| MintRequestError::MissingPowParameters)?;
+        let bytes: [u8; CHALLENGE_ENCODED_SIZE] =
+            hex_to_bytes(value).map_err(|_| MintRequestError::MissingPowParameters)?;
 
         // SAFETY: Length of the bytes is enforced above.
         let target = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
@@ -114,7 +115,7 @@ impl Challenge {
         bytes.extend_from_slice(&self.account_id.to_bytes());
         bytes.extend_from_slice(&self.api_key.inner());
         bytes.extend_from_slice(&self.signature);
-        Self::hex_encode(&bytes)
+        bytes.to_hex_with_prefix()
     }
 
     /// Checks whether the provided nonce satisfies the target requirement encoded in the
@@ -160,25 +161,6 @@ impl Challenge {
         hasher.update(api_key);
         hasher.finalize().into()
     }
-
-    /// Simple hex encoding function.
-    fn hex_encode(bytes: &[u8]) -> String {
-        bytes.iter().fold(String::new(), |mut acc, b| {
-            write!(acc, "{b:02x}").unwrap();
-            acc
-        })
-    }
-
-    /// Simple hex decoding function.
-    fn hex_decode(s: &str) -> Result<Vec<u8>, ()> {
-        if s.len() % 2 != 0 {
-            return Err(());
-        }
-        (0..s.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|_| ()))
-            .collect()
-    }
 }
 
 #[cfg(test)]
@@ -222,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn test_challenge_encode_decode() {
+    fn challenge_encode_decode() {
         let secret = create_test_secret();
         let target = 3;
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -239,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn test_timestamp_validation() {
+    fn timestamp_validation() {
         let secret = create_test_secret();
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();

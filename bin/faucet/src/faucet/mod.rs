@@ -82,7 +82,7 @@ impl Faucet {
         store_path: PathBuf,
         network_id: NetworkId,
         account_file: AccountFile,
-        endpoint: &Endpoint,
+        node_url: &Url,
         timeout: Duration,
         remote_tx_prover_url: Option<Url>,
     ) -> anyhow::Result<Self> {
@@ -91,11 +91,15 @@ impl Faucet {
 
         let keystore = FilesystemKeyStore::<StdRng>::new(PathBuf::from("keystore"))
             .context("failed to create keystore")?;
-        keystore.add_key(
-            account_file.auth_secret_keys.first().context("account file has no auth keys")?,
-        )?;
-        let mut client = ClientBuilder::default()
-            .tonic_rpc_client(endpoint, Some(timeout.as_millis() as u64))
+        for key in account_file.auth_secret_keys {
+            keystore.add_key(&key)?;
+        }
+        let endpoint = Endpoint::try_from(node_url.as_str())
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("failed to parse node url: {node_url}"))?;
+
+        let mut client = ClientBuilder::new()
+            .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
             .sqlite_store(store_path.to_str().context("invalid store path")?)
             .build()
@@ -192,8 +196,11 @@ impl Faucet {
         Ok(())
     }
 
-    /// Fully handles a batch of requests to create and submit a transaction, and updates the local
-    /// db.
+    /// Fully handles a batch of requests to create and submit a transaction.
+    ///
+    /// For each mint request, a mint note is built. Then, with these notes, a transaction is
+    /// created, executed, and submitted using the local miden-client. This results in submitting
+    /// the transaction to the node and updating the local db to track the created notes.
     async fn handle_request_batch(
         &mut self,
         requests: &[MintRequest],
@@ -236,7 +243,7 @@ impl Faucet {
 // HELPER FUNCTIONS
 // ================================================================================================
 
-/// Builds a collection of `P2Id` notes from a set of mint requests.
+/// Builds a collection of `P2ID` notes from a set of mint requests.
 ///
 /// # Errors
 ///
@@ -334,10 +341,10 @@ mod tests {
             );
 
             Faucet::load(
-                PathBuf::from("store.sqlite3"),
+                PathBuf::from("faucet_client_store.sqlite3"),
                 NetworkId::Testnet,
                 account_file,
-                &Endpoint::try_from(stub_node_url.as_str()).unwrap(),
+                &stub_node_url,
                 Duration::from_secs(10),
                 None,
             )

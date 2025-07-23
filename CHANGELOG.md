@@ -5,8 +5,8 @@
 ### Changes
 
 - Integrated miden-client (#11).
-- Added `/get_notes` endpoint (#19).
+- Added `/get_note` endpoint (#19).
 
 ## 0.10.0 (2025-07-10)
 
-For previous changes see https://github.com/0xMiden/miden-node/blob/main/CHANGELOG.md
+For previous changes see the changelog in https://github.com/0xMiden/miden-node.

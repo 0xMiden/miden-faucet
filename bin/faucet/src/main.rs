@@ -20,7 +20,6 @@ use miden_client::{
     asset::TokenSymbol,
     auth::AuthSecretKey,
     crypto::SecretKey,
-    rpc::Endpoint,
     store::sqlite_store::SqliteStore,
 };
 use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
@@ -140,7 +139,7 @@ pub enum Command {
         open_telemetry: bool,
 
         /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = "store.sqlite3", env = ENV_STORE)]
+        #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
         store_path: PathBuf,
     },
 
@@ -219,14 +218,12 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 "failed to load faucet account from file ({})",
                 faucet_account_path.display()
             ))?;
-            let node_endpoint = Endpoint::try_from(node_url.as_str())
-                .map_err(|e| anyhow::anyhow!("failed to parse node url: {e}"))?;
 
             let faucet = Faucet::load(
                 store_path.clone(),
                 network.to_network_id()?,
                 account_file,
-                &node_endpoint,
+                &node_url,
                 timeout,
                 remote_tx_prover_url,
             )
@@ -302,7 +299,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let symbol = TokenSymbol::try_from(token_symbol.as_str())
                 .context("failed to parse token symbol")?;
             let max_supply = Felt::try_from(max_supply)
-                .expect("max supply value is greater than or equal to the field modulus");
+                .map_err(anyhow::Error::msg)
+                .context("max supply value is greater than or equal to the field modulus")?;
 
             let (account, account_seed) = AccountBuilder::new(rng.random())
                 .account_type(AccountType::FungibleFaucet)
@@ -538,7 +536,7 @@ mod test {
                         faucet_account_path: faucet_account_path.clone(),
                         remote_tx_prover_url: None,
                         open_telemetry: false,
-                        store_path: PathBuf::from("store.sqlite3"),
+                        store_path: PathBuf::from("faucet_client_store.sqlite3"),
                     },
                 })
                 .await

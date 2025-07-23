@@ -15,4 +15,4 @@ target
 
 .DS_Store
 keystore/
-store.sqlite3
+faucet_client_store.sqlite3

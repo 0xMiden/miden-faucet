@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function requestNote() {
-        const response = await fetch(window.location.href + 'get_notes?' + new URLSearchParams({
+        const response = await fetch(window.location.href + 'get_note?' + new URLSearchParams({
             note_id: noteIdElem.textContent
         }));
         if (!response.ok) {

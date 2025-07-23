@@ -19,7 +19,7 @@ use crate::{COMPONENT, server::Server};
 // ================================================================================================
 
 #[instrument(
-    parent = None, target = COMPONENT, name = "faucet.server.get_notes", skip_all,
+    parent = None, target = COMPONENT, name = "faucet.server.get_note", skip_all,
     fields(
         note_id = %request.note_id,
     )
