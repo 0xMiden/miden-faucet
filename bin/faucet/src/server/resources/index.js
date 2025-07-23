@@ -64,7 +64,7 @@ class MidenFaucet {
     }
 
     async fetchMetadata() {
-        fetch(window.location.href + 'get_metadata')
+        fetch(window.location.origin + '/get_metadata')
             .then(response => response.json())
             .then(data => {
                 this.faucetAddress.textContent = data.id;
@@ -88,7 +88,7 @@ class MidenFaucet {
     async getPowChallenge(recipient) {
         let powResponse;
         try {
-            powResponse = await fetch(window.location.href + 'pow?' + new URLSearchParams({
+            powResponse = await fetch(window.location.origin + '/pow?' + new URLSearchParams({
                 account_id: recipient
             }), {
                 method: "GET"
@@ -115,7 +115,7 @@ class MidenFaucet {
             challenge: challenge,
             nonce: nonce
         };
-        const evtSource = new EventSource(window.location.href + 'get_tokens?' + new URLSearchParams(params));
+        const evtSource = new EventSource(window.location.origin + '/get_tokens?' + new URLSearchParams(params));
 
         evtSource.onerror = (_) => {
             // Either rate limit exceeded or invalid account id. The error event does not contain the reason.
@@ -145,7 +145,8 @@ class MidenFaucet {
                 // TODO: use download button
                 let data = JSON.parse(event.data);
                 const blob = Utils.base64ToBlob(data.data_base64);
-                Utils.downloadBlob(blob, 'note.mno');
+                // Utils.downloadBlob(blob, 'note.mno');
+                // window.open('https://download', '_blank');
             }
         });
     }
