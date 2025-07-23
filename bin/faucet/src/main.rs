@@ -1,5 +1,4 @@
 mod faucet;
-mod rpc_client;
 mod server;
 mod types;
 
@@ -12,17 +11,19 @@ use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use faucet::Faucet;
-use miden_lib::{AuthScheme, account::faucets::create_basic_fungible_faucet};
-use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
-use miden_objects::{
+use miden_client::{
     Felt,
-    account::{AccountFile, AccountStorageMode, AuthSecretKey},
+    account::{
+        AccountBuilder, AccountFile, AccountStorageMode, AccountType,
+        component::{BasicFungibleFaucet, RpoFalcon512},
+    },
     asset::TokenSymbol,
-    crypto::dsa::rpo_falcon512::SecretKey,
+    auth::AuthSecretKey,
+    crypto::SecretKey,
 };
+use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use rpc_client::RpcClient;
 use server::Server;
 use tokio::sync::mpsc;
 use types::AssetOptions;
@@ -53,6 +54,7 @@ const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
 const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
+const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 
 // COMMANDS
 // ================================================================================================
@@ -134,6 +136,10 @@ pub enum Command {
         /// OpenTelemetry documentation. See our operator manual for further details.
         #[arg(long = "enable-otel", value_name = "BOOL", default_value_t = false, env = ENV_ENABLE_OTEL)]
         open_telemetry: bool,
+
+        /// Path to the `SQLite` store.
+        #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
+        store_path: PathBuf,
     },
 
     /// Create a new public faucet account and save to the specified file.
@@ -205,18 +211,19 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             pow_baseline,
             api_keys,
             open_telemetry: _,
+            store_path,
         } => {
-            let mut rpc_client = RpcClient::connect_lazy(&node_url, timeout.as_millis() as u64)
-                .context("failed to create RPC client")?;
             let account_file = AccountFile::read(&faucet_account_path).context(format!(
                 "failed to load faucet account from file ({})",
                 faucet_account_path.display()
             ))?;
 
             let faucet = Faucet::load(
+                store_path,
                 network.to_network_id()?,
                 account_file,
-                &mut rpc_client,
+                &node_url,
+                timeout,
                 remote_tx_prover_url,
             )
             .await?;
@@ -249,7 +256,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             // Use select to concurrently:
             // - Run and wait for the faucet (on current thread)
             // - Run and wait for server (in a spawned task)
-            let faucet_future = faucet.run(rpc_client, rx_requests);
+            let faucet_future = faucet.run(rx_requests);
             let server_future = async {
                 let server_handle =
                     tokio::spawn(
@@ -285,17 +292,19 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             let secret = SecretKey::with_rng(&mut get_rpo_random_coin(&mut rng));
 
-            let (account, account_seed) = create_basic_fungible_faucet(
-                rng.random(),
-                TokenSymbol::try_from(token_symbol.as_str())
-                    .context("failed to parse token symbol")?,
-                decimals,
-                Felt::try_from(max_supply)
-                    .expect("max supply value is greater than or equal to the field modulus"),
-                AccountStorageMode::Public,
-                AuthScheme::RpoFalcon512 { pub_key: secret.public_key() },
-            )
-            .context("failed to create basic fungible faucet account")?;
+            let symbol = TokenSymbol::try_from(token_symbol.as_str())
+                .context("failed to parse token symbol")?;
+            let max_supply = Felt::try_from(max_supply)
+                .map_err(anyhow::Error::msg)
+                .context("max supply value is greater than or equal to the field modulus")?;
+
+            let (account, account_seed) = AccountBuilder::new(rng.random())
+                .account_type(AccountType::FungibleFaucet)
+                .storage_mode(AccountStorageMode::Public)
+                .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
+                .with_auth_component(RpoFalcon512::new(secret.public_key()))
+                .build()
+                .context("failed to create basic fungible faucet account")?;
 
             let account_data = AccountFile::new(
                 account,
@@ -346,6 +355,7 @@ mod test {
     use std::{
         env::temp_dir,
         num::NonZeroUsize,
+        path::PathBuf,
         process::Stdio,
         str::FromStr,
         time::{Duration, Instant},
@@ -523,6 +533,7 @@ mod test {
                         faucet_account_path: faucet_account_path.clone(),
                         remote_tx_prover_url: None,
                         open_telemetry: false,
+                        store_path: PathBuf::from("faucet_client_store.sqlite3"),
                     },
                 })
                 .await

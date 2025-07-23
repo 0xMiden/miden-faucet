@@ -1,10 +1,9 @@
 use std::time::Duration;
 
-use miden_objects::{
+use miden_client::{
     account::AccountId,
-    utils::{Deserializable, Serializable},
+    utils::{Deserializable, Serializable, ToHex, hex_to_bytes},
 };
-use miden_tx::utils::{ToHex, hex_to_bytes};
 use serde::{Serialize, Serializer};
 use sha3::{Digest, Sha3_256};
 
@@ -205,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn test_challenge_encode_decode() {
+    fn challenge_encode_decode() {
         let secret = create_test_secret();
         let target = 3;
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -222,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn test_timestamp_validation() {
+    fn timestamp_validation() {
         let secret = create_test_secret();
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();
