@@ -60,7 +60,14 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<SyncStateRequest>,
     ) -> Result<Response<SyncStateResponse>, Status> {
-        unimplemented!();
+        Ok(Response::new(SyncStateResponse {
+            chain_tip: 0,
+            block_header: None,
+            mmr_delta: None,
+            accounts: vec![],
+            transactions: vec![],
+            notes: vec![],
+        }))
     }
 
     async fn sync_notes(

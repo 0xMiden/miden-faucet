@@ -135,7 +135,7 @@ class MidenFaucet {
             this.showSuccess(event.data);
         });
 
-        evtSource.addEventListener("note", (event) => {
+        evtSource.addEventListener("minted", (event) => {
             evtSource.close();
             this.setLoading(false);
 
@@ -148,6 +148,26 @@ class MidenFaucet {
                 Utils.downloadBlob(blob, 'note.mno');
             }
         });
+    }
+
+    async requestNote(noteId) {
+        const response = await fetch(window.location.href + 'get_note?' + new URLSearchParams({
+            note_id: noteId
+        }));
+        if (!response.ok) {
+            this.showError('Failed to download note: ' + await response.text());
+            return;
+        }
+        const data = await response.json();
+        // Decode base64
+        const binaryString = atob(data.data_base64);
+        const byteArray = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            byteArray[i] = binaryString.charCodeAt(i);
+        }
+
+        const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+        downloadBlob(blob, 'note.mno');
     }
 
     setLoading(isLoading) {
