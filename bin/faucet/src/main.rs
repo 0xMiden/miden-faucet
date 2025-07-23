@@ -4,7 +4,7 @@ mod types;
 
 mod network;
 #[cfg(test)]
-mod stub_rpc_api;
+mod testing;
 
 use std::{num::NonZeroUsize, path::PathBuf, sync::Arc, time::Duration};
 
@@ -371,7 +371,7 @@ mod test {
     use tokio::{io::AsyncBufReadExt, time::sleep};
     use url::Url;
 
-    use crate::{Cli, FaucetNetwork, run_faucet_command, stub_rpc_api::serve_stub};
+    use crate::{Cli, FaucetNetwork, run_faucet_command, testing::stub_rpc_api::serve_stub};
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
     /// to test the faucet website. It then loads the website and checks that all the requests

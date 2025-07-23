@@ -294,7 +294,7 @@ mod tests {
     use url::Url;
 
     use super::*;
-    use crate::{stub_rpc_api::serve_stub, types::AssetOptions};
+    use crate::{testing::stub_rpc_api::serve_stub, types::AssetOptions};
 
     // This test ensures that the faucet can create a transaction that outputs a batch of notes.
     #[allow(clippy::cast_sign_loss)]
