@@ -125,7 +125,7 @@ body {
     gap: 12px;
 }
 
-.btn {
+.button {
     width: 100%;
     height: 48px;
     border: 1px solid #e0e0e0;
@@ -140,17 +140,17 @@ body {
     transition: all 0.2s;
 }
 
-.btn:hover {
+.button:hover {
     background-color: #eeeeee;
     border-color: #d0d0d0;
 }
 
-.btn:disabled {
+.button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-.btn-icon {
+.button-icon {
     width: 16px;
     height: 16px;
     fill: currentColor;

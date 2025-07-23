@@ -1,16 +1,16 @@
 class MidenFaucet {
     constructor() {
         this.form = document.getElementById('faucetForm');
-        this.recipientInput = document.getElementById('recipientAddress');
-        this.tokenSelect = document.getElementById('tokenAmount');
-        this.privateBtn = document.getElementById('sendPrivateBtn');
-        this.publicBtn = document.getElementById('sendPublicBtn');
-        this.successMessage = document.getElementById('successMessage');
-        this.errorMessage = document.getElementById('errorMessage');
-        this.faucetAddress = document.getElementById('faucetAddress');
-        this.progressFill = document.getElementById('progressFill');
-        this.tokensClaimed = document.getElementById('tokensClaimed');
-        this.tokensSupply = document.getElementById('tokensSupply');
+        this.recipientInput = document.getElementById('recipient-address');
+        this.tokenSelect = document.getElementById('token-amount');
+        this.privateBtn = document.getElementById('send-private-button');
+        this.publicBtn = document.getElementById('send-public-button');
+        this.successMessage = document.getElementById('success-message');
+        this.errorMessage = document.getElementById('error-message');
+        this.faucetAddress = document.getElementById('faucet-address');
+        this.progressFill = document.getElementById('progress-fill');
+        this.tokensClaimed = document.getElementById('tokens-claimed');
+        this.tokensSupply = document.getElementById('tokens-supply');
 
         // Check if SHA3 is available right from the start
         if (typeof sha3_256 === 'undefined') {
@@ -18,33 +18,21 @@ class MidenFaucet {
             this.showError('Cryptographic library not loaded. Please refresh the page.');
         }
         this.fetchMetadata();
-        this.initEventListeners();
-        this.validateForm();
-    }
-
-    initEventListeners() {
         this.privateBtn.addEventListener('click', () => this.handleSendTokens(true));
         this.publicBtn.addEventListener('click', () => this.handleSendTokens(false));
-
-        this.recipientInput.addEventListener('input', () => this.validateForm());
-        this.tokenSelect.addEventListener('change', () => this.validateForm());
-
-        // Prevent form submission
-        this.form.addEventListener('submit', (e) => e.preventDefault());
-    }
-
-    validateForm() {
-        const isValid = this.recipientInput.value.trim() && this.tokenSelect.value;
-        this.privateBtn.disabled = !isValid;
-        this.publicBtn.disabled = !isValid;
     }
 
     async handleSendTokens(isPrivateNote) {
         const recipient = this.recipientInput.value.trim();
         const amount = this.tokenSelect.value;
 
-        if (!recipient || !amount) {
-            this.showError('Please fill in all required fields.');
+        if (!recipient) {
+            this.showError('Recipient address is required.');
+            return;
+        }
+
+        if (!amount || amount === '0') {
+            this.showError('Amount is required.');
             return;
         }
 
@@ -173,7 +161,6 @@ class MidenFaucet {
             this.publicBtn.disabled = true;
             this.privateBtn.style.opacity = '1';
             this.publicBtn.style.opacity = '1';
-            this.validateForm();
         }
     }
 
@@ -196,12 +183,6 @@ class MidenFaucet {
 
     resetForm() {
         this.recipientInput.value = '';
-        this.validateForm();
-    }
-
-    truncateAddress(address) {
-        if (address.length <= 10) return address;
-        return `${address.slice(0, 6)}...${address.slice(-4)}`;
     }
 }
 
@@ -228,8 +209,9 @@ const Utils = {
             nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
             try {
+                // Compute hash using SHA3 with the challenge and nonce
                 let hash = sha3_256.create();
-                hash.update(challenge);
+                hash.update(challenge);  // Use the hex-encoded challenge string directly
 
                 // Convert nonce to 8-byte big-endian format to match backend
                 const nonceBytes = new ArrayBuffer(8);
@@ -241,6 +223,7 @@ const Utils = {
                 // Take the first 8 bytes of the hash and parse them as u64 in big-endian
                 let digest = BigInt("0x" + hash.hex().slice(0, 16));
 
+                // Check if the hash is less than the target
                 if (digest < targetNum) {
                     return nonce;
                 }

@@ -26,18 +26,18 @@
 
             <form id="faucetForm">
                 <div class="form-group">
-                    <label for="recipientAddress" class="form-label">RECIPIENT ADDRESS</label>
-                    <input type="text" id="recipientAddress" class="form-input" placeholder="">
+                    <label for="recipient-address" class="form-label">RECIPIENT ADDRESS</label>
+                    <input type="text" id="recipient-address" class="form-input" placeholder="">
                 </div>
 
                 <div class="form-group">
-                    <label for="tokenAmount" class="form-label">TOKEN AMOUNT</label>
-                    <select id="tokenAmount" class="form-select"></select>
+                    <label for="token-amount" class="form-label">TOKEN AMOUNT</label>
+                    <select id="token-amount" class="form-select"></select>
                 </div>
 
                 <div class="button-group">
-                    <button type="button" class="btn" id="sendPrivateBtn">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button type="button" class="button" id="send-private-button">
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="transparent"></path>
                             <circle cx="12" cy="12" r="3" />
                             <line x1="2" y1="2" x2="22" y2="22" stroke-width="3" />
@@ -46,8 +46,8 @@
                         SEND PRIVATE NOTE
                     </button>
 
-                    <button type="button" class="btn" id="sendPublicBtn">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button type="button" class="button" id="send-public-button">
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="transparent"></path>
                             <circle cx="12" cy="12" r="3"></circle>
                         </svg>
@@ -59,8 +59,8 @@
                     Private note data is not visible on-chain
                 </div>
 
-                <div class="success-message" id="successMessage"></div>
-                <div class="error-message" id="errorMessage"></div>
+                <div class="success-message" id="success-message"></div>
+                <div class="error-message" id="error-message"></div>
             </form>
         </main>
     </div>
@@ -70,16 +70,16 @@
             <div class="footer-section">
                 <div class="footer-label">FAUCET ADDRESS</div>
                 <div class="footer-value">
-                    <span id="faucetAddress"> -</span>
+                    <span id="faucet-address"> -</span>
                 </div>
             </div>
             <div class="footer-section tokens-section">
                 <div class="footer-label">TOKENS CLAIMED</div>
                 <div class="footer-value">
-                    <span id="tokensClaimed">-</span> / <span id="tokensSupply">-</span>
+                    <span id="tokens-claimed">-</span> / <span id="tokens-supply">-</span>
                 </div>
                 <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
+                    <div class="progress-fill" id="progress-fill"></div>
                 </div>
             </div>
         </div>
