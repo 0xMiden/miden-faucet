@@ -4,9 +4,9 @@ mod types;
 
 mod network;
 #[cfg(test)]
-mod stub_rpc_api;
+mod testing;
 
-use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
+use std::{num::NonZeroUsize, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -20,6 +20,7 @@ use miden_client::{
     asset::TokenSymbol,
     auth::AuthSecretKey,
     crypto::SecretKey,
+    store::sqlite_store::SqliteStore,
 };
 use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
 use rand::{Rng, SeedableRng};
@@ -219,7 +220,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             ))?;
 
             let faucet = Faucet::load(
-                store_path,
+                store_path.clone(),
                 network.to_network_id()?,
                 account_file,
                 &node_url,
@@ -227,9 +228,11 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 remote_tx_prover_url,
             )
             .await?;
+            let store =
+                Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
 
             // Maximum of 1000 requests in-queue at once. Overflow is rejected for faster feedback.
-            let (tx_requests, rx_requests) = mpsc::channel(REQUESTS_QUEUE_SIZE);
+            let (tx_mint_requests, rx_mint_requests) = mpsc::channel(REQUESTS_QUEUE_SIZE);
 
             let api_keys = api_keys
                 .iter()
@@ -247,16 +250,17 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let server = Server::new(
                 faucet.faucet_id(),
                 asset_options,
-                tx_requests,
+                tx_mint_requests,
                 pow_secret.unwrap_or_default().as_str(),
                 pow_config,
                 &api_keys,
+                store,
             );
 
             // Use select to concurrently:
             // - Run and wait for the faucet (on current thread)
             // - Run and wait for server (in a spawned task)
-            let faucet_future = faucet.run(rx_requests);
+            let faucet_future = faucet.run(rx_mint_requests);
             let server_future = async {
                 let server_handle =
                     tokio::spawn(
@@ -273,7 +277,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 faucet_result = faucet_future => {
                     // Faucet completed, return its result
                     faucet_result.context("faucet failed")
-                }
+                },
             }?;
         },
 
@@ -367,7 +371,7 @@ mod test {
     use tokio::{io::AsyncBufReadExt, time::sleep};
     use url::Url;
 
-    use crate::{Cli, FaucetNetwork, run_faucet_command, stub_rpc_api::serve_stub};
+    use crate::{Cli, FaucetNetwork, run_faucet_command, testing::stub_rpc_api::serve_stub};
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
     /// to test the faucet website. It then loads the website and checks that all the requests
@@ -461,7 +465,7 @@ mod test {
                 .as_array()
                 .unwrap()
                 .clone();
-            if events.iter().any(|event| event["type"] == "note") {
+            if events.iter().any(|event| event["type"] == "minted") {
                 captured_events = events;
                 break;
             }
@@ -471,11 +475,10 @@ mod test {
         // Verify the received events
         assert!(!captured_events.is_empty(), "Took too long to capture any events");
         assert!(captured_events.iter().any(|event| event["type"] == "update"));
-        let note_event = captured_events.iter().find(|event| event["type"] == "note").unwrap();
+        let note_event = captured_events.iter().find(|event| event["type"] == "minted").unwrap();
         let note_data: serde_json::Value =
             serde_json::from_str(note_event["data"].as_str().unwrap()).unwrap();
         assert!(note_data["note_id"].is_string());
-        assert!(note_data["account_id"].is_string());
         assert!(note_data["transaction_id"].is_string());
         assert!(note_data["explorer_url"].is_string());
 
