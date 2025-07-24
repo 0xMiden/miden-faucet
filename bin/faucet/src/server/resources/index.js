@@ -1,6 +1,5 @@
 class MidenFaucet {
     constructor() {
-        this.form = document.getElementById('faucetForm');
         this.recipientInput = document.getElementById('recipient-address');
         this.tokenSelect = document.getElementById('token-amount');
         this.privateBtn = document.getElementById('send-private-button');
