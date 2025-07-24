@@ -6,6 +6,7 @@
 
 - Integrated miden-client (#11).
 - Added `/get_note` endpoint (#19).
+- Redesigned the home frontend (#20).
 
 ## 0.10.0 (2025-07-10)
 

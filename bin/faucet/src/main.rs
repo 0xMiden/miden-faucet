@@ -421,7 +421,7 @@ mod test {
 
         // Fill in the account address
         client
-            .find(fantoccini::Locator::Css("#account-address"))
+            .find(fantoccini::Locator::Css("#recipient-address"))
             .await
             .unwrap()
             .send_keys("mtst1qrvhealccdyj7gqqqrlxl4n4f53uxwaw")
@@ -430,14 +430,14 @@ mod test {
 
         // Select the first asset amount option
         client
-            .find(fantoccini::Locator::Css("#asset-amount"))
+            .find(fantoccini::Locator::Css("#token-amount"))
             .await
             .unwrap()
             .click()
             .await
             .unwrap();
         client
-            .find(fantoccini::Locator::Css("#asset-amount option"))
+            .find(fantoccini::Locator::Css("#token-amount option"))
             .await
             .unwrap()
             .click()
@@ -446,7 +446,7 @@ mod test {
 
         // Click the public note button
         client
-            .find(fantoccini::Locator::Css("#button-public"))
+            .find(fantoccini::Locator::Css("#send-public-button"))
             .await
             .unwrap()
             .click()
