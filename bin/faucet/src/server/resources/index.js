@@ -273,8 +273,9 @@ const Utils = {
             nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
             try {
+                // Compute hash using SHA3 with the challenge and nonce
                 let hash = sha3_256.create();
-                hash.update(challenge);
+                hash.update(challenge); // Use the hex-encoded challenge string directly
 
                 // Convert nonce to 8-byte big-endian format to match backend
                 const nonceBytes = new ArrayBuffer(8);
@@ -286,6 +287,7 @@ const Utils = {
                 // Take the first 8 bytes of the hash and parse them as u64 in big-endian
                 let digest = BigInt("0x" + hash.hex().slice(0, 16));
 
+                // Check if the hash is less than the target
                 if (digest < targetNum) {
                     return nonce;
                 }
