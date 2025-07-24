@@ -15,7 +15,6 @@ use miden_node_proto::generated::{
     },
     rpc::api_server,
 };
-use miden_node_utils::cors::cors_for_grpc_web_layer;
 use miden_testing::MockChain;
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -61,7 +60,14 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<SyncStateRequest>,
     ) -> Result<Response<SyncStateResponse>, Status> {
-        unimplemented!();
+        Ok(Response::new(SyncStateResponse {
+            chain_tip: 0,
+            block_header: None,
+            mmr_delta: None,
+            accounts: vec![],
+            transactions: vec![],
+            notes: vec![],
+        }))
     }
 
     async fn sync_notes(
@@ -131,7 +137,6 @@ pub async fn serve_stub(endpoint: &Url) -> anyhow::Result<()> {
 
     tonic::transport::Server::builder()
         .accept_http1(true)
-        .layer(cors_for_grpc_web_layer())
         .layer(GrpcWebLayer::new())
         .add_service(api_service)
         .serve_with_incoming(TcpListenerStream::new(listener))

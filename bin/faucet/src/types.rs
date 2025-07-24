@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 
-use miden_objects::asset::FungibleAsset;
+use miden_client::asset::FungibleAsset;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
 /// Describes the asset amounts allowed by the faucet.
@@ -103,7 +103,7 @@ pub enum NoteType {
     Public,
 }
 
-impl From<NoteType> for miden_objects::note::NoteType {
+impl From<NoteType> for miden_client::note::NoteType {
     fn from(value: NoteType) -> Self {
         match value {
             NoteType::Private => Self::Private,

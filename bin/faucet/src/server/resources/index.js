@@ -1,15 +1,15 @@
 class MidenFaucet {
     constructor() {
-        this.form = document.getElementById('faucetForm');
-        this.recipientInput = document.getElementById('recipientAddress');
-        this.tokenSelect = document.getElementById('tokenAmount');
-        this.privateButton = document.getElementById('sendPrivateButton');
-        this.publicButton = document.getElementById('sendPublicButton');
-        this.errorMessage = document.getElementById('errorMessage');
-        this.faucetAddress = document.getElementById('faucetAddress');
-        this.progressFill = document.getElementById('progressFill');
-        this.tokensClaimed = document.getElementById('tokensClaimed');
-        this.tokensSupply = document.getElementById('tokensSupply');
+        this.recipientInput = document.getElementById('recipient-address');
+        this.tokenSelect = document.getElementById('token-amount');
+        this.privateButton = document.getElementById('send-private-button');
+        this.publicButton = document.getElementById('send-public-button');
+        this.successMessage = document.getElementById('success-message');
+        this.errorMessage = document.getElementById('error-message');
+        this.faucetAddress = document.getElementById('faucet-address');
+        this.progressFill = document.getElementById('progress-fill');
+        this.tokensClaimed = document.getElementById('tokens-claimed');
+        this.tokensSupply = document.getElementById('tokens-supply');
 
         // Check if SHA3 is available right from the start
         if (typeof sha3_256 === 'undefined') {
@@ -120,14 +120,12 @@ class MidenFaucet {
         evtSource.onerror = (_) => {
             // Either rate limit exceeded or invalid account id. The error event does not contain the reason.
             evtSource.close();
-            this.hideModals();
             this.showError('Please try again soon.');
             return;
         };
 
         evtSource.addEventListener("get-tokens-error", (event) => {
             console.error('EventSource failed:', event.data);
-            this.hideModals();
             evtSource.close();
 
             const data = JSON.parse(event.data);
@@ -135,38 +133,53 @@ class MidenFaucet {
             return;
         });
 
-        evtSource.addEventListener("note", (event) => {
+        evtSource.addEventListener("minted", (event) => {
             evtSource.close();
+            this.setLoading(false);
+
+            let data = JSON.parse(event.data);
 
             // TODO: this state should wait until note is committed - use web-client for this
-            this.showCompletedModal(recipient, amount, isPrivateNote);
-
-            if (isPrivateNote) {
-                // TODO: use download button
-                let data = JSON.parse(event.data);
-                const blob = Utils.base64ToBlob(data.data_base64);
-                // Utils.downloadBlob(blob, 'note.mno');
-                // window.open('https://download', '_blank');
-            }
+            this.showCompletedModal(recipient, amount, isPrivateNote, data);
         });
     }
 
+    async requestNote(noteId) {
+        const response = await fetch(window.location.href + 'get_note?' + new URLSearchParams({
+            note_id: noteId
+        }));
+        if (!response.ok) {
+            this.showError('Failed to download note: ' + await response.text());
+            return;
+        }
+        const data = await response.json();
+        // Decode base64
+        const binaryString = atob(data.data_base64);
+        const byteArray = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            byteArray[i] = binaryString.charCodeAt(i);
+        }
+
+        const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+        Utils.downloadBlob(blob, 'note.mno');
+    }
+
     hideModals() {
-        const mintingModal = document.getElementById('mintingModal');
+        const mintingModal = document.getElementById('minting-modal');
         mintingModal.classList.remove('active');
 
-        const completedPrivateModal = document.getElementById('completedPrivateModal');
+        const completedPrivateModal = document.getElementById('completed-private-modal');
         completedPrivateModal.classList.remove('active');
 
-        const completedPublicModal = document.getElementById('completedPublicModal');
+        const completedPublicModal = document.getElementById('completed-public-modal');
         completedPublicModal.classList.remove('active');
     }
 
     showMintingModal(recipient, amount, isPrivateNote) {
-        const modal = document.getElementById('mintingModal');
-        const tokenAmount = document.getElementById('modalTokenAmount');
-        const recipientAddress = document.getElementById('modalRecipientAddress');
-        const noteType = document.getElementById('modalNoteType');
+        const modal = document.getElementById('minting-modal');
+        const tokenAmount = document.getElementById('modal-token-amount');
+        const recipientAddress = document.getElementById('modal-recipient-address');
+        const noteType = document.getElementById('modal-note-type');
 
         // Update modal content
         tokenAmount.textContent = amount;
@@ -176,29 +189,34 @@ class MidenFaucet {
         modal.classList.add('active');
     }
 
-    showCompletedModal(recipient, amount, isPrivateNote) {
-        const mintingModal = document.getElementById('mintingModal');
+    showCompletedModal(recipient, amount, isPrivateNote, mintingData) {
+        const mintingModal = document.getElementById('minting-modal');
         mintingModal.classList.remove('active');
 
-        document.getElementById('completedPublicTokenAmount').textContent = amount;
-        document.getElementById('completedPublicRecipientAddress').textContent = recipient;
-        document.getElementById('completedPrivateTokenAmount').textContent = amount;
-        document.getElementById('completedPrivateRecipientAddress').textContent = recipient;
+        document.getElementById('completed-public-token-amount').textContent = amount;
+        document.getElementById('completed-public-recipient-address').textContent = recipient;
+        document.getElementById('completed-private-token-amount').textContent = amount;
+        document.getElementById('completed-private-recipient-address').textContent = recipient;
 
         this.updateMintingTitle('TOKENS MINTED!');
-        const completedPrivateModal = document.getElementById('completedPrivateModal');
-        const completedPublicModal = document.getElementById('completedPublicModal');
+        const completedPrivateModal = document.getElementById('completed-private-modal');
+        const completedPublicModal = document.getElementById('completed-public-modal');
 
         if (isPrivateNote) {
             completedPrivateModal.classList.add('active');
 
-            const downloadButton = document.getElementById('downloadButton');
-            downloadButton.onclick = () => console.log('download clicked');
+            const downloadButton = document.getElementById('download-button');
+            downloadButton.onclick = () => this.requestNote(mintingData.note_id);
         } else {
             completedPublicModal.classList.add('active');
-            // TODO: enable explorer button
-            const explorerButton = document.getElementById('explorerButton');
-            explorerButton.onclick = () => this.openExplorer();
+
+            const explorerButton = document.getElementById('explorer-button');
+            if (mintingData.explorer_url) {
+                explorerButton.onclick = () => window.open(mintingData.explorer_url + '/tx/' + mintingData.transaction_id, '_blank');
+            } else {
+                explorerButton.onclick = () => this.showError('Explorer URL not available');
+            }
+
         }
 
         // Add click anywhere to continue
@@ -212,16 +230,13 @@ class MidenFaucet {
         };
     }
 
-    openExplorer() {
-        window.open('https://testnet.midenscan.com', '_blank');
-    }
-
     updateMintingTitle(title) {
-        const mintingTitle = document.getElementById('mintingTitle');
+        const mintingTitle = document.getElementById('minting-title');
         mintingTitle.textContent = title;
     }
 
     showError(message) {
+        this.hideModals();
         this.errorMessage.textContent = message;
         this.errorMessage.style.display = 'block';
     }

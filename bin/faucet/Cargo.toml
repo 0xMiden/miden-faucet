@@ -16,13 +16,8 @@ workspace = true
 
 [dependencies]
 # Miden dependencies.
-miden-lib                  = { workspace = true }
-miden-node-proto           = { workspace = true }
-miden-node-rpc             = { workspace = true }
-miden-node-utils           = { workspace = true }
-miden-objects              = { workspace = true }
-miden-remote-prover-client = { features = ["tx-prover"], workspace = true }
-miden-tx                   = { features = ["async", "concurrent"], workspace = true }
+miden-client     = { features = ["sqlite", "tonic"], workspace = true }
+miden-node-utils = { workspace = true }
 
 # External dependencies.
 anyhow       = { workspace = true }
@@ -52,14 +47,12 @@ url          = { workspace = true }
 miden-node-utils = { features = ["vergen"], workspace = true }
 
 [dev-dependencies]
-fantoccini                = { version = "0.22" }
-miden-node-block-producer = { features = ["testing"], workspace = true }
-miden-objects             = { features = ["testing"], workspace = true }
-miden-testing             = { features = ["async"], workspace = true }
-serde_json                = { version = "1.0" }
-tokio                     = { features = ["process"], workspace = true }
-tokio-stream              = { features = ["net"], workspace = true }
-tonic-web                 = { version = "0.13" }
+fantoccini       = { version = "0.22" }
+miden-node-proto = { branch = "next", git = "https://github.com/0xMiden/miden-node" }
+miden-testing    = { branch = "next", features = ["async"], git = "https://github.com/0xMiden/miden-base" }
+serde_json       = { version = "1.0" }
+tokio            = { features = ["process"], workspace = true }
+tonic-web        = { version = "0.13" }
 
 # Required to avoid false positives in cargo-machete
 # This is due to the `winter-maybe-async` crate not working standalone.

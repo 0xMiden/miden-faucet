@@ -8,8 +8,8 @@ use axum::{
         sse::{Event, KeepAlive},
     },
 };
+use miden_client::account::{AccountId, AccountIdError};
 use miden_node_utils::ErrorReport;
-use miden_objects::{AccountIdError, account::AccountId};
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio_stream::{Stream, wrappers::ReceiverStream};
@@ -19,20 +19,18 @@ use super::Server;
 use crate::{
     COMPONENT,
     faucet::MintRequest,
-    server::ApiKey,
+    server::{ApiKey, MintRequestSender},
     types::{AssetOptions, NoteType},
 };
 
-type RequestSender = mpsc::Sender<(MintRequest, mpsc::Sender<Result<Event, Infallible>>)>;
-
 #[derive(Clone)]
 pub struct GetTokensState {
-    request_sender: RequestSender,
-    asset_options: AssetOptions,
+    pub request_sender: MintRequestSender,
+    pub asset_options: AssetOptions,
 }
 
 impl GetTokensState {
-    pub fn new(request_sender: RequestSender, asset_options: AssetOptions) -> Self {
+    pub fn new(request_sender: MintRequestSender, asset_options: AssetOptions) -> Self {
         Self { request_sender, asset_options }
     }
 }
@@ -199,8 +197,8 @@ pub async fn get_tokens(
     State(server): State<Server>,
     Query(request): Query<RawMintRequest>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    // Response channel with buffer size 5 since there are currently 5 possible updates
-    let (tx_result_notifier, rx_result) = mpsc::channel(5);
+    // Response channel with buffer size 4 since there are currently 4 possible updates
+    let (tx_result_notifier, rx_result) = mpsc::channel(4);
 
     let mint_error = request
         .validate(&server)

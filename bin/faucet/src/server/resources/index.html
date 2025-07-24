@@ -24,19 +24,19 @@
         <main class="main-content">
             <h1 class="form-title">REQUEST TEST TOKENS</h1>
 
-            <form id="faucetForm">
+            <form>
                 <div class="form-group">
-                    <label for="recipientAddress" class="form-label">RECIPIENT ADDRESS</label>
-                    <input type="text" id="recipientAddress" class="form-input" placeholder="">
+                    <label for="recipient-address" class="form-label">RECIPIENT ADDRESS</label>
+                    <input type="text" id="recipient-address" class="form-input" placeholder="">
                 </div>
 
                 <div class="form-group">
-                    <label for="tokenAmount" class="form-label">TOKEN AMOUNT</label>
-                    <select id="tokenAmount" class="form-select"></select>
+                    <label for="token-amount" class="form-label">TOKEN AMOUNT</label>
+                    <select id="token-amount" class="form-select"></select>
                 </div>
 
                 <div class="button-group">
-                    <button type="button" class="button" id="sendPrivateButton">
+                    <button type="button" class="button" id="send-private-button">
                         <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="transparent"></path>
                             <circle cx="12" cy="12" r="3" />
@@ -46,7 +46,7 @@
                         SEND PRIVATE NOTE
                     </button>
 
-                    <button type="button" class="button" id="sendPublicButton">
+                    <button type="button" class="button" id="send-public-button">
                         <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="transparent"></path>
                             <circle cx="12" cy="12" r="3"></circle>
@@ -59,18 +59,19 @@
                     Private note data is not visible on-chain
                 </div>
 
-                <div class="error-message" id="errorMessage"></div>
-                <div class="modal-overlay" id="mintingModal">
+                <div class="error-message" id="error-message"></div>
+                <div class="modal-overlay" id="minting-modal">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h2 class="modal-title">
-                                <span class="highlight" id="modalNoteType"></span> NOTE REQUEST
+                                <span class="highlight" id="modal-note-type"></span> NOTE REQUEST
                             </h2>
                         </div>
 
                         <div class="modal-body">
                             <div class="token-info">
-                                <span id="modalTokenAmount"></span> TOKENS TO: <span id="modalRecipientAddress"></span>
+                                <span id="modal-token-amount"></span> TOKENS TO: <span
+                                    id="modal-recipient-address"></span>
                             </div>
 
                             <div class="loading-section">
@@ -78,7 +79,7 @@
                             </div>
 
                             <div class="minting-text">
-                                <div class="minting-title" id="mintingTitle">MINTING TOKENS</div>
+                                <div class="minting-title" id="minting-title">MINTING TOKENS</div>
                                 <div class="minting-subtitle">This may take a few seconds depending
                                     on server load.
                                 </div>
@@ -92,7 +93,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-overlay" id="completedPublicModal">
+                <div class="modal-overlay" id="completed-public-modal">
                     <div class="modal-content completed-modal">
                         <div class="modal-header">
                             <h2 class="modal-title">
@@ -102,8 +103,8 @@
 
                         <div class="modal-body">
                             <div class="token-info">
-                                <span id="completedPublicTokenAmount"></span> TOKENS TO: <span
-                                    id="completedPublicRecipientAddress"></span>
+                                <span id="completed-public-token-amount"></span> TOKENS TO: <span
+                                    id="completed-public-recipient-address"></span>
                             </div>
 
                             <div class="loading-section">
@@ -127,13 +128,13 @@
                         </div>
                     </div>
 
-                    <button class="explorer-button" id="explorerButton">
+                    <button class="explorer-button" id="explorer-button">
                         VIEW TRANSACTION ON EXPLORER
                     </button>
                     <div class="continue-text">CLICK ANYWHERE TO CONTINUE</div>
                 </div>
 
-                <div class="modal-overlay" id="completedPrivateModal">
+                <div class="modal-overlay" id="completed-private-modal">
                     <div class="modal-content completed-modal">
                         <div class="modal-header">
                             <h2 class="modal-title">
@@ -143,12 +144,12 @@
 
                         <div class="modal-body">
                             <div class="token-info">
-                                <span id="completedPrivateTokenAmount"></span> TOKENS TO: <span
-                                    id="completedPrivateRecipientAddress"></span>
+                                <span id="completed-private-token-amount"></span> TOKENS TO: <span
+                                    id="completed-private-recipient-address"></span>
                             </div>
 
                             <div class="loading-section">
-                                <button class="download-button" id="downloadButton">
+                                <button class="download-button" id="download-button">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
                                         xmlns="http://www.w3.org/2000/svg">
                                         <path
@@ -208,16 +209,16 @@
             <div class="footer-section">
                 <div class="footer-label">FAUCET ADDRESS</div>
                 <div class="footer-value">
-                    <span id="faucetAddress"> -</span>
+                    <span id="faucet-address"> -</span>
                 </div>
             </div>
             <div class="footer-section tokens-section">
                 <div class="footer-label">TOKENS CLAIMED</div>
                 <div class="footer-value">
-                    <span id="tokensClaimed">-</span> / <span id="tokensSupply">-</span>
+                    <span id="tokens-claimed">-</span> / <span id="tokens-supply">-</span>
                 </div>
                 <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
+                    <div class="progress-fill" id="progress-fill"></div>
                 </div>
             </div>
         </div>
