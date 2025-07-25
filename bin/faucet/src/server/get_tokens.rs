@@ -223,7 +223,7 @@ impl RawMintRequest {
     }
 }
 
-/// A request for minting to the [`Faucet`].
+/// A request for minting to the Faucet.
 pub struct MintRequest {
     /// Destination account.
     pub account_id: AccountId,
