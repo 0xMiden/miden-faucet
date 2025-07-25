@@ -115,32 +115,27 @@ class MidenFaucet {
             challenge: challenge,
             nonce: nonce
         };
-        const evtSource = new EventSource(window.location.origin + '/get_tokens?' + new URLSearchParams(params));
-
-        evtSource.onerror = (_) => {
-            // Either rate limit exceeded or invalid account id. The error event does not contain the reason.
-            evtSource.close();
-            this.showError('Please try again soon.');
+        let response;
+        try {
+            response = await fetch(window.location.origin + '/get_tokens?' + new URLSearchParams(params), {
+                method: "GET"
+            });
+        } catch (error) {
+            this.showError('Connection failed.');
+            console.error(error);
             return;
-        };
+        }
 
-        evtSource.addEventListener("get-tokens-error", (event) => {
-            console.error('EventSource failed:', event.data);
-            evtSource.close();
-
-            const data = JSON.parse(event.data);
-            this.showError('Failed to receive tokens: ' + data.message);
+        if (!response.ok) {
+            const message = await response.text();
+            this.showError(message);
             return;
-        });
+        }
 
-        evtSource.addEventListener("minted", (event) => {
-            evtSource.close();
+        let data = await response.json();
 
-            let data = JSON.parse(event.data);
-
-            // TODO: this state should wait until note is committed - use web-client for this
-            this.showCompletedModal(recipient, amount, isPrivateNote, data);
-        });
+        // TODO: this state should wait until note is committed - use web-client for this
+        this.showCompletedModal(recipient, amount, isPrivateNote, data);
     }
 
     async requestNote(noteId) {
