@@ -135,7 +135,6 @@ class MidenFaucet {
 
         evtSource.addEventListener("minted", (event) => {
             evtSource.close();
-            this.setLoading(false);
 
             let data = JSON.parse(event.data);
 
@@ -145,7 +144,7 @@ class MidenFaucet {
     }
 
     async requestNote(noteId) {
-        const response = await fetch(window.location.href + 'get_note?' + new URLSearchParams({
+        const response = await fetch(window.location.origin + '/get_note?' + new URLSearchParams({
             note_id: noteId
         }));
         if (!response.ok) {
@@ -206,7 +205,21 @@ class MidenFaucet {
             completedPrivateModal.classList.add('active');
 
             const downloadButton = document.getElementById('download-button');
-            downloadButton.onclick = () => this.requestNote(mintingData.note_id);
+            downloadButton.onclick = async () => {
+                await this.requestNote(mintingData.note_id);
+
+                const continueText = document.getElementById('private-continue-text');
+                continueText.style.visibility = 'visible';
+
+                const closeButton = document.getElementById('private-close-button');
+                closeButton.style.display = 'block';
+                closeButton.onclick = () => {
+                    closeButton.style.display = 'none';
+                    continueText.style.visibility = 'hidden';
+                    this.hideModals();
+                    this.resetForm();
+                };
+            };
         } else {
             completedPublicModal.classList.add('active');
 
@@ -214,20 +227,17 @@ class MidenFaucet {
             if (mintingData.explorer_url) {
                 explorerButton.onclick = () => window.open(mintingData.explorer_url + '/tx/' + mintingData.transaction_id, '_blank');
             } else {
-                explorerButton.onclick = () => this.showError('Explorer URL not available');
+                explorerButton.onclick = () => { console.error('Explorer URL not available'); }
             }
 
+            completedPublicModal.onclick = (e) => {
+                const continueText = document.getElementById('public-continue-text');
+                if (e.target === completedPublicModal || e.target === continueText) {
+                    this.hideModals();
+                    this.resetForm();
+                }
+            };
         }
-
-        // Add click anywhere to continue
-        completedPublicModal.onclick = (_) => {
-            this.hideModals();
-            this.resetForm();
-        }
-        completedPrivateModal.onclick = (_) => {
-            this.hideModals();
-            this.resetForm();
-        };
     }
 
     updateMintingTitle(title) {

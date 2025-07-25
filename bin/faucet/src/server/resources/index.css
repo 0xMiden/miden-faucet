@@ -223,6 +223,34 @@ body {
     color: #ff5500;
 }
 
+#private-close-button {
+    position: absolute;
+    top: 0px;
+    right: 0px;
+    width: 26px;
+    height: 26px;
+    background: #ff5500;
+    border: none;
+    cursor: pointer;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    z-index: 10;
+    display: none;
+}
+
+#private-close-button:hover {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+#private-close-button svg {
+    width: 10px;
+    height: 10px;
+}
+
 .token-info {
     font-size: 12px;
     font-weight: 400;
@@ -424,6 +452,11 @@ body {
     font-weight: 400;
     margin-top: 20px;
     color: rgba(0, 0, 0, 1);
+}
+
+#private-continue-text {
+    top: 31vh;
+    visibility: hidden;
 }
 
 .warning-text {
