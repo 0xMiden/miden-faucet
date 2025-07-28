@@ -4,8 +4,6 @@ class MidenFaucet {
         this.tokenSelect = document.getElementById('token-amount');
         this.privateButton = document.getElementById('send-private-button');
         this.publicButton = document.getElementById('send-public-button');
-        this.successMessage = document.getElementById('success-message');
-        this.errorMessage = document.getElementById('error-message');
         this.faucetAddress = document.getElementById('faucet-address');
         this.progressFill = document.getElementById('progress-fill');
         this.tokensClaimed = document.getElementById('tokens-claimed');
@@ -128,7 +126,7 @@ class MidenFaucet {
 
         if (!response.ok) {
             const message = await response.text();
-            this.showError(message);
+            this.showError('Failed to receive tokens: ' + message);
             return;
         }
 
@@ -139,11 +137,19 @@ class MidenFaucet {
     }
 
     async requestNote(noteId) {
-        const response = await fetch(window.location.origin + '/get_note?' + new URLSearchParams({
-            note_id: noteId
-        }));
+        this.hidePrivateModalError();
+        let response;
+        try {
+            response = await fetch(window.location.origin + '/get_note?' + new URLSearchParams({
+                note_id: noteId
+            }));
+        } catch (error) {
+            this.showPrivateModalError('Connection failed.');
+            return;
+        }
+
         if (!response.ok) {
-            this.showError('Failed to download note: ' + await response.text());
+            this.showPrivateModalError('Failed to download note: ' + await response.text());
             return;
         }
         const data = await response.json();
@@ -156,6 +162,13 @@ class MidenFaucet {
 
         const blob = new Blob([byteArray], { type: 'application/octet-stream' });
         Utils.downloadBlob(blob, 'note.mno');
+
+        this.showNoteDownloadedMessage();
+    }
+
+    showNoteDownloadedMessage() {
+        const continueText = document.getElementById('private-continue-text');
+        continueText.style.visibility = 'visible';
     }
 
     hideModals() {
@@ -203,14 +216,11 @@ class MidenFaucet {
             downloadButton.onclick = async () => {
                 await this.requestNote(mintingData.note_id);
 
-                const continueText = document.getElementById('private-continue-text');
-                continueText.style.visibility = 'visible';
-
                 const closeButton = document.getElementById('private-close-button');
                 closeButton.style.display = 'block';
                 closeButton.onclick = () => {
                     closeButton.style.display = 'none';
-                    continueText.style.visibility = 'hidden';
+                    this.hideMessages();
                     this.hideModals();
                     this.resetForm();
                 };
@@ -222,7 +232,7 @@ class MidenFaucet {
             if (mintingData.explorer_url) {
                 explorerButton.onclick = () => window.open(mintingData.explorer_url + '/tx/' + mintingData.transaction_id, '_blank');
             } else {
-                explorerButton.onclick = () => { console.error('Explorer URL not available'); }
+                explorerButton.onclick = () => this.showPublicModalError('Explorer URL not available');
             }
 
             completedPublicModal.onclick = (e) => {
@@ -240,14 +250,42 @@ class MidenFaucet {
         mintingTitle.textContent = title;
     }
 
+    showPublicModalError(message) {
+        const publicModalError = document.getElementById('public-error-message');
+        publicModalError.textContent = message;
+        publicModalError.style.display = 'block';
+    }
+
+    showPrivateModalError(message) {
+        const privateModalError = document.getElementById('private-error-message');
+        privateModalError.textContent = message;
+        privateModalError.style.display = 'block';
+    }
+
+    hidePrivateModalError() {
+        const privateModalError = document.getElementById('private-error-message');
+        privateModalError.style.display = 'none';
+    }
+
     showError(message) {
         this.hideModals();
-        this.errorMessage.textContent = message;
-        this.errorMessage.style.display = 'block';
+        const errorMessage = document.getElementById('error-message');
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
     }
 
     hideMessages() {
-        this.errorMessage.style.display = 'none';
+        const errorMessage = document.getElementById('error-message');
+        errorMessage.style.display = 'none';
+
+        const privateModalError = document.getElementById('private-error-message');
+        privateModalError.style.display = 'none';
+
+        const publicModalError = document.getElementById('public-error-message');
+        publicModalError.style.display = 'none';
+
+        const continueText = document.getElementById('private-continue-text');
+        continueText.style.visibility = 'hidden';
     }
 
     resetForm() {

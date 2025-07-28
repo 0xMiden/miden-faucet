@@ -192,7 +192,7 @@ body {
     background: white;
     border: 0.5px solid #e0e0e0;
     padding: 15px;
-    max-width: 500px;
+    max-width: 530px;
     width: 90%;
     max-height: 90vh;
     text-align: center;
@@ -263,6 +263,7 @@ body {
     align-items: center;
     justify-content: center;
     position: relative;
+    height: 60px;
 }
 
 .loader {
@@ -385,6 +386,7 @@ body {
     margin-top: 16px;
     display: none;
     font-size: 14px;
+    z-index: 1000;
 }
 
 @media (max-width: 768px) {
@@ -497,7 +499,7 @@ body {
     background: white;
     border: 0.5px solid #e0e0e0;
     padding: 14px;
-    max-width: 500px;
+    max-width: 530px;
     width: 90%;
     max-height: 90vh;
 }
@@ -517,4 +519,9 @@ body {
 
 .next-steps .step:last-child {
     margin-bottom: 0;
+}
+
+.modal-error {
+    position: absolute;
+    top: 26vh;
 }
