@@ -363,8 +363,8 @@ body {
 }
 
 .progress-bar {
-    width: 120px;
-    height: 3px;
+    width: 240px;
+    height: 4px;
     background-color: #e0e0e0;
     border-radius: 2px;
     margin-top: 4px;

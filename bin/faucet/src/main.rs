@@ -218,6 +218,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 "failed to load faucet account from file ({})",
                 faucet_account_path.display()
             ))?;
+            let faucet_component = BasicFungibleFaucet::try_from(&account_file.account)?;
 
             let faucet = Faucet::load(
                 store_path.clone(),
@@ -228,6 +229,11 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 remote_tx_prover_url,
             )
             .await?;
+
+            let decimals = faucet_component.decimals();
+            let max_supply = faucet_component.max_supply().as_int() / 10u64.pow(decimals.into());
+            let claimed_supply = faucet.get_claimed_supply().await? / 10u64.pow(decimals.into());
+
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
 
@@ -249,6 +255,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             };
             let server = Server::new(
                 faucet.faucet_id(),
+                max_supply,
+                claimed_supply,
                 asset_options,
                 tx_mint_requests,
                 pow_secret.unwrap_or_default().as_str(),

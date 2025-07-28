@@ -41,27 +41,28 @@ pub async fn get_tokens(
 ) -> Result<impl IntoResponse, GetTokenError> {
     let (mint_response_sender, mint_response_receiver) = oneshot::channel();
 
-    request
-        .validate(&server)
-        .map_err(GetTokenError::InvalidRequest)
-        .and_then(|request| {
-            let span = tracing::Span::current();
-            span.record("account", request.account_id.to_hex());
-            span.record("amount", request.asset_amount.inner());
-            span.record("note_type", request.note_type.to_string());
+    let validated_request = request.validate(&server).map_err(GetTokenError::InvalidRequest)?;
+    let requested_amount = validated_request.asset_amount.inner();
 
-            server
-                .mint_state
-                .request_sender
-                .try_send((request, mint_response_sender))
-                .map_err(|err| match err {
-                    TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
-                    TrySendError::Closed(_) => GetTokenError::FaucetClosed,
-                })
+    let span = tracing::Span::current();
+    span.record("account", validated_request.account_id.to_hex());
+    span.record("amount", requested_amount);
+    span.record("note_type", validated_request.note_type.to_string());
+
+    server
+        .mint_state
+        .request_sender
+        .try_send((validated_request, mint_response_sender))
+        .map_err(|err| match err {
+            TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
+            TrySendError::Closed(_) => GetTokenError::FaucetClosed,
         })?;
+
     let mint_response = mint_response_receiver
         .await
         .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?;
+
+    server.increment_claimed_supply(requested_amount);
     Ok(Json(mint_response))
 }
 

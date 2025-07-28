@@ -214,6 +214,29 @@ impl Faucet {
     pub fn faucet_id(&self) -> FaucetId {
         self.id
     }
+
+    /// Returns the claimed supply of the faucet account.
+    ///
+    /// Retrieves the account record from the client's database and extracts the claimed supply
+    /// from its storage.
+    ///
+    /// # Panics
+    /// - If the client has not loaded the faucet account.
+    /// - If the faucet storage does not contain the claimed supply.
+    pub async fn get_claimed_supply(&self) -> Result<u64, ClientError> {
+        let account_record = self
+            .client
+            .get_account(self.id.account_id)
+            .await?
+            .expect("client should have loaded the faucet account");
+        let claimed_supply = account_record
+            .account()
+            .storage()
+            .get_item(0)
+            .expect("faucet storage should contain the claimed supply")[3]
+            .as_int();
+        Ok(claimed_supply)
+    }
 }
 
 // HELPER FUNCTIONS

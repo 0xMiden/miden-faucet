@@ -72,10 +72,11 @@ class MidenFaucet {
                     option.textContent = amount;
                     this.tokenSelect.appendChild(option);
                 }
-                // TODO: add metadata values
-                this.tokensClaimed.textContent = '0';
-                this.tokensSupply.textContent = '100,000,000,000';
-                this.progressFill.style.width = '0%';
+
+                this.tokensClaimed.textContent = data.claimed_supply.toLocaleString();
+                this.tokensSupply.textContent = data.max_supply.toLocaleString();
+                this.progressFill.style.width = (data.claimed_supply / data.max_supply) * 100 + '%';
+                // TODO: show error message if no more tokens available
             })
             .catch(error => {
                 console.error('Error fetching metadata:', error);
