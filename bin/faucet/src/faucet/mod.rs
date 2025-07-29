@@ -11,8 +11,8 @@ use miden_client::{
     note::{NoteError, create_p2id_note},
     rpc::Endpoint,
     transaction::{
-        LocalTransactionProver, OutputNote, TransactionId, TransactionProver,
-        TransactionRequestBuilder,
+        LocalTransactionProver, OutputNote, TransactionExecutorError, TransactionId,
+        TransactionProver, TransactionRequestBuilder,
     },
 };
 use miden_node_utils::crypto::get_rpo_random_coin;
@@ -164,7 +164,17 @@ impl Faucet {
             let mut rng = get_rpo_random_coin(&mut rng());
             let notes = build_p2id_notes(self.id, self.decimals, &requests, &mut rng)?;
             let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
-            let tx_id = self.create_transaction(notes).await?;
+            let tx_id = match self.create_transaction(notes).await {
+                Err(ClientError::TransactionExecutorError(
+                    TransactionExecutorError::TransactionProgramExecutionFailed(e),
+                )) => {
+                    // We assume this is a supply exceeded error, we ignore it and drop the whole
+                    // batch. Execution should not fail for other reasons.
+                    tracing::error!(?e, "failed to create transaction");
+                    continue;
+                },
+                result => result?,
+            };
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.

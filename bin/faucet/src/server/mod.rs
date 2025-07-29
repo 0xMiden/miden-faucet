@@ -190,6 +190,11 @@ impl Server {
     pub(crate) fn increment_claimed_supply(&self, amount: u64) {
         self.metadata.claimed_supply.fetch_add(amount, Ordering::Relaxed);
     }
+
+    /// Checks if the given amount is available to be claimed.
+    pub(crate) fn amount_is_available(&self, amount: u64) -> bool {
+        self.metadata.claimed_supply.load(Ordering::Relaxed) + amount <= self.metadata.max_supply
+    }
 }
 
 impl FromRef<Server> for &'static Metadata {
