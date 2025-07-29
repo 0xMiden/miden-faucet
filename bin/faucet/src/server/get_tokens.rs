@@ -226,7 +226,7 @@ impl RawMintRequest {
         // requests can be included in the same batch and exceed the available supply.
         if !server.amount_is_available(asset_amount.inner()) {
             tracing::error!("faucet supply exceeded");
-            // return Err(MintRequestError::AvailableSupplyExceeded);
+            return Err(MintRequestError::AvailableSupplyExceeded);
         }
 
         Ok(MintRequest { account_id, note_type, asset_amount })
