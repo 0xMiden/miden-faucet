@@ -55,7 +55,6 @@ class MidenFaucet {
 
         try {
             await this.getTokens(powData.challenge, nonce, recipient, amount, isPrivateNote);
-            this.resetForm();
         } catch (error) {
             this.showError(`Failed to send tokens: ${error.message}`);
         }

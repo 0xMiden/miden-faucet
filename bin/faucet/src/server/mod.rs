@@ -29,7 +29,7 @@ use url::Url;
 use crate::{
     COMPONENT,
     faucet::FaucetId,
-    server::{get_note::get_note, get_pow::get_pow, get_tokens::MintRequestError},
+    server::{get_note::get_note, get_pow::get_pow},
     types::AssetOptions,
 };
 
@@ -41,7 +41,7 @@ mod get_pow;
 mod get_tokens;
 mod pow;
 pub use api_key::ApiKey;
-pub use get_tokens::{MintRequest, MintResponse, MintResponseSender};
+pub use get_tokens::{MintRequest, MintRequestError, MintResponse, MintResponseSender};
 pub use pow::PoWConfig;
 
 // FAUCET STATE
@@ -64,7 +64,7 @@ impl Server {
     pub fn new(
         faucet_id: FaucetId,
         max_supply: u64,
-        claimed_supply: u64,
+        available_supply: u64,
         asset_options: AssetOptions,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
@@ -76,7 +76,7 @@ impl Server {
         let metadata = Metadata {
             id: faucet_id,
             asset_amount_options: asset_options,
-            claimed_supply: Arc::new(AtomicU64::new(claimed_supply)),
+            claimed_supply: Arc::new(AtomicU64::new(max_supply - available_supply)),
             max_supply,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
@@ -189,11 +189,6 @@ impl Server {
     /// Increments the claimed supply counter by the given amount.
     pub(crate) fn increment_claimed_supply(&self, amount: u64) {
         self.metadata.claimed_supply.fetch_add(amount, Ordering::Relaxed);
-    }
-
-    /// Checks if the given amount is available to be claimed.
-    pub(crate) fn amount_is_available(&self, amount: u64) -> bool {
-        self.metadata.claimed_supply.load(Ordering::Relaxed) + amount <= self.metadata.max_supply
     }
 }
 

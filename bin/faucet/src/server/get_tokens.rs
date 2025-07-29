@@ -25,7 +25,7 @@ use crate::{
 // ENDPOINT
 // ================================================================================================
 
-pub type MintResponseSender = oneshot::Sender<MintResponse>;
+pub type MintResponseSender = oneshot::Sender<Result<MintResponse, MintRequestError>>;
 
 #[instrument(
     parent = None, target = COMPONENT, name = "faucet.server.get_tokens", skip_all,
@@ -60,7 +60,8 @@ pub async fn get_tokens(
 
     let mint_response = mint_response_receiver
         .await
-        .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?;
+        .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
+        .map_err(GetTokenError::InvalidRequest)?;
 
     server.increment_claimed_supply(requested_amount);
     Ok(Json(mint_response))
@@ -221,13 +222,6 @@ impl RawMintRequest {
         let nonce = self.nonce.ok_or(MintRequestError::MissingPowParameters)?;
 
         server.submit_challenge(&challenge_str, nonce, account_id, &api_key.unwrap_or_default())?;
-
-        // Validate if the requested amount is available. This may not be accurate because other
-        // requests can be included in the same batch and exceed the available supply.
-        if !server.amount_is_available(asset_amount.inner()) {
-            tracing::error!("faucet supply exceeded");
-            return Err(MintRequestError::AvailableSupplyExceeded);
-        }
 
         Ok(MintRequest { account_id, note_type, asset_amount })
     }
