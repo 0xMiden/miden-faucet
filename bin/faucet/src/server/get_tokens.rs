@@ -9,7 +9,6 @@ use axum::{
     },
 };
 use miden_client::account::{AccountId, AccountIdError};
-use miden_node_utils::ErrorReport;
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio_stream::{Stream, wrappers::ReceiverStream};
@@ -87,7 +86,7 @@ impl GetTokenError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::InvalidRequest(invalid_request) => invalid_request.as_report(),
+            Self::InvalidRequest(invalid_request) => invalid_request.to_string(),
             Self::FaucetOverloaded => {
                 "The faucet is currently overloaded, please try again later.".to_owned()
             },

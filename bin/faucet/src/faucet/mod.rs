@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use miden_client::{
-    Client, ClientError, Felt, RemoteTransactionProver,
+    Client, ClientError, Felt, RemoteTransactionProver, Word,
     account::{AccountFile, AccountId, NetworkId, component::BasicFungibleFaucet},
     asset::FungibleAsset,
     builder::ClientBuilder,
@@ -15,8 +15,7 @@ use miden_client::{
         TransactionRequestBuilder,
     },
 };
-use miden_node_utils::crypto::get_rpo_random_coin;
-use rand::{rng, rngs::StdRng};
+use rand::{Rng, rng, rngs::StdRng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
 use tracing::{info, instrument, warn};
@@ -206,7 +205,11 @@ impl Faucet {
         requests: &[MintRequest],
         updater: &ClientUpdater,
     ) -> Result<(TransactionId, Vec<NoteId>), ClientError> {
-        let mut rng = get_rpo_random_coin(&mut rng());
+        let mut rng = {
+            let auth_seed: [u64; 4] = rng().random();
+            let rng_seed = Word::from(auth_seed.map(Felt::new));
+            RpoRandomCoin::new(rng_seed)
+        };
 
         // Build the notes
         let notes = build_p2id_notes(self.id, self.decimals, requests, &mut rng)?;
@@ -287,9 +290,7 @@ mod tests {
         rpc::{NodeRpcClient, TonicRpcClient},
         store::TransactionFilter,
     };
-    use miden_node_utils::crypto::get_rpo_random_coin;
-    use rand::{Rng, SeedableRng};
-    use rand_chacha::ChaCha20Rng;
+    use rand::Rng;
     use tokio::time::{Instant, sleep};
     use url::Url;
 
@@ -322,12 +323,11 @@ mod tests {
 
         // Create the faucet
         let mut faucet = {
-            let mut rng = ChaCha20Rng::from_seed(rand::random());
-            let secret = SecretKey::with_rng(&mut get_rpo_random_coin(&mut rng));
+            let secret = SecretKey::new();
             let symbol = TokenSymbol::try_from("MIDEN").unwrap();
             let decimals = 2;
             let max_supply = Felt::try_from(1_000_000_000_000u64).unwrap();
-            let (account, account_seed) = AccountBuilder::new(rng.random())
+            let (account, account_seed) = AccountBuilder::new(rng().random())
                 .account_type(AccountType::FungibleFaucet)
                 .storage_mode(AccountStorageMode::Public)
                 .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply).unwrap())
