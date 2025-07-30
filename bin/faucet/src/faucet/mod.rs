@@ -59,7 +59,7 @@ impl Serialize for FaucetId {
 pub struct Faucet {
     id: FaucetId,
     decimals: u8,
-    client: Client,
+    client: Client<FilesystemKeyStore<StdRng>>,
     tx_prover: Arc<dyn TransactionProver>,
 }
 
