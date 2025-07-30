@@ -63,7 +63,6 @@ pub async fn get_tokens(
         .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
         .map_err(GetTokenError::InvalidRequest)?;
 
-    server.increment_claimed_supply(requested_amount);
     Ok(Json(mint_response))
 }
 

@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     sync::{
         Arc,
-        atomic::{AtomicU64, Ordering},
+        atomic::AtomicU64,
     },
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -64,7 +64,7 @@ impl Server {
     pub fn new(
         faucet_id: FaucetId,
         max_supply: u64,
-        available_supply: u64,
+        claimed_supply: Arc<AtomicU64>,
         asset_options: AssetOptions,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
@@ -76,7 +76,7 @@ impl Server {
         let metadata = Metadata {
             id: faucet_id,
             asset_amount_options: asset_options,
-            claimed_supply: Arc::new(AtomicU64::new(max_supply - available_supply)),
+            claimed_supply,
             max_supply,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
@@ -184,11 +184,6 @@ impl Server {
             .expect("current timestamp should be greater than unix epoch")
             .as_secs();
         self.pow.submit_challenge(account_id, api_key, challenge, nonce, timestamp)
-    }
-
-    /// Increments the claimed supply counter by the given amount.
-    pub(crate) fn increment_claimed_supply(&self, amount: u64) {
-        self.metadata.claimed_supply.fetch_add(amount, Ordering::Relaxed);
     }
 }
 

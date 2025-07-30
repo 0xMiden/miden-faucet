@@ -1,4 +1,11 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 
 use anyhow::Context;
 use miden_client::{
@@ -61,7 +68,8 @@ pub struct Faucet {
     decimals: u8,
     client: Client,
     tx_prover: Arc<dyn TransactionProver>,
-    available_supply: u64,
+    claimed_supply: Arc<AtomicU64>,
+    max_supply: u64,
 }
 
 impl Faucet {
@@ -138,15 +146,15 @@ impl Faucet {
             None => Arc::new(LocalTransactionProver::default()),
         };
         let id = FaucetId::new(account.id(), network_id);
-        let available_supply =
-            (faucet.max_supply().as_int() - claimed_supply) / 10u64.pow(faucet.decimals().into());
+        let decimal_divisor = 10u64.pow(faucet.decimals().into());
 
         Ok(Self {
             id,
             decimals: faucet.decimals(),
             client,
             tx_prover,
-            available_supply,
+            claimed_supply: Arc::new(AtomicU64::new(claimed_supply / decimal_divisor)),
+            max_supply: faucet.max_supply().as_int() / decimal_divisor,
         })
     }
 
@@ -171,15 +179,15 @@ impl Faucet {
             let mut response_senders = vec![];
             for (request, response_sender) in buffer.drain(..) {
                 let requested_amount = request.asset_amount.inner();
-                if self.available_supply < requested_amount {
+                if self.available_supply() < requested_amount {
                     let _ = response_sender.send(Err(MintRequestError::AvailableSupplyExceeded));
                     continue;
                 }
                 filtered_requests.push(request);
                 response_senders.push(response_sender);
-                self.available_supply -= requested_amount;
+                self.claimed_supply.fetch_add(requested_amount, Ordering::Relaxed);
             }
-            if self.available_supply == 0 {
+            if self.available_supply() == 0 {
                 error!("Faucet has run out of tokens");
             }
             if filtered_requests.is_empty() {
@@ -242,7 +250,12 @@ impl Faucet {
 
     /// Returns the available supply of the faucet.
     pub fn available_supply(&self) -> u64 {
-        self.available_supply
+        self.max_supply - self.claimed_supply.load(Ordering::Relaxed)
+    }
+
+    /// Returns the claimed supply of the faucet.
+    pub fn claimed_supply(&self) -> Arc<AtomicU64> {
+        self.claimed_supply.clone()
     }
 
     /// Returns the claimed supply of the provided account.
