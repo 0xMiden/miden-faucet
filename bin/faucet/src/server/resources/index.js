@@ -41,6 +41,7 @@ class MidenFaucet {
 
         this.hideMessages();
         this.showMintingModal(recipient, amount, isPrivateNote);
+        this.updateProgressBar(0);
 
         this.updateMintingTitle('PREPARING THE REQUEST');
 
@@ -52,6 +53,7 @@ class MidenFaucet {
         const nonce = await Utils.findValidNonce(powData.challenge, powData.target);
 
         this.updateMintingTitle('MINTING TOKENS');
+        this.updateProgressBar(50);
 
         try {
             await this.getTokens(powData.challenge, nonce, recipient, amount, isPrivateNote);
@@ -181,6 +183,8 @@ class MidenFaucet {
 
         const completedPublicModal = document.getElementById('completed-public-modal');
         completedPublicModal.classList.remove('active');
+
+        this.hideProgressBar();
     }
 
     showMintingModal(recipient, amount, isPrivateNote) {
@@ -209,6 +213,8 @@ class MidenFaucet {
         this.updateMintingTitle('TOKENS MINTED!');
         const completedPrivateModal = document.getElementById('completed-private-modal');
         const completedPublicModal = document.getElementById('completed-public-modal');
+
+        this.updateProgressBar(100);
 
         if (isPrivateNote) {
             completedPrivateModal.classList.add('active');
@@ -291,6 +297,23 @@ class MidenFaucet {
 
     resetForm() {
         this.recipientInput.value = '';
+    }
+
+    updateProgressBar(progress) {
+        this.showProgressBar();
+        const progressBarFill = document.getElementById('progress-bar-fill');
+        progressBarFill.style.width = progress + '%';
+    }
+
+    showProgressBar() {
+        const progressBarTotal = document.getElementById('progress-bar-total');
+        progressBarTotal.classList.add('active');
+    }
+
+    hideProgressBar() {
+        this.updateProgressBar(0);
+        const progressBarTotal = document.getElementById('progress-bar-total');
+        progressBarTotal.classList.remove('active');
     }
 }
 
