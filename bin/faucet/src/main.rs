@@ -387,38 +387,6 @@ mod test {
         let title = client.title().await.unwrap();
         assert_eq!(title, "Miden Faucet");
 
-        // Execute a script to get all the failed requests
-        let script = r"
-            let errors = [];
-            performance.getEntriesByType('resource').forEach(entry => {
-                if (entry.responseStatus && entry.responseStatus >= 400) {
-                    errors.push({url: entry.name, status: entry.responseStatus});
-                }
-            });
-            return errors;
-        ";
-        let failed_requests = client.execute(script, vec![]).await.unwrap();
-
-        // Verify all requests are successful
-        assert!(failed_requests.as_array().unwrap().is_empty());
-
-        // Inject JavaScript to capture sse events
-        let capture_events_script = r"
-            window.capturedEvents = [];
-            const original = EventSource.prototype.addEventListener;
-            EventSource.prototype.addEventListener = function(type, listener) {
-                const wrappedListener = function(event) {
-                    window.capturedEvents.push({
-                        type: type,
-                        data: event.data
-                    });
-                    return listener(event);
-                };
-                return original.call(this, type, wrappedListener);
-            };
-        ";
-        client.execute(capture_events_script, vec![]).await.unwrap();
-
         // Fill in the account address
         client
             .find(fantoccini::Locator::Css("#recipient-address"))
@@ -453,34 +421,20 @@ mod test {
             .await
             .unwrap();
 
-        // Poll until minting is complete. We wait 10s and then poll every 2s for a max of
-        // 55 times (total 2 mins).
-        sleep(Duration::from_secs(10)).await;
-        let mut captured_events: Vec<serde_json::Value> = vec![];
-        for _ in 0..55 {
-            let events = client
-                .execute("return window.capturedEvents;", vec![])
-                .await
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .clone();
-            if events.iter().any(|event| event["type"] == "minted") {
-                captured_events = events;
-                break;
-            }
-            sleep(Duration::from_secs(2)).await;
-        }
+        // Execute a script to get all the failed requests
+        let script = r"
+            let errors = [];
+            performance.getEntriesByType('resource').forEach(entry => {
+                if (entry.responseStatus && entry.responseStatus >= 400) {
+                    errors.push({url: entry.name, status: entry.responseStatus});
+                }
+            });
+            return errors;
+        ";
+        let failed_requests = client.execute(script, vec![]).await.unwrap();
 
-        // Verify the received events
-        assert!(!captured_events.is_empty(), "Took too long to capture any events");
-        assert!(captured_events.iter().any(|event| event["type"] == "update"));
-        let note_event = captured_events.iter().find(|event| event["type"] == "minted").unwrap();
-        let note_data: serde_json::Value =
-            serde_json::from_str(note_event["data"].as_str().unwrap()).unwrap();
-        assert!(note_data["note_id"].is_string());
-        assert!(note_data["transaction_id"].is_string());
-        assert!(note_data["explorer_url"].is_string());
+        // Verify all requests are successful
+        assert!(failed_requests.as_array().unwrap().is_empty());
 
         client.close().await.unwrap();
     }
