@@ -20,7 +20,7 @@ opt-level = 2
 
 [workspace.dependencies]
 # miden-client dependencies.
-miden-client = { branch = "tomyrd-downgrade-base", git = "https://github.com/0xMiden/miden-client" }
+miden-client = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
 
 # miden-node dependencies.
 miden-node-utils = { branch = "next", git = "https://github.com/0xMiden/miden-node" }
