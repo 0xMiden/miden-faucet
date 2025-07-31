@@ -25,7 +25,7 @@ use crate::{
 // ENDPOINT
 // ================================================================================================
 
-pub type MintResponseSender = oneshot::Sender<MintResponse>;
+pub type MintResponseSender = oneshot::Sender<Result<MintResponse, MintRequestError>>;
 
 #[instrument(
     parent = None, target = COMPONENT, name = "faucet.server.get_tokens", skip_all,
@@ -60,9 +60,9 @@ pub async fn get_tokens(
 
     let mint_response = mint_response_receiver
         .await
-        .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?;
+        .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
+        .map_err(GetTokenError::InvalidRequest)?;
 
-    server.increment_claimed_supply(requested_amount);
     Ok(Json(mint_response))
 }
 
@@ -117,6 +117,8 @@ pub enum MintRequestError {
     ChallengeAlreadyUsed,
     #[error("account is rate limited")]
     RateLimited,
+    #[error("faucet supply exceeded")]
+    AvailableSupplyExceeded,
 }
 
 pub enum GetTokenError {

@@ -1,9 +1,16 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 
 use anyhow::Context;
 use miden_client::{
     Client, ClientError, Felt, RemoteTransactionProver,
-    account::{AccountFile, AccountId, NetworkId, component::BasicFungibleFaucet},
+    account::{Account, AccountFile, AccountId, NetworkId, component::BasicFungibleFaucet},
     asset::FungibleAsset,
     builder::ClientBuilder,
     crypto::RpoRandomCoin,
@@ -19,12 +26,12 @@ use miden_node_utils::crypto::get_rpo_random_coin;
 use rand::{rng, rngs::StdRng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
-use tracing::{info, instrument, warn};
+use tracing::{error, info, instrument, warn};
 use url::Url;
 
 use crate::{
     network::ExplorerUrl,
-    server::{MintRequest, MintResponse, MintResponseSender},
+    server::{MintRequest, MintRequestError, MintResponse, MintResponseSender},
 };
 
 // FAUCET CLIENT
@@ -61,6 +68,8 @@ pub struct Faucet {
     decimals: u8,
     client: Client<FilesystemKeyStore<StdRng>>,
     tx_prover: Arc<dyn TransactionProver>,
+    claimed_supply: Arc<AtomicU64>,
+    max_supply: u64,
 }
 
 impl Faucet {
@@ -95,7 +104,7 @@ impl Faucet {
 
         info!("Fetching faucet state from node");
 
-        match client.import_account_by_id(account.id()).await {
+        let claimed_supply = match client.import_account_by_id(account.id()).await {
             Ok(()) => {
                 // SAFETY: if import was successful, the account is tracked by the client
                 let record = client.get_account(account.id()).await?.unwrap();
@@ -104,6 +113,7 @@ impl Faucet {
                     nonce = %record.account().nonce(),
                     "Received faucet account state from the node",
                 );
+                Self::get_claimed_supply(record.account())
             },
             Err(_) => match client.add_account(&account, account_file.account_seed, false).await {
                 Ok(()) => {
@@ -112,6 +122,7 @@ impl Faucet {
                         nonce = %account.nonce(),
                         "Loaded state from account file"
                     );
+                    Self::get_claimed_supply(&account)
                 },
                 Err(ClientError::AccountAlreadyTracked(_)) => {
                     // SAFETY: account is tracked, so its present in the db
@@ -121,10 +132,11 @@ impl Faucet {
                         nonce = %record.account().nonce(),
                         "Loaded state from existing local client db"
                     );
+                    Self::get_claimed_supply(record.account())
                 },
                 Err(err) => anyhow::bail!("failed to add account from file: {err}"),
             },
-        }
+        };
 
         client.ensure_genesis_in_place().await?;
 
@@ -134,12 +146,15 @@ impl Faucet {
             None => Arc::new(LocalTransactionProver::default()),
         };
         let id = FaucetId::new(account.id(), network_id);
+        let decimal_divisor = 10u64.pow(faucet.decimals().into());
 
         Ok(Self {
             id,
             decimals: faucet.decimals(),
             client,
             tx_prover,
+            claimed_supply: Arc::new(AtomicU64::new(claimed_supply / decimal_divisor)),
+            max_supply: faucet.max_supply().as_int() / decimal_divisor,
         })
     }
 
@@ -158,21 +173,39 @@ impl Faucet {
         let explorer_url = ExplorerUrl::from_network_id(self.id.network_id);
 
         while requests.recv_many(&mut buffer, limit).await > 0 {
-            let (requests, response_senders): (Vec<MintRequest>, Vec<MintResponseSender>) =
-                buffer.drain(..).unzip();
+            // Check if there are enough tokens available and update the supply counter for each
+            // request.
+            let mut filtered_requests = vec![];
+            let mut response_senders = vec![];
+            for (request, response_sender) in buffer.drain(..) {
+                let requested_amount = request.asset_amount.inner();
+                if self.available_supply() < requested_amount {
+                    let _ = response_sender.send(Err(MintRequestError::AvailableSupplyExceeded));
+                    continue;
+                }
+                filtered_requests.push(request);
+                response_senders.push(response_sender);
+                self.claimed_supply.fetch_add(requested_amount, Ordering::Relaxed);
+            }
+            if self.available_supply() == 0 {
+                error!("Faucet has run out of tokens");
+            }
+            if filtered_requests.is_empty() {
+                continue;
+            }
 
             let mut rng = get_rpo_random_coin(&mut rng());
-            let notes = build_p2id_notes(self.id, self.decimals, &requests, &mut rng)?;
+            let notes = build_p2id_notes(self.id, self.decimals, &filtered_requests, &mut rng)?;
             let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
             let tx_id = self.create_transaction(notes).await?;
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
-                let _ = sender.send(MintResponse {
+                let _ = sender.send(Ok(MintResponse {
                     tx_id,
                     note_id,
                     explorer_url: explorer_url.clone(),
-                });
+                }));
             }
             self.client.sync_state().await?;
         }
@@ -215,27 +248,26 @@ impl Faucet {
         self.id
     }
 
-    /// Returns the claimed supply of the faucet account.
-    ///
-    /// Retrieves the account record from the client's database and extracts the claimed supply
-    /// from its storage.
+    /// Returns the available supply of the faucet.
+    pub fn available_supply(&self) -> u64 {
+        self.max_supply - self.claimed_supply.load(Ordering::Relaxed)
+    }
+
+    /// Returns the claimed supply of the faucet.
+    pub fn claimed_supply(&self) -> Arc<AtomicU64> {
+        self.claimed_supply.clone()
+    }
+
+    /// Returns the claimed supply of the provided account.
     ///
     /// # Panics
-    /// - If the client has not loaded the faucet account.
     /// - If the faucet storage does not contain the claimed supply.
-    pub async fn get_claimed_supply(&self) -> Result<u64, ClientError> {
-        let account_record = self
-            .client
-            .get_account(self.id.account_id)
-            .await?
-            .expect("client should have loaded the faucet account");
-        let claimed_supply = account_record
-            .account()
+    fn get_claimed_supply(account: &Account) -> u64 {
+        account
             .storage()
             .get_item(0)
             .expect("faucet storage should contain the claimed supply")[3]
-            .as_int();
-        Ok(claimed_supply)
+            .as_int()
     }
 }
 
