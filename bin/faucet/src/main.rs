@@ -62,7 +62,7 @@ const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 // ================================================================================================
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)] // TODO: check long version
+#[command(version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
