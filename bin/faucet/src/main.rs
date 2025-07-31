@@ -256,7 +256,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let server = Server::new(
                 faucet.faucet_id(),
                 max_supply,
-                faucet.claimed_supply(),
+                faucet.issuance(),
                 asset_options,
                 tx_mint_requests,
                 pow_secret.unwrap_or_default().as_str(),

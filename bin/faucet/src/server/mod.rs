@@ -61,7 +61,7 @@ impl Server {
     pub fn new(
         faucet_id: FaucetId,
         max_supply: u64,
-        claimed_supply: Arc<AtomicU64>,
+        issuance: Arc<AtomicU64>,
         asset_options: AssetOptions,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
@@ -73,7 +73,7 @@ impl Server {
         let metadata = Metadata {
             id: faucet_id,
             asset_amount_options: asset_options,
-            claimed_supply,
+            issuance,
             max_supply,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.

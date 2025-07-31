@@ -6,7 +6,7 @@ class MidenFaucet {
         this.publicButton = document.getElementById('send-public-button');
         this.faucetAddress = document.getElementById('faucet-address');
         this.progressFill = document.getElementById('progress-fill');
-        this.tokensClaimed = document.getElementById('tokens-claimed');
+        this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
 
         // Check if SHA3 is available right from the start
@@ -74,10 +74,9 @@ class MidenFaucet {
                     this.tokenSelect.appendChild(option);
                 }
 
-                this.tokensClaimed.textContent = data.claimed_supply.toLocaleString();
+                this.issuance.textContent = data.issuance.toLocaleString();
                 this.tokensSupply.textContent = data.max_supply.toLocaleString();
-                this.progressFill.style.width = (data.claimed_supply / data.max_supply) * 100 + '%';
-                // TODO: show error message if no more tokens available
+                this.progressFill.style.width = (data.issuance / data.max_supply) * 100 + '%';
             })
             .catch(error => {
                 console.error('Error fetching metadata:', error);

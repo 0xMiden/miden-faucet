@@ -68,7 +68,7 @@ pub struct Faucet {
     decimals: u8,
     client: Client<FilesystemKeyStore<StdRng>>,
     tx_prover: Arc<dyn TransactionProver>,
-    claimed_supply: Arc<AtomicU64>,
+    issuance: Arc<AtomicU64>,
     max_supply: u64,
 }
 
@@ -104,7 +104,7 @@ impl Faucet {
 
         info!("Fetching faucet state from node");
 
-        let claimed_supply = match client.import_account_by_id(account.id()).await {
+        let issuance = match client.import_account_by_id(account.id()).await {
             Ok(()) => {
                 // SAFETY: if import was successful, the account is tracked by the client
                 let record = client.get_account(account.id()).await?.unwrap();
@@ -113,7 +113,7 @@ impl Faucet {
                     nonce = %record.account().nonce(),
                     "Received faucet account state from the node",
                 );
-                Self::get_claimed_supply(record.account())
+                Self::get_account_issuance(record.account())
             },
             Err(_) => match client.add_account(&account, account_file.account_seed, false).await {
                 Ok(()) => {
@@ -122,7 +122,7 @@ impl Faucet {
                         nonce = %account.nonce(),
                         "Loaded state from account file"
                     );
-                    Self::get_claimed_supply(&account)
+                    Self::get_account_issuance(&account)
                 },
                 Err(ClientError::AccountAlreadyTracked(_)) => {
                     // SAFETY: account is tracked, so its present in the db
@@ -132,7 +132,7 @@ impl Faucet {
                         nonce = %record.account().nonce(),
                         "Loaded state from existing local client db"
                     );
-                    Self::get_claimed_supply(record.account())
+                    Self::get_account_issuance(record.account())
                 },
                 Err(err) => anyhow::bail!("failed to add account from file: {err}"),
             },
@@ -153,7 +153,7 @@ impl Faucet {
             decimals: faucet.decimals(),
             client,
             tx_prover,
-            claimed_supply: Arc::new(AtomicU64::new(claimed_supply / decimal_divisor)),
+            issuance: Arc::new(AtomicU64::new(issuance / decimal_divisor)),
             max_supply: faucet.max_supply().as_int() / decimal_divisor,
         })
     }
@@ -185,7 +185,7 @@ impl Faucet {
                 }
                 filtered_requests.push(request);
                 response_senders.push(response_sender);
-                self.claimed_supply.fetch_add(requested_amount, Ordering::Relaxed);
+                self.issuance.fetch_add(requested_amount, Ordering::Relaxed);
             }
             if self.available_supply() == 0 {
                 error!("Faucet has run out of tokens");
@@ -250,23 +250,24 @@ impl Faucet {
 
     /// Returns the available supply of the faucet.
     pub fn available_supply(&self) -> u64 {
-        self.max_supply - self.claimed_supply.load(Ordering::Relaxed)
+        self.max_supply - self.issuance.load(Ordering::Relaxed)
     }
 
-    /// Returns the claimed supply of the faucet.
-    pub fn claimed_supply(&self) -> Arc<AtomicU64> {
-        self.claimed_supply.clone()
+    /// Returns the amount of tokens issued by the faucet.
+    pub fn issuance(&self) -> Arc<AtomicU64> {
+        self.issuance.clone()
     }
 
-    /// Returns the claimed supply of the provided account.
+    /// Returns the amount of tokens issued by the provided account.
     ///
     /// # Panics
-    /// - If the faucet storage does not contain the claimed supply.
-    fn get_claimed_supply(account: &Account) -> u64 {
+    /// - If the faucet storage does not contain the issuance.
+    fn get_account_issuance(account: &Account) -> u64 {
+        // TODO: use `account.get_issuance()` method instead
         account
             .storage()
             .get_item(0)
-            .expect("faucet storage should contain the claimed supply")[3]
+            .expect("faucet storage should contain the issuance")[3]
             .as_int()
     }
 }
