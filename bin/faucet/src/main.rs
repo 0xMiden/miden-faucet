@@ -15,7 +15,7 @@ use miden_client::{
     Felt,
     account::{
         AccountBuilder, AccountFile, AccountStorageMode, AccountType,
-        component::{BasicFungibleFaucet, RpoFalcon512},
+        component::{AuthRpoFalcon512, BasicFungibleFaucet},
     },
     asset::TokenSymbol,
     auth::AuthSecretKey,
@@ -227,7 +227,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 timeout,
                 remote_tx_prover_url,
             )
-            .await?;
+            .await
+            .context("failed to load faucet")?;
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
 
@@ -306,7 +307,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .account_type(AccountType::FungibleFaucet)
                 .storage_mode(AccountStorageMode::Public)
                 .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
-                .with_auth_component(RpoFalcon512::new(secret.public_key()))
+                .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
                 .build()
                 .context("failed to create basic fungible faucet account")?;
 
