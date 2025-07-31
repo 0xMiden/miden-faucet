@@ -42,7 +42,7 @@ impl FaucetNetwork {
 }
 
 /// A type wrapper for the explorer URL.
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ExplorerUrl(&'static str);
 
 impl ExplorerUrl {

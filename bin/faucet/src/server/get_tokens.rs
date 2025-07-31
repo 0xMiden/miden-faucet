@@ -1,26 +1,71 @@
-use std::convert::Infallible;
-
 use axum::{
+    Json,
     extract::{Query, State},
     http::StatusCode,
-    response::{
-        IntoResponse, Response, Sse,
-        sse::{Event, KeepAlive},
-    },
+    response::{IntoResponse, Response},
 };
-use miden_client::account::{AccountId, AccountIdError};
-use serde::Deserialize;
-use tokio::sync::mpsc::{self, error::TrySendError};
-use tokio_stream::{Stream, wrappers::ReceiverStream};
+use miden_client::{
+    account::{AccountId, AccountIdError},
+    note::NoteId,
+    transaction::TransactionId,
+};
+use serde::{Deserialize, Serialize};
+use tokio::sync::{mpsc::error::TrySendError, oneshot};
 use tracing::{error, instrument};
 
 use super::Server;
 use crate::{
     COMPONENT,
-    faucet::MintRequest,
+    network::ExplorerUrl,
     server::{ApiKey, MintRequestSender},
-    types::{AssetOptions, NoteType},
+    types::{AssetAmount, AssetOptions, NoteType},
 };
+
+// ENDPOINT
+// ================================================================================================
+
+pub type MintResponseSender = oneshot::Sender<MintResponse>;
+
+#[instrument(
+    parent = None, target = COMPONENT, name = "faucet.server.get_tokens", skip_all,
+    fields(
+        account_id = %request.account_id,
+        is_private_note = %request.is_private_note,
+        asset_amount = %request.asset_amount,
+    )
+)]
+pub async fn get_tokens(
+    State(server): State<Server>,
+    Query(request): Query<RawMintRequest>,
+) -> Result<impl IntoResponse, GetTokenError> {
+    let (mint_response_sender, mint_response_receiver) = oneshot::channel();
+
+    request
+        .validate(&server)
+        .map_err(GetTokenError::InvalidRequest)
+        .and_then(|request| {
+            let span = tracing::Span::current();
+            span.record("account", request.account_id.to_hex());
+            span.record("amount", request.asset_amount.inner());
+            span.record("note_type", request.note_type.to_string());
+
+            server
+                .mint_state
+                .request_sender
+                .try_send((request, mint_response_sender))
+                .map_err(|err| match err {
+                    TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
+                    TrySendError::Closed(_) => GetTokenError::FaucetClosed,
+                })
+        })?;
+    let mint_response = mint_response_receiver
+        .await
+        .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?;
+    Ok(Json(mint_response))
+}
+
+// STATE
+// ================================================================================================
 
 #[derive(Clone)]
 pub struct GetTokensState {
@@ -33,6 +78,9 @@ impl GetTokensState {
         Self { request_sender, asset_options }
     }
 }
+
+// REQUEST VALIDATION
+// ================================================================================================
 
 /// Used to receive the initial request from the user.
 ///
@@ -73,6 +121,7 @@ pub enum GetTokenError {
     InvalidRequest(MintRequestError),
     FaucetOverloaded,
     FaucetClosed,
+    FaucetReturnChannelClosed,
 }
 
 impl GetTokenError {
@@ -80,6 +129,7 @@ impl GetTokenError {
         match self {
             Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             Self::FaucetOverloaded | Self::FaucetClosed => StatusCode::SERVICE_UNAVAILABLE,
+            Self::FaucetReturnChannelClosed => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -93,6 +143,7 @@ impl GetTokenError {
             Self::FaucetClosed => {
                 "The faucet is currently unavailable, please try again later.".to_owned()
             },
+            Self::FaucetReturnChannelClosed => "Internal error.".to_owned(),
         }
     }
 
@@ -104,23 +155,10 @@ impl GetTokenError {
             Self::FaucetClosed => {
                 tracing::error!("faucet channel is closed but requests are still coming in");
             },
+            Self::FaucetReturnChannelClosed => {
+                tracing::error!("result channel from the faucet closed mid-request");
+            },
         }
-    }
-
-    /// Convert the error into an SSE event and trigger a trace log.
-    fn into_event(self) -> Event {
-        // TODO: This is a hacky way of doing error logging, but
-        // its one of the last times we have the error before
-        // it becomes opaque. Should replace this by something
-        // better
-        self.trace();
-        Event::default().event("get-tokens-error").data(
-            serde_json::json!({
-                "message": self.user_facing_error(),
-                "status": self.status_code().to_string(),
-            })
-            .to_string(),
-        )
     }
 }
 
@@ -184,46 +222,32 @@ impl RawMintRequest {
     }
 }
 
-#[instrument(
-    parent = None, target = COMPONENT, name = "faucet.server.get_tokens", skip_all,
-    fields(
-        account_id = %request.account_id,
-        is_private_note = %request.is_private_note,
-        asset_amount = %request.asset_amount,
-    )
-)]
-pub async fn get_tokens(
-    State(server): State<Server>,
-    Query(request): Query<RawMintRequest>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    // Response channel with buffer size 4 since there are currently 4 possible updates
-    let (tx_result_notifier, rx_result) = mpsc::channel(4);
+/// A request for minting to the Faucet.
+pub struct MintRequest {
+    /// Destination account.
+    pub account_id: AccountId,
+    /// Whether to generate a public or private note to hold the minted asset.
+    pub note_type: NoteType,
+    /// The amount to mint.
+    pub asset_amount: AssetAmount,
+}
 
-    let mint_error = request
-        .validate(&server)
-        .map_err(GetTokenError::InvalidRequest)
-        .and_then(|request| {
-            let span = tracing::Span::current();
-            span.record("account", request.account_id.to_hex());
-            span.record("amount", request.asset_amount.inner());
-            span.record("note_type", request.note_type.to_string());
+pub struct MintResponse {
+    pub tx_id: TransactionId,
+    pub note_id: NoteId,
+    pub explorer_url: Option<ExplorerUrl>,
+}
 
-            server
-                .mint_state
-                .request_sender
-                .try_send((request, tx_result_notifier.clone()))
-                .map_err(|err| match err {
-                    TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
-                    TrySendError::Closed(_) => GetTokenError::FaucetClosed,
-                })
-        })
-        .err();
-
-    if let Some(error) = mint_error {
-        // SAFETY: the channel is not closed because we just created it.
-        tx_result_notifier.send(Ok(error.into_event())).await.unwrap();
+impl Serialize for MintResponse {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("MintResponse", 3)?;
+        state.serialize_field("tx_id", &self.tx_id.to_string())?;
+        state.serialize_field("note_id", &self.note_id.to_string())?;
+        state.serialize_field("explorer_url", &self.explorer_url)?;
+        state.end()
     }
-
-    let stream = ReceiverStream::new(rx_result);
-    Sse::new(stream).keep_alive(KeepAlive::default())
 }

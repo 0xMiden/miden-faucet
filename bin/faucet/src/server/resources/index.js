@@ -2,10 +2,8 @@ class MidenFaucet {
     constructor() {
         this.recipientInput = document.getElementById('recipient-address');
         this.tokenSelect = document.getElementById('token-amount');
-        this.privateBtn = document.getElementById('send-private-button');
-        this.publicBtn = document.getElementById('send-public-button');
-        this.successMessage = document.getElementById('success-message');
-        this.errorMessage = document.getElementById('error-message');
+        this.privateButton = document.getElementById('send-private-button');
+        this.publicButton = document.getElementById('send-public-button');
         this.faucetAddress = document.getElementById('faucet-address');
         this.progressFill = document.getElementById('progress-fill');
         this.tokensClaimed = document.getElementById('tokens-claimed');
@@ -16,9 +14,10 @@ class MidenFaucet {
             console.error("SHA3 library not loaded initially");
             this.showError('Cryptographic library not loaded. Please refresh the page.');
         }
+
         this.fetchMetadata();
-        this.privateBtn.addEventListener('click', () => this.handleSendTokens(true));
-        this.publicBtn.addEventListener('click', () => this.handleSendTokens(false));
+        this.privateButton.addEventListener('click', () => this.handleSendTokens(true));
+        this.publicButton.addEventListener('click', () => this.handleSendTokens(false));
     }
 
     async handleSendTokens(isPrivateNote) {
@@ -40,24 +39,32 @@ class MidenFaucet {
             return;
         }
 
-        this.setLoading(true);
         this.hideMessages();
+        this.showMintingModal(recipient, amount, isPrivateNote);
+        this.updateProgressBar(0);
+
+        this.updateMintingTitle('PREPARING THE REQUEST');
 
         const powData = await this.getPowChallenge(recipient);
+        if (!powData) {
+            this.hideModals();
+            return;
+        }
         const nonce = await Utils.findValidNonce(powData.challenge, powData.target);
+
+        this.updateMintingTitle('MINTING TOKENS');
+        this.updateProgressBar(50);
 
         try {
             await this.getTokens(powData.challenge, nonce, recipient, amount, isPrivateNote);
             this.resetForm();
         } catch (error) {
             this.showError(`Failed to send tokens: ${error.message}`);
-        } finally {
-            this.setLoading(false);
         }
     }
 
     async fetchMetadata() {
-        fetch(window.location.href + 'get_metadata')
+        fetch(window.location.origin + '/get_metadata')
             .then(response => response.json())
             .then(data => {
                 this.faucetAddress.textContent = data.id;
@@ -81,7 +88,7 @@ class MidenFaucet {
     async getPowChallenge(recipient) {
         let powResponse;
         try {
-            powResponse = await fetch(window.location.href + 'pow?' + new URLSearchParams({
+            powResponse = await fetch(window.location.origin + '/pow?' + new URLSearchParams({
                 account_id: recipient
             }), {
                 method: "GET"
@@ -108,53 +115,43 @@ class MidenFaucet {
             challenge: challenge,
             nonce: nonce
         };
-        const evtSource = new EventSource(window.location.href + 'get_tokens?' + new URLSearchParams(params));
+        let response;
+        try {
+            response = await fetch(window.location.origin + '/get_tokens?' + new URLSearchParams(params), {
+                method: "GET"
+            });
+        } catch (error) {
+            this.showError('Connection failed.');
+            console.error(error);
+            return;
+        }
 
-        evtSource.onopen = () => {
-            this.showSuccess("Request on queue...");
-        };
+        if (!response.ok) {
+            const message = await response.text();
+            this.showError('Failed to receive tokens: ' + message);
+            return;
+        }
 
-        evtSource.onerror = (_) => {
-            // Either rate limit exceeded or invalid account id. The error event does not contain the reason.
-            evtSource.close();
-            this.showError('Please try again soon.');
-            this.setLoading(false);
-        };
+        let data = await response.json();
 
-        evtSource.addEventListener("get-tokens-error", (event) => {
-            console.error('EventSource failed:', event.data);
-            evtSource.close();
-
-            const data = JSON.parse(event.data);
-            this.showError('Failed to receive tokens: ' + data.message);
-            this.setLoading(false);
-        });
-
-        evtSource.addEventListener("update", (event) => {
-            this.showSuccess(event.data);
-        });
-
-        evtSource.addEventListener("minted", (event) => {
-            evtSource.close();
-            this.setLoading(false);
-
-            let data = JSON.parse(event.data);
-
-            // TODO: this is temporary, will be redesigned later
-            this.showSuccess(`Created note ${data.note_id} for account ${data.account_id}. See transaction ${data.explorer_url + '/tx/' + data.transaction_id} on the explorer.`);
-            if (isPrivateNote) {
-                const blob = Utils.base64ToBlob(data.data_base64);
-                Utils.downloadBlob(blob, 'note.mno');
-            }
-        });
+        // TODO: this state should wait until note is committed - use web-client for this
+        this.showCompletedModal(recipient, amount, isPrivateNote, data);
     }
 
     async requestNote(noteId) {
-        const response = await fetch(window.location.href + 'get_note?' + new URLSearchParams({
-            note_id: noteId
-        }));
+        this.hidePrivateModalError();
+        let response;
+        try {
+            response = await fetch(window.location.origin + '/get_note?' + new URLSearchParams({
+                note_id: noteId
+            }));
+        } catch (error) {
+            this.showPrivateModalError('Connection failed.');
+            return;
+        }
+
         if (!response.ok) {
-            this.showError('Failed to download note: ' + await response.text());
+            this.showPrivateModalError('Failed to download note: ' + await response.text());
             return;
         }
         const data = await response.json();
@@ -166,42 +163,156 @@ class MidenFaucet {
         }
 
         const blob = new Blob([byteArray], { type: 'application/octet-stream' });
-        downloadBlob(blob, 'note.mno');
+        Utils.downloadBlob(blob, 'note.mno');
+
+        this.showNoteDownloadedMessage();
     }
 
-    setLoading(isLoading) {
-        if (isLoading) {
-            this.privateBtn.disabled = true;
-            this.publicBtn.disabled = true;
-            this.privateBtn.style.opacity = '0.6';
-            this.publicBtn.style.opacity = '0.6';
+    showNoteDownloadedMessage() {
+        const continueText = document.getElementById('private-continue-text');
+        continueText.style.visibility = 'visible';
+    }
+
+    hideModals() {
+        const mintingModal = document.getElementById('minting-modal');
+        mintingModal.classList.remove('active');
+
+        const completedPrivateModal = document.getElementById('completed-private-modal');
+        completedPrivateModal.classList.remove('active');
+
+        const completedPublicModal = document.getElementById('completed-public-modal');
+        completedPublicModal.classList.remove('active');
+
+        this.hideProgressBar();
+    }
+
+    showMintingModal(recipient, amount, isPrivateNote) {
+        const modal = document.getElementById('minting-modal');
+        const tokenAmount = document.getElementById('modal-token-amount');
+        const recipientAddress = document.getElementById('modal-recipient-address');
+        const noteType = document.getElementById('modal-note-type');
+
+        // Update modal content
+        tokenAmount.textContent = amount;
+        recipientAddress.textContent = recipient;
+        noteType.textContent = isPrivateNote ? 'PRIVATE' : 'PUBLIC';
+
+        modal.classList.add('active');
+    }
+
+    showCompletedModal(recipient, amount, isPrivateNote, mintingData) {
+        const mintingModal = document.getElementById('minting-modal');
+        mintingModal.classList.remove('active');
+
+        document.getElementById('completed-public-token-amount').textContent = amount;
+        document.getElementById('completed-public-recipient-address').textContent = recipient;
+        document.getElementById('completed-private-token-amount').textContent = amount;
+        document.getElementById('completed-private-recipient-address').textContent = recipient;
+
+        this.updateMintingTitle('TOKENS MINTED!');
+        const completedPrivateModal = document.getElementById('completed-private-modal');
+        const completedPublicModal = document.getElementById('completed-public-modal');
+
+        this.updateProgressBar(100);
+
+        if (isPrivateNote) {
+            completedPrivateModal.classList.add('active');
+
+            const downloadButton = document.getElementById('download-button');
+            downloadButton.onclick = async () => {
+                await this.requestNote(mintingData.note_id);
+
+                const closeButton = document.getElementById('private-close-button');
+                closeButton.style.display = 'block';
+                closeButton.onclick = () => {
+                    closeButton.style.display = 'none';
+                    this.hideMessages();
+                    this.hideModals();
+                    this.resetForm();
+                };
+            };
         } else {
-            this.privateBtn.disabled = true;
-            this.publicBtn.disabled = true;
-            this.privateBtn.style.opacity = '1';
-            this.publicBtn.style.opacity = '1';
+            completedPublicModal.classList.add('active');
+
+            const explorerButton = document.getElementById('explorer-button');
+            if (mintingData.explorer_url) {
+                explorerButton.onclick = () => window.open(mintingData.explorer_url + '/tx/' + mintingData.transaction_id, '_blank');
+            } else {
+                explorerButton.onclick = () => this.showPublicModalError('Explorer URL not available');
+            }
+
+            completedPublicModal.onclick = (e) => {
+                const continueText = document.getElementById('public-continue-text');
+                if (e.target === completedPublicModal || e.target === continueText) {
+                    this.hideModals();
+                    this.resetForm();
+                }
+            };
         }
     }
 
-    showSuccess(message) {
-        this.successMessage.textContent = message;
-        this.successMessage.style.display = 'block';
-        this.errorMessage.style.display = 'none';
+    updateMintingTitle(title) {
+        const mintingTitle = document.getElementById('minting-title');
+        mintingTitle.textContent = title;
+    }
+
+    showPublicModalError(message) {
+        const publicModalError = document.getElementById('public-error-message');
+        publicModalError.textContent = message;
+        publicModalError.style.display = 'block';
+    }
+
+    showPrivateModalError(message) {
+        const privateModalError = document.getElementById('private-error-message');
+        privateModalError.textContent = message;
+        privateModalError.style.display = 'block';
+    }
+
+    hidePrivateModalError() {
+        const privateModalError = document.getElementById('private-error-message');
+        privateModalError.style.display = 'none';
     }
 
     showError(message) {
-        this.errorMessage.textContent = message;
-        this.errorMessage.style.display = 'block';
-        this.successMessage.style.display = 'none';
+        this.hideModals();
+        const errorMessage = document.getElementById('error-message');
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
     }
 
     hideMessages() {
-        this.successMessage.style.display = 'none';
-        this.errorMessage.style.display = 'none';
+        const errorMessage = document.getElementById('error-message');
+        errorMessage.style.display = 'none';
+
+        const privateModalError = document.getElementById('private-error-message');
+        privateModalError.style.display = 'none';
+
+        const publicModalError = document.getElementById('public-error-message');
+        publicModalError.style.display = 'none';
+
+        const continueText = document.getElementById('private-continue-text');
+        continueText.style.visibility = 'hidden';
     }
 
     resetForm() {
         this.recipientInput.value = '';
+    }
+
+    updateProgressBar(progress) {
+        this.showProgressBar();
+        const progressBarFill = document.getElementById('progress-bar-fill');
+        progressBarFill.style.width = progress + '%';
+    }
+
+    showProgressBar() {
+        const progressBarTotal = document.getElementById('progress-bar-total');
+        progressBarTotal.classList.add('active');
+    }
+
+    hideProgressBar() {
+        this.updateProgressBar(0);
+        const progressBarTotal = document.getElementById('progress-bar-total');
+        progressBarTotal.classList.remove('active');
     }
 }
 
@@ -230,7 +341,7 @@ const Utils = {
             try {
                 // Compute hash using SHA3 with the challenge and nonce
                 let hash = sha3_256.create();
-                hash.update(challenge);  // Use the hex-encoded challenge string directly
+                hash.update(challenge); // Use the hex-encoded challenge string directly
 
                 // Convert nonce to 8-byte big-endian format to match backend
                 const nonceBytes = new ArrayBuffer(8);

@@ -24,7 +24,7 @@ use url::Url;
 
 use crate::{
     COMPONENT,
-    faucet::{FaucetId, MintRequest, MintResponseSender},
+    faucet::FaucetId,
     server::{get_note::get_note, get_pow::get_pow, get_tokens::MintRequestError},
     types::AssetOptions,
 };
@@ -37,6 +37,7 @@ mod get_pow;
 mod get_tokens;
 mod pow;
 pub use api_key::ApiKey;
+pub use get_tokens::{MintRequest, MintResponse, MintResponseSender};
 pub use pow::PoWConfig;
 
 // FAUCET STATE

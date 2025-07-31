@@ -46,10 +46,5 @@ The faucet implements several security measures to prevent abuse:
   - Requests are processed in batches to optimize performance
   - Failed requests within a batch are handled individually
 
-- **Account rollbacks**:
-  - Faucet maintains the last 1000 account states for potential rollbacks
-  - Is used in case a desync is detected
-
-
 ## License
 This project is [MIT licensed](../../LICENSE).

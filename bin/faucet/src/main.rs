@@ -16,7 +16,7 @@ use miden_client::{
     Felt, Word,
     account::{
         AccountBuilder, AccountFile, AccountStorageMode, AccountType,
-        component::{BasicFungibleFaucet, RpoFalcon512},
+        component::{AuthRpoFalcon512, BasicFungibleFaucet},
     },
     asset::TokenSymbol,
     auth::AuthSecretKey,
@@ -147,7 +147,7 @@ pub enum Command {
     /// Create a new public faucet account and save to the specified file.
     CreateFaucetAccount {
         #[arg(short, long, value_name = "FILE")]
-        output: PathBuf,
+        output_path: PathBuf,
         #[arg(short, long, value_name = "STRING")]
         token_symbol: String,
         #[arg(short, long, value_name = "U8")]
@@ -227,7 +227,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 timeout,
                 remote_tx_prover_url,
             )
-            .await?;
+            .await
+            .context("failed to load faucet")?;
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
 
@@ -282,7 +283,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         },
 
         Command::CreateFaucetAccount {
-            output: output_path,
+            output_path,
             token_symbol,
             decimals,
             max_supply,
@@ -309,7 +310,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .account_type(AccountType::FungibleFaucet)
                 .storage_mode(AccountStorageMode::Public)
                 .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
-                .with_auth_component(RpoFalcon512::new(secret.public_key()))
+                .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
                 .build()
                 .context("failed to create basic fungible faucet account")?;
 
@@ -372,38 +373,6 @@ mod test {
         let title = client.title().await.unwrap();
         assert_eq!(title, "Miden Faucet");
 
-        // Execute a script to get all the failed requests
-        let script = r"
-            let errors = [];
-            performance.getEntriesByType('resource').forEach(entry => {
-                if (entry.responseStatus && entry.responseStatus >= 400) {
-                    errors.push({url: entry.name, status: entry.responseStatus});
-                }
-            });
-            return errors;
-        ";
-        let failed_requests = client.execute(script, vec![]).await.unwrap();
-
-        // Verify all requests are successful
-        assert!(failed_requests.as_array().unwrap().is_empty());
-
-        // Inject JavaScript to capture sse events
-        let capture_events_script = r"
-            window.capturedEvents = [];
-            const original = EventSource.prototype.addEventListener;
-            EventSource.prototype.addEventListener = function(type, listener) {
-                const wrappedListener = function(event) {
-                    window.capturedEvents.push({
-                        type: type,
-                        data: event.data
-                    });
-                    return listener(event);
-                };
-                return original.call(this, type, wrappedListener);
-            };
-        ";
-        client.execute(capture_events_script, vec![]).await.unwrap();
-
         // Fill in the account address
         client
             .find(fantoccini::Locator::Css("#recipient-address"))
@@ -438,34 +407,20 @@ mod test {
             .await
             .unwrap();
 
-        // Poll until minting is complete. We wait 10s and then poll every 2s for a max of
-        // 55 times (total 2 mins).
-        sleep(Duration::from_secs(10)).await;
-        let mut captured_events: Vec<serde_json::Value> = vec![];
-        for _ in 0..55 {
-            let events = client
-                .execute("return window.capturedEvents;", vec![])
-                .await
-                .unwrap()
-                .as_array()
-                .unwrap()
-                .clone();
-            if events.iter().any(|event| event["type"] == "minted") {
-                captured_events = events;
-                break;
-            }
-            sleep(Duration::from_secs(2)).await;
-        }
+        // Execute a script to get all the failed requests
+        let script = r"
+            let errors = [];
+            performance.getEntriesByType('resource').forEach(entry => {
+                if (entry.responseStatus && entry.responseStatus >= 400) {
+                    errors.push({url: entry.name, status: entry.responseStatus});
+                }
+            });
+            return errors;
+        ";
+        let failed_requests = client.execute(script, vec![]).await.unwrap();
 
-        // Verify the received events
-        assert!(!captured_events.is_empty(), "Took too long to capture any events");
-        assert!(captured_events.iter().any(|event| event["type"] == "update"));
-        let note_event = captured_events.iter().find(|event| event["type"] == "minted").unwrap();
-        let note_data: serde_json::Value =
-            serde_json::from_str(note_event["data"].as_str().unwrap()).unwrap();
-        assert!(note_data["note_id"].is_string());
-        assert!(note_data["transaction_id"].is_string());
-        assert!(note_data["explorer_url"].is_string());
+        // Verify all requests are successful
+        assert!(failed_requests.as_array().unwrap().is_empty());
 
         client.close().await.unwrap();
     }
@@ -484,7 +439,7 @@ mod test {
         // Create faucet account
         run_faucet_command(Cli {
             command: crate::Command::CreateFaucetAccount {
-                output: faucet_account_path.clone(),
+                output_path: faucet_account_path.clone(),
                 token_symbol: "TEST".to_string(),
                 decimals: 6,
                 max_supply: 1_000_000_000_000,
