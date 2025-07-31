@@ -15,7 +15,7 @@ use miden_client::{
     Felt,
     account::{
         AccountBuilder, AccountFile, AccountStorageMode, AccountType,
-        component::{BasicFungibleFaucet, RpoFalcon512},
+        component::{AuthRpoFalcon512, BasicFungibleFaucet},
     },
     asset::TokenSymbol,
     auth::AuthSecretKey,
@@ -146,7 +146,7 @@ pub enum Command {
     /// Create a new public faucet account and save to the specified file.
     CreateFaucetAccount {
         #[arg(short, long, value_name = "FILE")]
-        output: PathBuf,
+        output_path: PathBuf,
         #[arg(short, long, value_name = "STRING")]
         token_symbol: String,
         #[arg(short, long, value_name = "U8")]
@@ -228,7 +228,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 timeout,
                 remote_tx_prover_url,
             )
-            .await?;
+            .await
+            .context("failed to load faucet")?;
 
             let decimals = faucet_component.decimals();
             let max_supply = faucet_component.max_supply().as_int() / 10u64.pow(decimals.into());
@@ -290,7 +291,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         },
 
         Command::CreateFaucetAccount {
-            output: output_path,
+            output_path,
             token_symbol,
             decimals,
             max_supply,
@@ -314,7 +315,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .account_type(AccountType::FungibleFaucet)
                 .storage_mode(AccountStorageMode::Public)
                 .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
-                .with_auth_component(RpoFalcon512::new(secret.public_key()))
+                .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
                 .build()
                 .context("failed to create basic fungible faucet account")?;
 
@@ -461,7 +462,7 @@ mod test {
         // Create faucet account
         run_faucet_command(Cli {
             command: crate::Command::CreateFaucetAccount {
-                output: faucet_account_path.clone(),
+                output_path: faucet_account_path.clone(),
                 token_symbol: "TEST".to_string(),
                 decimals: 6,
                 max_supply: 1_000_000_000_000,
