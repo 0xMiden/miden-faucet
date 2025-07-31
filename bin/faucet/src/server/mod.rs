@@ -1,9 +1,6 @@
 use std::{
     collections::HashSet,
-    sync::{
-        Arc,
-        atomic::AtomicU64,
-    },
+    sync::{Arc, atomic::AtomicU64},
     time::{SystemTime, UNIX_EPOCH},
 };
 
