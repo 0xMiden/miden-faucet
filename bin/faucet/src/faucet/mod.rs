@@ -10,7 +10,10 @@ use std::{
 use anyhow::Context;
 use miden_client::{
     Client, ClientError, Felt, RemoteTransactionProver,
-    account::{Account, AccountFile, AccountId, NetworkId, component::BasicFungibleFaucet},
+    account::{
+        AccountFile, AccountId, NetworkId,
+        component::{BasicFungibleFaucet, FungibleFaucetExt},
+    },
     asset::FungibleAsset,
     builder::ClientBuilder,
     crypto::RpoRandomCoin,
@@ -113,7 +116,7 @@ impl Faucet {
                     nonce = %record.account().nonce(),
                     "Received faucet account state from the node",
                 );
-                Self::get_account_issuance(record.account())
+                record.account().get_token_issuance()?
             },
             Err(_) => match client.add_account(&account, account_file.account_seed, false).await {
                 Ok(()) => {
@@ -122,7 +125,7 @@ impl Faucet {
                         nonce = %account.nonce(),
                         "Loaded state from account file"
                     );
-                    Self::get_account_issuance(&account)
+                    account.get_token_issuance()?
                 },
                 Err(ClientError::AccountAlreadyTracked(_)) => {
                     // SAFETY: account is tracked, so its present in the db
@@ -132,7 +135,7 @@ impl Faucet {
                         nonce = %record.account().nonce(),
                         "Loaded state from existing local client db"
                     );
-                    Self::get_account_issuance(record.account())
+                    record.account().get_token_issuance()?
                 },
                 Err(err) => anyhow::bail!("failed to add account from file: {err}"),
             },
@@ -147,14 +150,16 @@ impl Faucet {
         };
         let id = FaucetId::new(account.id(), network_id);
         let decimal_divisor = 10u64.pow(faucet.decimals().into());
+        let issuance = issuance.inner() / decimal_divisor;
+        let max_supply = faucet.max_supply().as_int() / decimal_divisor;
 
         Ok(Self {
             id,
             decimals: faucet.decimals(),
             client,
             tx_prover,
-            issuance: Arc::new(AtomicU64::new(issuance / decimal_divisor)),
-            max_supply: faucet.max_supply().as_int() / decimal_divisor,
+            issuance: Arc::new(AtomicU64::new(issuance)),
+            max_supply,
         })
     }
 
@@ -256,19 +261,6 @@ impl Faucet {
     /// Returns the amount of tokens issued by the faucet.
     pub fn issuance(&self) -> Arc<AtomicU64> {
         self.issuance.clone()
-    }
-
-    /// Returns the amount of tokens issued by the provided account.
-    ///
-    /// # Panics
-    /// - If the faucet storage does not contain the issuance.
-    fn get_account_issuance(account: &Account) -> u64 {
-        // TODO: use `account.get_issuance()` method instead
-        account
-            .storage()
-            .get_item(0)
-            .expect("faucet storage should contain the issuance")[3]
-            .as_int()
     }
 }
 
