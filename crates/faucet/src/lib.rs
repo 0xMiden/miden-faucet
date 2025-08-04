@@ -67,7 +67,14 @@ pub struct Faucet {
 }
 
 impl Faucet {
-    /// Loads the faucet state from the node and the account file.
+    /// Loads the faucet.
+    ///
+    /// A client is instantiated with the provided store path, node url and timeout. The account is
+    /// loaded from the provided account file. If the account is already tracked by the current
+    /// store, it is loaded. Otherwise, the account is added from the file state.
+    ///
+    /// If a remote transaction prover url is provided, it is used to prove transactions. Otherwise,
+    /// a local transaction prover is used.
     #[instrument(name = "faucet.load", fields(id), skip_all)]
     pub async fn load(
         store_path: PathBuf,
