@@ -69,7 +69,3 @@ The server exposes the following endpoints:
 
 ## License
 This project is [MIT licensed](../../LICENSE).
-
-
-## License
-This project is [MIT licensed](../../LICENSE).
