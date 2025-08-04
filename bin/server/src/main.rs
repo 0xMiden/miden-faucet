@@ -1,6 +1,6 @@
-mod server;
-
+mod api;
 mod network;
+mod pow;
 #[cfg(test)]
 mod testing;
 
@@ -23,13 +23,13 @@ use miden_faucet::{Faucet, types::AssetOptions};
 use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use server::Server;
 use tokio::sync::mpsc;
 use url::Url;
 
 use crate::{
+    api::Server,
     network::FaucetNetwork,
-    server::{ApiKey, PoWConfig},
+    pow::{PoWConfig, api_key::ApiKey},
 };
 
 // CONSTANTS

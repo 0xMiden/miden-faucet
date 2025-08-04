@@ -14,8 +14,7 @@ use serde::Deserialize;
 use tokio::sync::{mpsc::error::TrySendError, oneshot};
 use tracing::{error, instrument};
 
-use super::Server;
-use crate::{COMPONENT, server::ApiKey};
+use crate::{COMPONENT, api::Server, pow::api_key::ApiKey};
 
 // ENDPOINT
 // ================================================================================================

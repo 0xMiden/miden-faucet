@@ -1,3 +1,8 @@
+pub mod frontend;
+pub mod get_note;
+pub mod get_pow;
+pub mod get_tokens;
+
 use std::{
     collections::HashSet,
     sync::Arc,
@@ -6,13 +11,10 @@ use std::{
 
 use anyhow::Context;
 use axum::{Router, extract::FromRef, routing::get};
-use frontend::Metadata;
-use get_tokens::{GetTokensState, get_tokens};
 use http::{HeaderValue, Request};
 use miden_client::{account::AccountId, store::Store};
 use miden_faucet::{FaucetId, requests::MintRequestSender, types::AssetOptions};
 use miden_node_utils::grpc::UrlExt;
-use pow::PoW;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -26,18 +28,14 @@ use url::Url;
 
 use crate::{
     COMPONENT,
-    server::{get_note::get_note, get_pow::get_pow, get_tokens::MintRequestError},
+    api::{
+        frontend::Metadata,
+        get_note::get_note,
+        get_pow::get_pow,
+        get_tokens::{GetTokensState, MintRequestError, get_tokens},
+    },
+    pow::{PoW, PoWConfig, api_key::ApiKey},
 };
-
-mod api_key;
-mod challenge;
-mod frontend;
-mod get_note;
-mod get_pow;
-mod get_tokens;
-mod pow;
-pub use api_key::ApiKey;
-pub use pow::PoWConfig;
 
 // FAUCET STATE
 // ================================================================================================

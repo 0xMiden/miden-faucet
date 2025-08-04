@@ -13,7 +13,7 @@ use miden_client::{
 use serde::Deserialize;
 use tracing::instrument;
 
-use crate::{COMPONENT, server::Server};
+use crate::{COMPONENT, api::Server};
 
 // ENDPOINT
 // ================================================================================================

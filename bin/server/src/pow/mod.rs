@@ -8,8 +8,13 @@ use std::{
 use miden_client::account::AccountId;
 use tokio::time::{Duration, interval};
 
-use super::challenge::Challenge;
-use crate::server::{ApiKey, get_pow::PowRequest, get_tokens::MintRequestError};
+use crate::{
+    api::{get_pow::PowRequest, get_tokens::MintRequestError},
+    pow::{api_key::ApiKey, challenge::Challenge},
+};
+
+pub mod api_key;
+pub mod challenge;
 
 // POW
 // ================================================================================================

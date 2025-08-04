@@ -7,7 +7,7 @@ use http::StatusCode;
 use miden_client::account::{AccountId, AccountIdError};
 use serde::Deserialize;
 
-use crate::server::{ApiKey, pow::PoW};
+use crate::pow::{PoW, api_key::ApiKey};
 
 // ENDPOINT
 // ================================================================================================

@@ -2,7 +2,7 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::server::get_tokens::MintRequestError;
+use crate::api::get_tokens::MintRequestError;
 
 // API KEY
 // ================================================================================================
@@ -57,7 +57,7 @@ mod tests {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::server::{ApiKey, api_key::API_KEY_PREFIX};
+    use crate::pow::api_key::{API_KEY_PREFIX, ApiKey};
 
     #[test]
     fn api_key_encode_and_decode() {
