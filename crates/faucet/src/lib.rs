@@ -22,9 +22,12 @@ use tokio::sync::mpsc::Receiver;
 use tracing::{info, instrument, warn};
 use url::Url;
 
+pub mod requests;
+pub mod types;
+
 use crate::{
-    network::ExplorerUrl,
-    server::{MintRequest, MintResponse, MintResponseSender},
+    requests::{MintRequest, MintResponse, MintResponseSender},
+    types::ExplorerUrl,
 };
 
 // FAUCET CLIENT

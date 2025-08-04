@@ -10,10 +10,11 @@ use frontend::Metadata;
 use get_tokens::{GetTokensState, get_tokens};
 use http::{HeaderValue, Request};
 use miden_client::{account::AccountId, store::Store};
+use miden_faucet::{FaucetId, requests::MintRequestSender, types::AssetOptions};
 use miden_node_utils::grpc::UrlExt;
 use pow::PoW;
 use sha3::{Digest, Sha3_256};
-use tokio::{net::TcpListener, sync::mpsc};
+use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
@@ -25,9 +26,7 @@ use url::Url;
 
 use crate::{
     COMPONENT,
-    faucet::FaucetId,
     server::{get_note::get_note, get_pow::get_pow, get_tokens::MintRequestError},
-    types::AssetOptions,
 };
 
 mod api_key;
@@ -38,13 +37,10 @@ mod get_pow;
 mod get_tokens;
 mod pow;
 pub use api_key::ApiKey;
-pub use get_tokens::{MintRequest, MintResponse, MintResponseSender};
 pub use pow::PoWConfig;
 
 // FAUCET STATE
 // ================================================================================================
-
-type MintRequestSender = mpsc::Sender<(MintRequest, MintResponseSender)>;
 
 /// Serves the faucet's website and handles token requests.
 #[derive(Clone)]

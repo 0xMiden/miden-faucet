@@ -5,8 +5,7 @@ use axum::{
 };
 use axum_extra::response::{Css, JavaScript};
 use http::header::{self};
-
-use crate::{faucet::FaucetId, types::AssetOptions};
+use miden_faucet::{FaucetId, types::AssetOptions};
 
 /// Describes the faucet metadata.
 ///
@@ -18,21 +17,21 @@ pub struct Metadata {
 }
 
 pub async fn get_index_html() -> Html<&'static str> {
-    Html(include_str!("resources/index.html"))
+    Html(include_str!("../static/index.html"))
 }
 
 pub async fn get_index_js() -> JavaScript<&'static str> {
-    JavaScript(include_str!("resources/index.js"))
+    JavaScript(include_str!("../static/index.js"))
 }
 
 pub async fn get_index_css() -> Css<&'static str> {
-    Css(include_str!("resources/index.css"))
+    Css(include_str!("../static/index.css"))
 }
 
 pub async fn get_background() -> Response {
     (
         [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/png"))],
-        include_bytes!("resources/background.png"),
+        include_bytes!("../static/background.png"),
     )
         .into_response()
 }
@@ -40,7 +39,7 @@ pub async fn get_background() -> Response {
 pub async fn get_favicon() -> Response {
     (
         [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/x-icon"))],
-        include_bytes!("resources/favicon.ico"),
+        include_bytes!("../static/favicon.ico"),
     )
         .into_response()
 }

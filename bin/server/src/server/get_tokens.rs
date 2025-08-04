@@ -4,28 +4,21 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use miden_client::{
-    account::{AccountId, AccountIdError},
-    note::NoteId,
-    transaction::TransactionId,
+use miden_client::account::{AccountId, AccountIdError};
+use miden_faucet::{
+    requests::{MintRequest, MintRequestSender},
+    types::{AssetOptions, NoteType},
 };
 use miden_node_utils::ErrorReport;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::sync::{mpsc::error::TrySendError, oneshot};
 use tracing::{error, instrument};
 
 use super::Server;
-use crate::{
-    COMPONENT,
-    network::ExplorerUrl,
-    server::{ApiKey, MintRequestSender},
-    types::{AssetAmount, AssetOptions, NoteType},
-};
+use crate::{COMPONENT, server::ApiKey};
 
 // ENDPOINT
 // ================================================================================================
-
-pub type MintResponseSender = oneshot::Sender<MintResponse>;
 
 #[instrument(
     parent = None, target = COMPONENT, name = "faucet.server.get_tokens", skip_all,
@@ -220,35 +213,5 @@ impl RawMintRequest {
         server.submit_challenge(&challenge_str, nonce, account_id, &api_key.unwrap_or_default())?;
 
         Ok(MintRequest { account_id, note_type, asset_amount })
-    }
-}
-
-/// A request for minting to the Faucet.
-pub struct MintRequest {
-    /// Destination account.
-    pub account_id: AccountId,
-    /// Whether to generate a public or private note to hold the minted asset.
-    pub note_type: NoteType,
-    /// The amount to mint.
-    pub asset_amount: AssetAmount,
-}
-
-pub struct MintResponse {
-    pub tx_id: TransactionId,
-    pub note_id: NoteId,
-    pub explorer_url: Option<ExplorerUrl>,
-}
-
-impl Serialize for MintResponse {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("MintResponse", 3)?;
-        state.serialize_field("tx_id", &self.tx_id.to_string())?;
-        state.serialize_field("note_id", &self.note_id.to_string())?;
-        state.serialize_field("explorer_url", &self.explorer_url)?;
-        state.end()
     }
 }

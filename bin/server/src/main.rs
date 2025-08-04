@@ -1,6 +1,4 @@
-mod faucet;
 mod server;
-mod types;
 
 mod network;
 #[cfg(test)]
@@ -10,7 +8,6 @@ use std::{num::NonZeroUsize, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use faucet::Faucet;
 use miden_client::{
     Felt,
     account::{
@@ -22,12 +19,12 @@ use miden_client::{
     crypto::SecretKey,
     store::sqlite_store::SqliteStore,
 };
+use miden_faucet::{Faucet, types::AssetOptions};
 use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use server::Server;
 use tokio::sync::mpsc;
-use types::AssetOptions;
 use url::Url;
 
 use crate::{
