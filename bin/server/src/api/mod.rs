@@ -1,8 +1,3 @@
-pub mod frontend;
-pub mod get_note;
-pub mod get_pow;
-pub mod get_tokens;
-
 use std::{
     collections::HashSet,
     sync::Arc,
@@ -36,6 +31,11 @@ use crate::{
     },
     pow::{PoW, PoWConfig, api_key::ApiKey},
 };
+
+pub mod frontend;
+pub mod get_note;
+pub mod get_pow;
+pub mod get_tokens;
 
 // FAUCET STATE
 // ================================================================================================
