@@ -8,6 +8,7 @@
 - Added `/get_note` endpoint ([#19](https://github.com/0xMiden/miden-faucet/pull/19)).
 - Redesigned the home frontend ([#20](https://github.com/0xMiden/miden-faucet/pull/20)).
 - Redesigned the tokens request flows ([#25](https://github.com/0xMiden/miden-faucet/pull/25)).
+- Introduced miden-faucet crate ([#10](https://github.com/0xMiden/miden-faucet/pull/10)).
 
 ## 0.10.0 (2025-07-10)
 
