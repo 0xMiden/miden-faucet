@@ -167,8 +167,12 @@ impl Faucet {
     /// error.
     ///
     /// It receives new minting requests and handles them in batches. For each request, it builds a
-    /// minting note that is included in a new transaction. For each request, sends the
-    /// resulting `MintResponse` through the response sender.
+    /// minting note and updates the issuance counter. A transaction is created and submitted with
+    /// all the notes from the batch. A `MintResponse` is sent through each response sender with the
+    /// new note id and transaction id.
+    ///
+    /// Once the available supply is exceeded, any requests that exceed the supply will return an
+    /// error. The request stream is closed and the minter shuts down.
     pub async fn run(
         mut self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
@@ -184,7 +188,9 @@ impl Faucet {
             let mut response_senders = vec![];
             for (request, response_sender) in buffer.drain(..) {
                 let requested_amount = request.asset_amount.inner();
-                if self.available_supply() < requested_amount {
+                let available_amount = self.available_supply();
+                if available_amount < requested_amount {
+                    error!(requested_amount, available_amount, request.account_id = %request.account_id, "Requested amount exceeds available supply");
                     let _ = response_sender.send(Err(MintRequestError::AvailableSupplyExceeded));
                     continue;
                 }
