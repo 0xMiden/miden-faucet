@@ -13,11 +13,7 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    OutputNote,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
 };
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver};
 use miden_node_utils::crypto::get_rpo_random_coin;
@@ -178,7 +174,7 @@ impl Faucet {
         while requests.recv_many(&mut buffer, limit).await > 0 {
             // Check if there are enough tokens available and update the supply counter for each
             // request.
-            let mut filtered_requests = vec![];
+            let mut valid_requests = vec![];
             let mut response_senders = vec![];
             for (request, response_sender) in buffer.drain(..) {
                 let requested_amount = request.asset_amount.inner();
@@ -188,19 +184,19 @@ impl Faucet {
                     let _ = response_sender.send(Err(MintRequestError::AvailableSupplyExceeded));
                     continue;
                 }
-                filtered_requests.push(request);
+                valid_requests.push(request);
                 response_senders.push(response_sender);
                 self.issuance.fetch_add(requested_amount, Ordering::Relaxed);
             }
             if self.available_supply() == 0 {
                 error!("Faucet has run out of tokens");
             }
-            if filtered_requests.is_empty() {
+            if valid_requests.is_empty() {
                 continue;
             }
 
             let mut rng = get_rpo_random_coin(&mut rng());
-            let notes = build_p2id_notes(self.id, self.decimals, &filtered_requests, &mut rng)?;
+            let notes = build_p2id_notes(self.id, self.decimals, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
             let tx_id = self.create_transaction(notes).await?;
 
