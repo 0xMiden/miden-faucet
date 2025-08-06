@@ -1,11 +1,11 @@
 [package]
 authors.workspace      = true
-description            = "Token faucet application for Miden testnet"
+description            = "Miden faucet's HTTP server"
 edition.workspace      = true
 homepage.workspace     = true
 keywords               = ["faucet", "miden", "node"]
 license.workspace      = true
-name                   = "server"
+name                   = "miden-faucet-server"
 readme                 = "README.md"
 repository.workspace   = true
 rust-version.workspace = true

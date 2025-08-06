@@ -1,6 +1,6 @@
 [package]
 authors.workspace      = true
-description            = "Token faucet application for Miden testnet"
+description            = "Miden faucet's logic"
 edition.workspace      = true
 homepage.workspace     = true
 keywords               = ["faucet", "miden", "node"]

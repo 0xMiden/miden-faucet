@@ -1867,6 +1867,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "miden-faucet-server"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "base64",
+ "clap",
+ "fantoccini",
+ "http 1.3.1",
+ "humantime",
+ "miden-client",
+ "miden-faucet",
+ "miden-node-proto",
+ "miden-node-utils",
+ "miden-testing",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "serde_json",
+ "sha3",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-web",
+ "tower",
+ "tower-http",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "miden-formatting"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3253,40 +3287,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "server"
-version = "0.10.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "axum-extra",
- "base64",
- "clap",
- "fantoccini",
- "http 1.3.1",
- "humantime",
- "miden-client",
- "miden-faucet",
- "miden-node-proto",
- "miden-node-utils",
- "miden-testing",
- "rand",
- "rand_chacha",
- "serde",
- "serde_json",
- "sha3",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-web",
- "tower",
- "tower-http",
- "tracing",
- "url",
 ]
 
 [[package]]

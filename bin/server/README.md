@@ -66,6 +66,8 @@ The server exposes the following endpoints:
   - `challenge`: The PoW challenge encoded as string.
   - `nonce`: The valid nonce that solves the challenge.
   - `api_key`: Optional API key. It must match the one used for issuing the PoW challenge.
+- `GET /get_note` - Request a specific note by its ID. **Query params:**  
+  - `note_id`: The note ID in hex format.
 
 ## License
 This project is [MIT licensed](../../LICENSE).

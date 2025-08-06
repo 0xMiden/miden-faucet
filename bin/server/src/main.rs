@@ -36,7 +36,7 @@ use crate::{
 // =================================================================================================
 
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
-const COMPONENT: &str = "miden-faucet";
+const COMPONENT: &str = "miden-faucet-server";
 
 const ENV_ENDPOINT: &str = "MIDEN_FAUCET_ENDPOINT";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";
