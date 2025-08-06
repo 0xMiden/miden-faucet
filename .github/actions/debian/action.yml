@@ -19,7 +19,7 @@ inputs:
     description: Name of binary crate being packaged.
     type: choice
     options:
-      - miden-faucet-server
+      - miden-faucet
   crate_dir:
     required: true
     description: Name of crate being packaged.

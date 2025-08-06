@@ -72,8 +72,8 @@ check: ## Check all targets and features for errors without code generation
 # --- installing ----------------------------------------------------------------------------------
 
 .PHONY: install-faucet
-install-faucet: ## Installs faucet server
-	${BUILD_PROTO} cargo install --path bin/server --locked
+install-faucet: ## Installs faucet
+	${BUILD_PROTO} cargo install --path bin/faucet --locked
 
 .PHONY: check-tools
 check-tools: ## Checks if development tools are installed
