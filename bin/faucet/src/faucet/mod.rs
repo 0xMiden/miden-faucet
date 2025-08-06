@@ -1,30 +1,33 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
-use miden_client::{
-    Client, ClientError, Felt, RemoteTransactionProver, Word,
-    account::{AccountFile, AccountId, NetworkId, component::BasicFungibleFaucet},
-    asset::FungibleAsset,
-    builder::ClientBuilder,
-    crypto::RpoRandomCoin,
-    keystore::FilesystemKeyStore,
-    note::{NoteError, create_p2id_note},
-    rpc::Endpoint,
-    transaction::{
-        LocalTransactionProver, OutputNote, TransactionId, TransactionProver,
-        TransactionRequestBuilder,
-    },
+use miden_client::account::component::BasicFungibleFaucet;
+use miden_client::account::{AccountFile, AccountId, NetworkId};
+use miden_client::asset::FungibleAsset;
+use miden_client::builder::ClientBuilder;
+use miden_client::crypto::RpoRandomCoin;
+use miden_client::keystore::FilesystemKeyStore;
+use miden_client::note::{NoteError, create_p2id_note};
+use miden_client::rpc::Endpoint;
+use miden_client::transaction::{
+    LocalTransactionProver,
+    OutputNote,
+    TransactionId,
+    TransactionProver,
+    TransactionRequestBuilder,
 };
-use rand::{Rng, rng, rngs::StdRng};
+use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
+use rand::rngs::StdRng;
+use rand::{Rng, rng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
 use tracing::{info, instrument, warn};
 use url::Url;
 
-use crate::{
-    network::ExplorerUrl,
-    server::{MintRequest, MintResponse, MintResponseSender},
-};
+use crate::network::ExplorerUrl;
+use crate::server::{MintRequest, MintResponse, MintResponseSender};
 
 // FAUCET CLIENT
 // ================================================================================================
