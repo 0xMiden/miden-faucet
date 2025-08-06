@@ -6,23 +6,24 @@ mod network;
 #[cfg(test)]
 mod testing;
 
-use std::{num::NonZeroUsize, path::PathBuf, sync::Arc, time::Duration};
+use std::num::NonZeroUsize;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use faucet::Faucet;
-use miden_client::{
-    Felt,
-    account::{
-        AccountBuilder, AccountFile, AccountStorageMode, AccountType,
-        component::{AuthRpoFalcon512, BasicFungibleFaucet},
-    },
-    asset::TokenSymbol,
-    auth::AuthSecretKey,
-    crypto::SecretKey,
-    store::sqlite_store::SqliteStore,
-};
-use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
+use miden_client::Felt;
+use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
+use miden_client::account::{AccountBuilder, AccountFile, AccountStorageMode, AccountType};
+use miden_client::asset::TokenSymbol;
+use miden_client::auth::AuthSecretKey;
+use miden_client::crypto::SecretKey;
+use miden_client::store::sqlite_store::SqliteStore;
+use miden_node_utils::crypto::get_rpo_random_coin;
+use miden_node_utils::logging::OpenTelemetry;
+use miden_node_utils::version::LongVersion;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use server::Server;
@@ -30,10 +31,8 @@ use tokio::sync::mpsc;
 use types::AssetOptions;
 use url::Url;
 
-use crate::{
-    network::FaucetNetwork,
-    server::{ApiKey, PoWConfig},
-};
+use crate::network::FaucetNetwork;
+use crate::server::{ApiKey, PoWConfig};
 
 // CONSTANTS
 // =================================================================================================
@@ -357,22 +356,22 @@ fn long_version() -> LongVersion {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        env::temp_dir,
-        num::NonZeroUsize,
-        path::PathBuf,
-        process::Stdio,
-        str::FromStr,
-        time::{Duration, Instant},
-    };
+    use std::env::temp_dir;
+    use std::num::NonZeroUsize;
+    use std::path::PathBuf;
+    use std::process::Stdio;
+    use std::str::FromStr;
+    use std::time::{Duration, Instant};
 
     use fantoccini::ClientBuilder;
     use miden_node_utils::grpc::UrlExt;
     use serde_json::{Map, json};
-    use tokio::{io::AsyncBufReadExt, time::sleep};
+    use tokio::io::AsyncBufReadExt;
+    use tokio::time::sleep;
     use url::Url;
 
-    use crate::{Cli, FaucetNetwork, run_faucet_command, testing::stub_rpc_api::serve_stub};
+    use crate::testing::stub_rpc_api::serve_stub;
+    use crate::{Cli, FaucetNetwork, run_faucet_command};
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
     /// to test the faucet website. It then loads the website and checks that all the requests
