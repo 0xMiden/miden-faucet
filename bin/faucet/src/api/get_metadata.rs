@@ -1,0 +1,18 @@
+use axum::{Json, extract::State};
+use miden_faucet_client::{FaucetId, types::AssetOptions};
+
+/// Describes the faucet metadata.
+///
+/// More specifically, the faucet's account ID and allowed mint amounts.
+#[derive(Clone, serde::Serialize)]
+pub struct Metadata {
+    pub id: FaucetId,
+    pub asset_amount_options: AssetOptions,
+}
+
+// ENDPOINT
+// ================================================================================================
+
+pub async fn get_metadata(State(metadata): State<&'static Metadata>) -> Json<&'static Metadata> {
+    Json(metadata)
+}

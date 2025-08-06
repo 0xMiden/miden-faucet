@@ -24,7 +24,8 @@ use url::Url;
 use crate::{
     COMPONENT,
     api::{
-        frontend::Metadata,
+        get_metadata::Metadata,
+        get_metadata::get_metadata,
         get_note::get_note,
         get_pow::get_pow,
         get_tokens::{GetTokensState, MintRequestError, get_tokens},
@@ -33,6 +34,7 @@ use crate::{
 };
 
 pub mod frontend;
+pub mod get_metadata;
 pub mod get_note;
 pub mod get_pow;
 pub mod get_tokens;
@@ -92,7 +94,7 @@ impl Server {
                 .route("/index.css", get(frontend::get_index_css))
                 .route("/background.png", get(frontend::get_background))
                 .route("/favicon.ico", get(frontend::get_favicon))
-                .route("/get_metadata", get(frontend::get_metadata))
+                .route("/get_metadata", get(get_metadata))
                 .route("/pow", get(get_pow))
                 // TODO: This feels rather ugly, and would be nice to move but I can't figure out the types.
                 .route(
