@@ -1,5 +1,7 @@
-use axum::{Json, extract::State};
-use miden_faucet_client::{FaucetId, types::AssetOptions};
+use axum::Json;
+use axum::extract::State;
+use miden_faucet_client::FaucetId;
+use miden_faucet_client::types::AssetOptions;
 
 /// Describes the faucet metadata.
 ///

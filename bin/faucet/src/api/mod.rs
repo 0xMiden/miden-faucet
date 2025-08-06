@@ -1,37 +1,34 @@
-use std::{
-    collections::HashSet,
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
-use axum::{Router, extract::FromRef, routing::get};
+use axum::Router;
+use axum::extract::FromRef;
+use axum::routing::get;
 use http::{HeaderValue, Request};
-use miden_client::{account::AccountId, store::Store};
-use miden_faucet_client::{FaucetId, requests::MintRequestSender, types::AssetOptions};
+use miden_client::account::AccountId;
+use miden_client::store::Store;
+use miden_faucet_client::FaucetId;
+use miden_faucet_client::requests::MintRequestSender;
+use miden_faucet_client::types::AssetOptions;
 use miden_node_utils::grpc::UrlExt;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
-use tower_http::{
-    cors::CorsLayer,
-    set_header::SetResponseHeaderLayer,
-    trace::{DefaultOnResponse, TraceLayer},
-};
+use tower_http::cors::CorsLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 use url::Url;
 
-use crate::{
-    COMPONENT,
-    api::{
-        get_metadata::Metadata,
-        get_metadata::get_metadata,
-        get_note::get_note,
-        get_pow::get_pow,
-        get_tokens::{GetTokensState, MintRequestError, get_tokens},
-    },
-    pow::{PoW, PoWConfig, api_key::ApiKey},
-};
+use crate::COMPONENT;
+use crate::api::get_metadata::{Metadata, get_metadata};
+use crate::api::get_note::get_note;
+use crate::api::get_pow::get_pow;
+use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
+use crate::pow::api_key::ApiKey;
+use crate::pow::{PoW, PoWConfig};
 
 pub mod frontend;
 pub mod get_metadata;

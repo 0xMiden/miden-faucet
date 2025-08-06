@@ -1,4 +1,6 @@
-use miden_client::{account::AccountId, note::NoteId, transaction::TransactionId};
+use miden_client::account::AccountId;
+use miden_client::note::NoteId;
+use miden_client::transaction::TransactionId;
 use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
 

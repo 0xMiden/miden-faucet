@@ -1,20 +1,19 @@
-use axum::{
-    Json,
-    extract::{Query, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
+use axum::Json;
+use axum::extract::{Query, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, AccountIdError};
-use miden_faucet_client::{
-    requests::{MintRequest, MintRequestSender},
-    types::{AssetOptions, NoteType},
-};
+use miden_faucet_client::requests::{MintRequest, MintRequestSender};
+use miden_faucet_client::types::{AssetOptions, NoteType};
 use miden_node_utils::ErrorReport;
 use serde::Deserialize;
-use tokio::sync::{mpsc::error::TrySendError, oneshot};
+use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::oneshot;
 use tracing::{error, instrument};
 
-use crate::{COMPONENT, api::Server, pow::api_key::ApiKey};
+use crate::COMPONENT;
+use crate::api::Server;
+use crate::pow::api_key::ApiKey;
 
 // ENDPOINT
 // ================================================================================================

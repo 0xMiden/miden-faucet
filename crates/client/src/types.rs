@@ -1,6 +1,7 @@
 //! A collection of new types and safety wrappers used throughout the faucet.
 
-use miden_client::{account::NetworkId, asset::FungibleAsset};
+use miden_client::account::NetworkId;
+use miden_client::asset::FungibleAsset;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
 /// Describes the asset amounts allowed by the faucet.

@@ -1,17 +1,15 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    num::NonZeroUsize,
-    sync::{Arc, Mutex},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::collections::{BTreeMap, HashMap};
+use std::num::NonZeroUsize;
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use miden_client::account::AccountId;
 use tokio::time::{Duration, interval};
 
-use crate::{
-    api::{get_pow::PowRequest, get_tokens::MintRequestError},
-    pow::{api_key::ApiKey, challenge::Challenge},
-};
+use crate::api::get_pow::PowRequest;
+use crate::api::get_tokens::MintRequestError;
+use crate::pow::api_key::ApiKey;
+use crate::pow::challenge::Challenge;
 
 pub mod api_key;
 pub mod challenge;

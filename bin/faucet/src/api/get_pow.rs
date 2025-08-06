@@ -1,13 +1,12 @@
-use axum::{
-    Json,
-    extract::{Query, State},
-    response::IntoResponse,
-};
+use axum::Json;
+use axum::extract::{Query, State};
+use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, AccountIdError};
 use serde::Deserialize;
 
-use crate::pow::{PoW, api_key::ApiKey};
+use crate::pow::PoW;
+use crate::pow::api_key::ApiKey;
 
 // ENDPOINT
 // ================================================================================================
