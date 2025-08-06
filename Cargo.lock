@@ -1857,20 +1857,6 @@ name = "miden-faucet"
 version = "0.10.0"
 dependencies = [
  "anyhow",
- "miden-client",
- "miden-node-utils",
- "rand",
- "serde",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "miden-faucet-server"
-version = "0.10.0"
-dependencies = [
- "anyhow",
  "async-trait",
  "axum",
  "axum-extra",
@@ -1880,7 +1866,7 @@ dependencies = [
  "http 1.3.1",
  "humantime",
  "miden-client",
- "miden-faucet",
+ "miden-faucet-client",
  "miden-node-proto",
  "miden-node-utils",
  "miden-testing",
@@ -1896,6 +1882,20 @@ dependencies = [
  "tonic-web",
  "tower",
  "tower-http",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "miden-faucet-client"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "miden-client",
+ "miden-node-utils",
+ "rand",
+ "serde",
+ "tokio",
  "tracing",
  "url",
 ]

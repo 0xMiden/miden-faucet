@@ -5,7 +5,7 @@ use axum::{
 };
 use axum_extra::response::{Css, JavaScript};
 use http::header::{self};
-use miden_faucet::{FaucetId, types::AssetOptions};
+use miden_faucet_client::{FaucetId, types::AssetOptions};
 
 /// Describes the faucet metadata.
 ///

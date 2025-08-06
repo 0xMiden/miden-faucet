@@ -1,4 +1,4 @@
-# Miden Faucet
+# Miden Faucet Client
 
 This crate implements a faucet to be used by the website. The faucet uses `miden-client` to create, execute, prove transactions, and then submits them to the node.
 

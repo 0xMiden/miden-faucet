@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use miden_client::account::{AccountId, AccountIdError};
-use miden_faucet::{
+use miden_faucet_client::{
     requests::{MintRequest, MintRequestSender},
     types::{AssetOptions, NoteType},
 };

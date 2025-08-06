@@ -19,7 +19,7 @@ use miden_client::{
     crypto::SecretKey,
     store::sqlite_store::SqliteStore,
 };
-use miden_faucet::{Faucet, types::AssetOptions};
+use miden_faucet_client::{Faucet, types::AssetOptions};
 use miden_node_utils::{crypto::get_rpo_random_coin, logging::OpenTelemetry, version::LongVersion};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;

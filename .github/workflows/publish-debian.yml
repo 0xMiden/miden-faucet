@@ -39,5 +39,5 @@ jobs:
           crate_dir: faucet
           service: miden-faucet
           package: faucet
-          crate: miden-faucet-server
+          crate: miden-faucet
           arch: ${{ matrix.arch }}

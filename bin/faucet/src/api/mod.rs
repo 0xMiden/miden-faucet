@@ -8,7 +8,7 @@ use anyhow::Context;
 use axum::{Router, extract::FromRef, routing::get};
 use http::{HeaderValue, Request};
 use miden_client::{account::AccountId, store::Store};
-use miden_faucet::{FaucetId, requests::MintRequestSender, types::AssetOptions};
+use miden_faucet_client::{FaucetId, requests::MintRequestSender, types::AssetOptions};
 use miden_node_utils::grpc::UrlExt;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
