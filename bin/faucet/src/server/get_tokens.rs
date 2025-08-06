@@ -1,26 +1,21 @@
-use axum::{
-    Json,
-    extract::{Query, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
-use miden_client::{
-    account::{AccountId, AccountIdError},
-    note::NoteId,
-    transaction::TransactionId,
-};
+use axum::Json;
+use axum::extract::{Query, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use miden_client::account::{AccountId, AccountIdError};
+use miden_client::note::NoteId;
+use miden_client::transaction::TransactionId;
 use miden_node_utils::ErrorReport;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc::error::TrySendError, oneshot};
+use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::oneshot;
 use tracing::{error, instrument};
 
 use super::Server;
-use crate::{
-    COMPONENT,
-    network::ExplorerUrl,
-    server::{ApiKey, MintRequestSender},
-    types::{AssetAmount, AssetOptions, NoteType},
-};
+use crate::COMPONENT;
+use crate::network::ExplorerUrl;
+use crate::server::{ApiKey, MintRequestSender};
+use crate::types::{AssetAmount, AssetOptions, NoteType};
 
 // ENDPOINT
 // ================================================================================================

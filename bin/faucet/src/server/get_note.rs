@@ -1,19 +1,17 @@
-use axum::{
-    Json,
-    extract::{Query, State},
-    response::IntoResponse,
-};
-use base64::{Engine, engine::general_purpose};
+use axum::Json;
+use axum::extract::{Query, State};
+use axum::response::IntoResponse;
+use base64::Engine;
+use base64::engine::general_purpose;
 use http::StatusCode;
-use miden_client::{
-    note::NoteId,
-    store::{NoteExportType, NoteFilter},
-    utils::Serializable,
-};
+use miden_client::note::NoteId;
+use miden_client::store::{NoteExportType, NoteFilter};
+use miden_client::utils::Serializable;
 use serde::Deserialize;
 use tracing::instrument;
 
-use crate::{COMPONENT, server::Server};
+use crate::COMPONENT;
+use crate::server::Server;
 
 // ENDPOINT
 // ================================================================================================
