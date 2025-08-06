@@ -13,7 +13,11 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
+    LocalTransactionProver,
+    OutputNote,
+    TransactionId,
+    TransactionProver,
+    TransactionRequestBuilder,
 };
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver};
 use miden_node_utils::crypto::get_rpo_random_coin;
