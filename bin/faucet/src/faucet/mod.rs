@@ -19,10 +19,9 @@ use miden_client::transaction::{
     TransactionProver,
     TransactionRequestBuilder,
 };
-use miden_client::{Client, ClientError, Felt, RemoteTransactionProver};
-use miden_node_utils::crypto::get_rpo_random_coin;
-use rand::rng;
+use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use rand::rngs::StdRng;
+use rand::{Rng, rng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
 use tracing::{error, info, instrument, warn};
@@ -199,7 +198,11 @@ impl Faucet {
                 continue;
             }
 
-            let mut rng = get_rpo_random_coin(&mut rng());
+            let mut rng = {
+                let auth_seed: [u64; 4] = rng().random();
+                let rng_seed = Word::from(auth_seed.map(Felt::new));
+                RpoRandomCoin::new(rng_seed)
+            };
             let notes = build_p2id_notes(self.id, self.decimals, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
             let tx_id = self.create_transaction(notes).await?;
