@@ -401,6 +401,7 @@ body {
     margin-top: 16px;
     display: none;
     font-size: 14px;
+    white-space: pre-wrap;
     z-index: 2;
 }
 

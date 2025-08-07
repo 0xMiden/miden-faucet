@@ -12,7 +12,6 @@ use miden_client::store::Store;
 use miden_faucet_client::FaucetId;
 use miden_faucet_client::requests::MintRequestSender;
 use miden_faucet_client::types::AssetOptions;
-use miden_node_utils::grpc::UrlExt;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -135,8 +134,10 @@ impl Server {
                 )
                 .with_state(self);
 
-        let listener = url.to_socket().with_context(|| format!("failed to parse url {url}"))?;
-        let listener = TcpListener::bind(listener)
+        let listener = url
+            .socket_addrs(|| None)
+            .with_context(|| format!("failed to parse url {url}"))?;
+        let listener = TcpListener::bind(&*listener)
             .await
             .with_context(|| format!("failed to bind TCP listener on {url}"))?;
 

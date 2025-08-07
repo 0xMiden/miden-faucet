@@ -46,28 +46,5 @@ The faucet implements several security measures to prevent abuse:
   - Requests are processed in batches to optimize performance
   - Failed requests within a batch are handled individually
 
-## API Endpoints
-
-The server exposes the following endpoints:
-
-- `GET /` - Request index page html
-- `GET /index.js` - Request index page js code
-- `GET /index.css` - Request index page style
-- `GET /background.png` - Request background image
-- `GET /favicon.ico` - Request favicon image
-- `GET /get_metadata` - Request faucet metadata
-- `GET /pow` - Request a proof-of-work challenge. **Query params:**  
-  - `account_id`: The recipient's account address in hex or bech32 format.
-  - `api_key`: Optional API key distributed to developers to reduce PoW difficulty.
-- `GET /get_tokens` - Request tokens. **Query params:**  
-  - `account_id`: The recipient's account address in hex or bech32 format.
-  - `is_private_note`: Whether to send tokens as a private note.
-  - `asset_amount`: The amount of tokens to send.
-  - `challenge`: The PoW challenge encoded as string.
-  - `nonce`: The valid nonce that solves the challenge.
-  - `api_key`: Optional API key. It must match the one used for issuing the PoW challenge.
-- `GET /get_note` - Request a specific note by its ID. **Query params:**  
-  - `note_id`: The note ID in hex format.
-
 ## License
 This project is [MIT licensed](../../LICENSE).

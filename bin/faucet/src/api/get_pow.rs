@@ -5,6 +5,7 @@ use http::StatusCode;
 use miden_client::account::{AccountId, AccountIdError};
 use serde::Deserialize;
 
+use crate::error_report::ErrorReport;
 use crate::pow::PoW;
 use crate::pow::api_key::ApiKey;
 
@@ -69,7 +70,7 @@ impl PowRequestError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::InvalidAccount(_) => "Invalid Account address".to_owned(),
+            Self::InvalidAccount(error) => error.as_report(),
             Self::InvalidApiKey(_) => "Invalid API key".to_owned(),
         }
     }

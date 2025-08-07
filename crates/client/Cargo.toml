@@ -16,8 +16,7 @@ workspace = true
 
 [dependencies]
 # Miden dependencies.
-miden-client     = { features = ["sqlite", "tonic"], workspace = true }
-miden-node-utils = { workspace = true }
+miden-client = { features = ["sqlite", "tonic"], workspace = true }
 
 # External dependencies.
 anyhow  = { workspace = true }
