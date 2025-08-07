@@ -11,7 +11,6 @@ use get_tokens::{GetTokensState, get_tokens};
 use http::{HeaderValue, Request};
 use miden_client::account::AccountId;
 use miden_client::store::Store;
-use miden_node_utils::grpc::UrlExt;
 use pow::PoW;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
@@ -142,8 +141,10 @@ impl Server {
                 )
                 .with_state(self);
 
-        let listener = url.to_socket().with_context(|| format!("failed to parse url {url}"))?;
-        let listener = TcpListener::bind(listener)
+        let listener = url
+            .socket_addrs(|| None)
+            .with_context(|| format!("failed to parse url {url}"))?;
+        let listener = TcpListener::bind(&*listener)
             .await
             .with_context(|| format!("failed to bind TCP listener on {url}"))?;
 

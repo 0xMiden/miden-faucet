@@ -5,7 +5,6 @@ use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, AccountIdError};
 use miden_client::note::NoteId;
 use miden_client::transaction::TransactionId;
-use miden_node_utils::ErrorReport;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
@@ -13,6 +12,7 @@ use tracing::{error, instrument};
 
 use super::Server;
 use crate::COMPONENT;
+use crate::error_report::ErrorReport;
 use crate::network::ExplorerUrl;
 use crate::server::{ApiKey, MintRequestSender};
 use crate::types::{AssetAmount, AssetOptions, NoteType};
@@ -132,7 +132,7 @@ impl GetTokenError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::InvalidRequest(invalid_request) => invalid_request.as_report(),
+            Self::InvalidRequest(error) => error.as_report(),
             Self::FaucetOverloaded => {
                 "The faucet is currently overloaded, please try again later.".to_owned()
             },
