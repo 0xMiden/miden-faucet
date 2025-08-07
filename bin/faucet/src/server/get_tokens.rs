@@ -12,6 +12,7 @@ use tracing::{error, instrument};
 
 use super::Server;
 use crate::COMPONENT;
+use crate::error_report::ErrorReport;
 use crate::network::ExplorerUrl;
 use crate::server::{ApiKey, MintRequestSender};
 use crate::types::{AssetAmount, AssetOptions, NoteType};
@@ -131,7 +132,7 @@ impl GetTokenError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::InvalidRequest(invalid_request) => invalid_request.to_string(),
+            Self::InvalidRequest(error) => error.as_report(),
             Self::FaucetOverloaded => {
                 "The faucet is currently overloaded, please try again later.".to_owned()
             },

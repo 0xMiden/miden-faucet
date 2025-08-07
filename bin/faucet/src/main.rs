@@ -1,11 +1,11 @@
+mod error_report;
 mod faucet;
-mod server;
-mod types;
-
 mod logging;
 mod network;
+mod server;
 #[cfg(test)]
 mod testing;
+mod types;
 
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -483,11 +483,11 @@ mod test {
 
         // Wait for faucet to be up
         let endpoint = Url::parse("http://localhost:8080").unwrap();
-        let addr = endpoint.socket_addrs(|| None).unwrap();
+        let addrs = endpoint.socket_addrs(|| None).unwrap();
         let start = Instant::now();
         let timeout = Duration::from_secs(10);
         loop {
-            match tokio::net::TcpStream::connect(&*addr).await {
+            match tokio::net::TcpStream::connect(&addrs[..]).await {
                 Ok(_) => break,
                 Err(_) if start.elapsed() < timeout => {
                     sleep(Duration::from_millis(200)).await;
