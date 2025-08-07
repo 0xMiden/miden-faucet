@@ -143,8 +143,8 @@ cargo run --example request_tokens
   - `account_id` (string, required): The account ID requesting the challenge
   - `api_key` (string, optional): API key for authentication
 - **Response**: JSON object containing:
-  - `challenge` (string): The encoded challenge string in hexadecimal format. This string serializes the target, timestamp, account ID, API key, and signature
-  - `target` (number): The target value for the proof-of-work challenge. A solution is valid if the hash `H(challenge, nonce)` is less than this target
+  - `challenge` (string): The encoded challenge string in hexadecimal format
+  - `target` (number): The target value for the proof-of-work challenge. A solution is valid if the hash `H(challenge, nonce)` is less than this target. We use `SHA-256` for this
   - `timestamp` (number): The timestamp when the challenge was created (seconds since UNIX epoch)
 
 **GET /get_tokens**
