@@ -56,79 +56,95 @@ The faucet provides a REST API. The typical flow to request tokens involves:
 
 1. **Request a Proof-of-Work challenge** from `/pow`
 
-```rust
-let base_url = "http://localhost:8080";
-let url = format!("{base_url}/pow?account_id=mlcl1qq8mcy8pdvl0cgqfkjzf8efjjsnlzf7q");
-let response = reqwest::get(&url).await?.error_for_status()?.text().await?;
-let json: serde_json::Value = serde_json::from_str(&response)?;
-let challenge: &str = json["challenge"].as_str().unwrap();
-let target: u64 = json["target"].as_u64().unwrap();
+```typescript
+const baseUrl = 'http://localhost:8080';
+const accountId = 'mlcl1qq8mcy8pdvl0cgqfkjzf8efjjsnlzf7q';
+
+const powUrl = new URL('/pow', baseUrl);
+powUrl.searchParams.set('account_id', accountId);
+const powResp = await fetch(powUrl);
+if (!powResp.ok) throw new Error(`PoW error: ${powResp.status} ${await powResp.text()}`);
+const powJson: any = await powResp.json();
+const challenge: string = powJson.challenge;
+const target: bigint = BigInt(powJson.target);
 ```
 
 2. **Solve the computational challenge**
 
-```rust
-use sha3::{Digest, Sha3_256};
+```typescript
+// Dependencies: npm i @noble/hashes
+import { sha3_256 } from '@noble/hashes/sha3';
 
-let nonce = {
-    let mut found_nonce = None;
-    for nonce in 0..u64::MAX {
-        // Create SHA3-256 hash
-        let mut hasher = Sha3_256::new();
-        hasher.update(challenge.as_bytes());
-        hasher.update(nonce.to_be_bytes());
-        let hash = hasher.finalize();
+let nonce = 0;
+while (true) {
+    nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
-        // Take the first 8 bytes and interpret as big-endian u64
-        let number = u64::from_be_bytes(hash[..8].try_into().unwrap());
+    try {
+        // Compute hash using SHA3 with the challenge and nonce
+        let hash = sha3_256.create();
+        hash.update(challenge); // Use the hex-encoded challenge string directly
 
-        // Check if hash number is less than target
-        if number < target {
-            found_nonce = Some(nonce);
-            break;
+        // Convert nonce to 8-byte big-endian format to match backend
+        const nonceBytes = new ArrayBuffer(8);
+        const nonceView = new DataView(nonceBytes);
+        nonceView.setBigUint64(0, BigInt(nonce), false); // false = big-endian
+        const nonceByteArray = new Uint8Array(nonceBytes);
+        hash.update(nonceByteArray);
+
+        // Take the first 8 bytes of the hash and parse them as u64 in big-endian
+        const hashBytes: Uint8Array = hash.digest().slice(0, 8);
+        let digest = BigInt('0x' + Array.from(hashBytes).map(b => b.toString(16).padStart(2, '0')).join(''));
+
+        // Check if the hash is less than the target
+        if (digest < target) {
+            console.log('Found nonce:', nonce);
+            return nonce;
         }
+    } catch (error: any) {
+        throw new Error('Failed to compute hash: ' + error.message);
     }
-    found_nonce.expect("No valid nonce found")
-};
+}
 ```
 
 3. **Request tokens** along with your solved challenge to `/get_tokens`
 
-```rust
-let base_url = "http://localhost:8080";
-let params = format!("account_id=mlcl1qq8mcy8pdvl0cgqfkjzf8efjjsnlzf7q\
-    &is_private_note=true\
-    &asset_amount=100\
-    &challenge={}\
-    &nonce={}", challenge, &nonce.to_string());
-let url = format!("{base_url}/get_tokens?{params}");
-let response = reqwest::get(&url).await?.error_for_status()?;
-let text = response.text().await?;
-let json: serde_json::Value = serde_json::from_str(&text)?;
+```typescript
+const params = new URLSearchParams({
+    account_id: accountId,
+    is_private_note: 'true',
+    asset_amount: '100',
+    challenge: challenge,
+    nonce: nonce.toString()
+});
+
+const response = await fetch(`${baseUrl}/get_tokens?${params}`);
+if (!response.ok) throw new Error(`Get tokens error: ${response.status} ${await response.text()}`);
+
+const text = await response.text();
+const json = JSON.parse(text);
+const noteId = json.note_id;
+const txId = json.tx_id;
+const explorerUrl = json.explorer_url;
 ```
 
 4. **Request note** to download generated private notes
 
-```rust
-use base64::Engine;
-use base64::engine::general_purpose;
+```typescript
+const response = await fetch(`${baseUrl}/get_note?note_id=${noteId}`);
+if (!response.ok) throw new Error(`Get note error: ${response.status} ${await response.text()}`);
 
-let base_url = "http://localhost:8080";
-let url = format!("{base_url}/get_note?note_id={note_id}");
-let response = reqwest::get(&url).await?.error_for_status()?;
-let text = response.text().await?;
-let json: serde_json::Value = serde_json::from_str(&text)?;
+const text = await response.text();
+const json = JSON.parse(text);
 
-// Decode note with base64 
-let note_data = general_purpose::STANDARD
-    .decode(json["data_base64"].as_str().unwrap())
-    .unwrap();
-std::fs::write("note.mno", &note_data).unwrap();
+// Decode note with base64
+const noteData = Buffer.from(json.data_base64, 'base64');
+
+fs.writeFileSync('note.mno', noteData);
 ```
 
 #### Example
 
-To see a full working example, check [request_tokens.rs](bin/faucet/examples/request_tokens.rs). The example assumes you have the faucet running on `http://localhost:8080`.
+To see a full working example in Rust, check [request_tokens.rs](bin/faucet/examples/request_tokens.rs). The example assumes you have the faucet running on `http://localhost:8080`.
 
 Run it with:
 ```bash
