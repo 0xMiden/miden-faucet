@@ -143,7 +143,7 @@ impl Faucet {
         };
         let id = FaucetId::new(account.id(), network_id);
         let decimal_divisor = 10u64.pow(faucet.decimals().into());
-        let issuance = issuance.inner() / decimal_divisor;
+        let issuance = issuance.as_int() / decimal_divisor;
         let max_supply = faucet.max_supply().as_int() / decimal_divisor;
 
         Ok(Self {
