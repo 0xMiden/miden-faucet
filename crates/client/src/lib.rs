@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::Context;
-use miden_client::account::component::BasicFungibleFaucet;
+use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{AccountFile, AccountId, NetworkId};
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
@@ -23,13 +24,13 @@ use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
-use tracing::{info, instrument, warn};
+use tracing::{error, info, instrument, warn};
 use url::Url;
 
 pub mod requests;
 pub mod types;
 
-use crate::requests::{MintRequest, MintResponse, MintResponseSender};
+use crate::requests::{MintRequest, MintRequestError, MintResponse, MintResponseSender};
 use crate::types::ExplorerUrl;
 
 // FAUCET CLIENT
@@ -66,6 +67,8 @@ pub struct Faucet {
     decimals: u8,
     client: Client<FilesystemKeyStore<StdRng>>,
     tx_prover: Arc<dyn TransactionProver>,
+    issuance: Arc<AtomicU64>,
+    max_supply: u64,
 }
 
 impl Faucet {
@@ -107,7 +110,7 @@ impl Faucet {
 
         info!("Fetching faucet state from node");
 
-        match client.import_account_by_id(account.id()).await {
+        let issuance = match client.import_account_by_id(account.id()).await {
             Ok(()) => {
                 // SAFETY: if import was successful, the account is tracked by the client
                 let record = client.get_account(account.id()).await?.unwrap();
@@ -116,6 +119,7 @@ impl Faucet {
                     nonce = %record.account().nonce(),
                     "Received faucet account state from the node",
                 );
+                record.account().get_token_issuance()?
             },
             Err(_) => match client.add_account(&account, account_file.account_seed, false).await {
                 Ok(()) => {
@@ -124,6 +128,7 @@ impl Faucet {
                         nonce = %account.nonce(),
                         "Loaded state from account file"
                     );
+                    account.get_token_issuance()?
                 },
                 Err(ClientError::AccountAlreadyTracked(_)) => {
                     // SAFETY: account is tracked, so its present in the db
@@ -133,10 +138,11 @@ impl Faucet {
                         nonce = %record.account().nonce(),
                         "Loaded state from existing local client db"
                     );
+                    record.account().get_token_issuance()?
                 },
                 Err(err) => anyhow::bail!("failed to add account from file: {err}"),
             },
-        }
+        };
 
         client.ensure_genesis_in_place().await?;
 
@@ -146,12 +152,17 @@ impl Faucet {
             None => Arc::new(LocalTransactionProver::default()),
         };
         let id = FaucetId::new(account.id(), network_id);
+        let decimal_divisor = 10u64.pow(faucet.decimals().into());
+        let issuance = issuance.as_int() / decimal_divisor;
+        let max_supply = faucet.max_supply().as_int() / decimal_divisor;
 
         Ok(Self {
             id,
             decimals: faucet.decimals(),
             client,
             tx_prover,
+            issuance: Arc::new(AtomicU64::new(issuance)),
+            max_supply,
         })
     }
 
@@ -159,8 +170,12 @@ impl Faucet {
     /// error.
     ///
     /// It receives new minting requests and handles them in batches. For each request, it builds a
-    /// minting note that is included in a new transaction. For each request, sends the
-    /// resulting `MintResponse` through the response sender.
+    /// minting note and updates the issuance counter. A transaction is created and submitted with
+    /// all the notes from the batch. A `MintResponse` is sent through each response sender with the
+    /// new note id and transaction id.
+    ///
+    /// Once the available supply is exceeded, any requests that exceed the supply will return an
+    /// error. The request stream is closed and the minter shuts down.
     pub async fn run(
         mut self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
@@ -170,25 +185,45 @@ impl Faucet {
         let explorer_url = ExplorerUrl::from_network_id(self.id.network_id);
 
         while requests.recv_many(&mut buffer, limit).await > 0 {
-            let (requests, response_senders): (Vec<MintRequest>, Vec<MintResponseSender>) =
-                buffer.drain(..).unzip();
+            // Check if there are enough tokens available and update the supply counter for each
+            // request.
+            let mut valid_requests = vec![];
+            let mut response_senders = vec![];
+            for (request, response_sender) in buffer.drain(..) {
+                let requested_amount = request.asset_amount.inner();
+                let available_amount = self.available_supply();
+                if available_amount < requested_amount {
+                    error!(requested_amount, available_amount, request.account_id = %request.account_id, "Requested amount exceeds available supply");
+                    let _ = response_sender.send(Err(MintRequestError::AvailableSupplyExceeded));
+                    continue;
+                }
+                valid_requests.push(request);
+                response_senders.push(response_sender);
+                self.issuance.fetch_add(requested_amount, Ordering::Relaxed);
+            }
+            if self.available_supply() == 0 {
+                error!("Faucet has run out of tokens");
+            }
+            if valid_requests.is_empty() {
+                continue;
+            }
 
             let mut rng = {
                 let auth_seed: [u64; 4] = rng().random();
                 let rng_seed = Word::from(auth_seed.map(Felt::new));
                 RpoRandomCoin::new(rng_seed)
             };
-            let notes = build_p2id_notes(self.id, self.decimals, &requests, &mut rng)?;
+            let notes = build_p2id_notes(self.id, self.decimals, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
             let tx_id = self.create_transaction(notes).await?;
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
-                let _ = sender.send(MintResponse {
+                let _ = sender.send(Ok(MintResponse {
                     tx_id,
                     note_id,
                     explorer_url: explorer_url.clone(),
-                });
+                }));
             }
             self.client.sync_state().await?;
         }
@@ -229,6 +264,16 @@ impl Faucet {
     /// Returns the id of the faucet account.
     pub fn faucet_id(&self) -> FaucetId {
         self.id
+    }
+
+    /// Returns the available supply of the faucet.
+    pub fn available_supply(&self) -> u64 {
+        self.max_supply - self.issuance.load(Ordering::Relaxed)
+    }
+
+    /// Returns the amount of tokens issued by the faucet.
+    pub fn issuance(&self) -> Arc<AtomicU64> {
+        self.issuance.clone()
     }
 }
 

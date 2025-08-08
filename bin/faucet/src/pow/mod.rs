@@ -4,10 +4,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use miden_client::account::AccountId;
+use miden_faucet_client::requests::MintRequestError;
 use tokio::time::{Duration, interval};
 
-use crate::api::get_pow::PowRequest;
-use crate::api::get_tokens::MintRequestError;
 use crate::pow::api_key::ApiKey;
 use crate::pow::challenge::Challenge;
 
@@ -139,6 +138,12 @@ impl PoW {
 
         Ok(())
     }
+}
+
+/// Validated and parsed request for the `PoW` challenge.
+pub struct PowRequest {
+    pub account_id: AccountId,
+    pub api_key: ApiKey,
 }
 
 // CHALLENGE CACHE

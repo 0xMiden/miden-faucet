@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
@@ -10,7 +11,7 @@ use http::{HeaderValue, Request};
 use miden_client::account::AccountId;
 use miden_client::store::Store;
 use miden_faucet_client::FaucetId;
-use miden_faucet_client::requests::MintRequestSender;
+use miden_faucet_client::requests::{MintRequestError, MintRequestSender};
 use miden_faucet_client::types::AssetOptions;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
@@ -25,15 +26,15 @@ use crate::COMPONENT;
 use crate::api::get_metadata::{Metadata, get_metadata};
 use crate::api::get_note::get_note;
 use crate::api::get_pow::get_pow;
-use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
+use crate::api::get_tokens::{GetTokensState, get_tokens};
 use crate::pow::api_key::ApiKey;
 use crate::pow::{PoW, PoWConfig};
 
-pub mod frontend;
-pub mod get_metadata;
-pub mod get_note;
-pub mod get_pow;
-pub mod get_tokens;
+mod frontend;
+mod get_metadata;
+mod get_note;
+mod get_pow;
+mod get_tokens;
 
 // FAUCET STATE
 // ================================================================================================
@@ -49,8 +50,11 @@ pub struct Server {
 }
 
 impl Server {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         faucet_id: FaucetId,
+        max_supply: u64,
+        issuance: Arc<AtomicU64>,
         asset_options: AssetOptions,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
@@ -62,6 +66,8 @@ impl Server {
         let metadata = Metadata {
             id: faucet_id,
             asset_amount_options: asset_options,
+            issuance,
+            max_supply,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
         let metadata = Box::leak(Box::new(metadata));

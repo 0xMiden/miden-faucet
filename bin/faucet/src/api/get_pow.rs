@@ -6,8 +6,8 @@ use miden_client::account::{AccountId, AccountIdError};
 use serde::Deserialize;
 
 use crate::error_report::ErrorReport;
-use crate::pow::PoW;
 use crate::pow::api_key::ApiKey;
+use crate::pow::{PoW, PowRequest};
 
 // ENDPOINT
 // ================================================================================================
@@ -29,12 +29,6 @@ pub async fn get_pow(
 pub struct RawPowRequest {
     pub account_id: String,
     pub api_key: Option<String>,
-}
-
-/// Validated and parsed `RawPowRequest`.
-pub struct PowRequest {
-    pub account_id: AccountId,
-    pub api_key: ApiKey,
 }
 
 impl RawPowRequest {

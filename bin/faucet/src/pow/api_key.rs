@@ -1,9 +1,8 @@
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use miden_faucet_client::requests::MintRequestError;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-
-use crate::api::get_tokens::MintRequestError;
 
 // API KEY
 // ================================================================================================

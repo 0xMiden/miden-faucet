@@ -2,13 +2,13 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use miden_client::account::{AccountId, AccountIdError};
-use miden_faucet_client::requests::{MintRequest, MintRequestSender};
+use miden_client::account::AccountId;
+use miden_faucet_client::requests::{MintRequest, MintRequestError, MintRequestSender};
 use miden_faucet_client::types::{AssetOptions, NoteType};
 use serde::Deserialize;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
-use tracing::{error, instrument};
+use tracing::instrument;
 
 use crate::COMPONENT;
 use crate::api::Server;
@@ -32,27 +32,28 @@ pub async fn get_tokens(
 ) -> Result<impl IntoResponse, GetTokenError> {
     let (mint_response_sender, mint_response_receiver) = oneshot::channel();
 
-    request
-        .validate(&server)
-        .map_err(GetTokenError::InvalidRequest)
-        .and_then(|request| {
-            let span = tracing::Span::current();
-            span.record("account", request.account_id.to_hex());
-            span.record("amount", request.asset_amount.inner());
-            span.record("note_type", request.note_type.to_string());
+    let validated_request = request.validate(&server).map_err(GetTokenError::InvalidRequest)?;
+    let requested_amount = validated_request.asset_amount.inner();
 
-            server
-                .mint_state
-                .request_sender
-                .try_send((request, mint_response_sender))
-                .map_err(|err| match err {
-                    TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
-                    TrySendError::Closed(_) => GetTokenError::FaucetClosed,
-                })
+    let span = tracing::Span::current();
+    span.record("account", validated_request.account_id.to_hex());
+    span.record("amount", requested_amount);
+    span.record("note_type", validated_request.note_type.to_string());
+
+    server
+        .mint_state
+        .request_sender
+        .try_send((validated_request, mint_response_sender))
+        .map_err(|err| match err {
+            TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
+            TrySendError::Closed(_) => GetTokenError::FaucetClosed,
         })?;
+
     let mint_response = mint_response_receiver
         .await
-        .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?;
+        .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
+        .map_err(GetTokenError::InvalidRequest)?;
+
     Ok(Json(mint_response))
 }
 
@@ -85,28 +86,6 @@ pub struct RawMintRequest {
     pub challenge: Option<String>,
     pub nonce: Option<u64>,
     pub api_key: Option<String>,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum MintRequestError {
-    #[error("account ID failed to parse")]
-    AccountId(#[source] AccountIdError),
-    #[error("asset amount {0} is not one of the provided options")]
-    AssetAmount(u64),
-    #[error("API key {0} is invalid")]
-    InvalidApiKey(String),
-    #[error("invalid POW solution")]
-    InvalidPoW,
-    #[error("POW parameters are missing")]
-    MissingPowParameters,
-    #[error("server signatures do not match")]
-    ServerSignaturesDoNotMatch,
-    #[error("server timestamp expired, received: {0}, current time: {1}")]
-    ExpiredServerTimestamp(u64, u64),
-    #[error("challenge already used")]
-    ChallengeAlreadyUsed,
-    #[error("account is rate limited")]
-    RateLimited,
 }
 
 pub enum GetTokenError {
@@ -198,10 +177,10 @@ impl RawMintRequest {
 
         // Check the API key, if provided
         let api_key = self.api_key.as_deref().map(ApiKey::decode).transpose()?;
-        if let Some(api_key) = &api_key {
-            if !server.api_keys.contains(api_key) {
-                return Err(MintRequestError::InvalidApiKey(api_key.encode()));
-            }
+        if let Some(api_key) = &api_key
+            && !server.api_keys.contains(api_key)
+        {
+            return Err(MintRequestError::InvalidApiKey(api_key.encode()));
         }
 
         // Validate Challenge and nonce

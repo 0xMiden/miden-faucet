@@ -2,10 +2,10 @@ use std::time::Duration;
 
 use miden_client::account::AccountId;
 use miden_client::utils::{Deserializable, Serializable, ToHex, hex_to_bytes};
+use miden_faucet_client::requests::MintRequestError;
 use serde::{Serialize, Serializer};
 use sha3::{Digest, Sha3_256};
 
-use crate::api::get_tokens::MintRequestError;
 use crate::pow::api_key::ApiKey;
 
 /// The size of the encoded challenge in bytes.
