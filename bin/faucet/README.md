@@ -80,7 +80,7 @@ while (true) {
     nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
     try {
-        // Compute hash using SHA3 with the challenge and nonce
+        // Compute hash using SHA3-256 with the challenge and nonce
         let hash = sha3_256.create();
         hash.update(challenge); // Use the hex-encoded challenge string directly
 
@@ -144,12 +144,9 @@ fs.writeFileSync('note.mno', noteData);
 
 #### Example
 
-To see a full working example in Rust, check [request_tokens.rs](bin/faucet/examples/request_tokens.rs). The example assumes you have the faucet running on `http://localhost:8080`.
-
-Run it with:
-```bash
-cargo run --example request_tokens
-```
+Check out the complete working examples below. Make sure the faucet is running at `http://localhost:8080` before using them.
+- Rust: [`examples/rust/request_tokens.rs`](examples/request_tokens.rs)
+- TypeScript: [`examples/typescript/request_tokens.ts`](examples/ts/request_tokens.ts)
 
 #### API Endpoints Reference
 
