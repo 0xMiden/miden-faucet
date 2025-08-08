@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+
 use axum::Json;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Response};
@@ -14,6 +17,8 @@ use crate::types::AssetOptions;
 pub struct Metadata {
     pub id: FaucetId,
     pub asset_amount_options: AssetOptions,
+    pub issuance: Arc<AtomicU64>,
+    pub max_supply: u64,
 }
 
 pub async fn get_index_html() -> Html<&'static str> {

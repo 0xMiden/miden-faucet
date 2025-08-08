@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
@@ -26,7 +27,6 @@ use crate::COMPONENT;
 use crate::faucet::FaucetId;
 use crate::server::get_note::get_note;
 use crate::server::get_pow::get_pow;
-use crate::server::get_tokens::MintRequestError;
 use crate::types::AssetOptions;
 
 mod api_key;
@@ -37,7 +37,7 @@ mod get_pow;
 mod get_tokens;
 mod pow;
 pub use api_key::ApiKey;
-pub use get_tokens::{MintRequest, MintResponse, MintResponseSender};
+pub use get_tokens::{MintRequest, MintRequestError, MintResponse, MintResponseSender};
 pub use pow::PoWConfig;
 
 // FAUCET STATE
@@ -56,8 +56,11 @@ pub struct Server {
 }
 
 impl Server {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         faucet_id: FaucetId,
+        max_supply: u64,
+        issuance: Arc<AtomicU64>,
         asset_options: AssetOptions,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
@@ -69,6 +72,8 @@ impl Server {
         let metadata = Metadata {
             id: faucet_id,
             asset_amount_options: asset_options,
+            issuance,
+            max_supply,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
         let metadata = Box::leak(Box::new(metadata));
