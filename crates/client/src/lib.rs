@@ -13,11 +13,7 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    OutputNote,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
 };
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use rand::rngs::StdRng;
@@ -30,7 +26,7 @@ use url::Url;
 pub mod requests;
 pub mod types;
 
-use crate::requests::{MintRequest, MintRequestError, MintResponse, MintResponseSender};
+use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::ExplorerUrl;
 
 // FAUCET CLIENT
@@ -194,7 +190,7 @@ impl Faucet {
                 let available_amount = self.available_supply();
                 if available_amount < requested_amount {
                     error!(requested_amount, available_amount, request.account_id = %request.account_id, "Requested amount exceeds available supply");
-                    let _ = response_sender.send(Err(MintRequestError::AvailableSupplyExceeded));
+                    let _ = response_sender.send(Err(MintError::AvailableSupplyExceeded));
                     continue;
                 }
                 valid_requests.push(request);

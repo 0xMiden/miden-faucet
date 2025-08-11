@@ -11,7 +11,7 @@ use http::{HeaderValue, Request};
 use miden_client::account::AccountId;
 use miden_client::store::Store;
 use miden_faucet_client::FaucetId;
-use miden_faucet_client::requests::{MintRequestError, MintRequestSender};
+use miden_faucet_client::requests::MintRequestSender;
 use miden_faucet_client::types::AssetOptions;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
@@ -26,7 +26,7 @@ use crate::COMPONENT;
 use crate::api::get_metadata::{Metadata, get_metadata};
 use crate::api::get_note::get_note;
 use crate::api::get_pow::get_pow;
-use crate::api::get_tokens::{GetTokensState, get_tokens};
+use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::pow::api_key::ApiKey;
 use crate::pow::{PoW, PoWConfig};
 
@@ -175,7 +175,9 @@ impl Server {
             .duration_since(UNIX_EPOCH)
             .expect("current timestamp should be greater than unix epoch")
             .as_secs();
-        self.pow.submit_challenge(account_id, api_key, challenge, nonce, timestamp)
+        self.pow
+            .submit_challenge(account_id, api_key, challenge, nonce, timestamp)
+            .map_err(MintRequestError::PowError)
     }
 }
 

@@ -1,8 +1,9 @@
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use miden_faucet_client::requests::MintRequestError;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+
+use crate::pow::PowError;
 
 // API KEY
 // ================================================================================================
@@ -40,14 +41,13 @@ impl ApiKey {
     }
 
     /// Decodes the API key from a string.
-    pub fn decode(api_key_str: &str) -> Result<Self, MintRequestError> {
+    pub fn decode(api_key_str: &str) -> Result<Self, PowError> {
         let api_key_str = api_key_str.trim_start_matches(API_KEY_PREFIX).to_string();
         let bytes = BASE64_STANDARD
             .decode(api_key_str.as_bytes())
-            .map_err(|_| MintRequestError::InvalidApiKey(api_key_str.clone()))?;
+            .map_err(|_| PowError::InvalidApiKey(api_key_str.clone()))?;
 
-        let api_key =
-            Self(bytes.try_into().map_err(|_| MintRequestError::InvalidApiKey(api_key_str))?);
+        let api_key = Self(bytes.try_into().map_err(|_| PowError::InvalidApiKey(api_key_str))?);
         Ok(api_key)
     }
 }

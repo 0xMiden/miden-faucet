@@ -2,8 +2,8 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use miden_client::account::AccountId;
-use miden_faucet_client::requests::{MintRequest, MintRequestError, MintRequestSender};
+use miden_client::account::{AccountId, AccountIdError};
+use miden_faucet_client::requests::{MintError, MintRequest, MintRequestSender};
 use miden_faucet_client::types::{AssetOptions, NoteType};
 use serde::Deserialize;
 use tokio::sync::mpsc::error::TrySendError;
@@ -13,6 +13,7 @@ use tracing::instrument;
 use crate::COMPONENT;
 use crate::api::Server;
 use crate::error_report::ErrorReport;
+use crate::pow::PowError;
 use crate::pow::api_key::ApiKey;
 
 // ENDPOINT
@@ -52,7 +53,7 @@ pub async fn get_tokens(
     let mint_response = mint_response_receiver
         .await
         .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
-        .map_err(GetTokenError::InvalidRequest)?;
+        .map_err(GetTokenError::MintError)?;
 
     Ok(Json(mint_response))
 }
@@ -88,8 +89,23 @@ pub struct RawMintRequest {
     pub api_key: Option<String>,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum MintRequestError {
+    #[error("account ID failed to parse")]
+    AccountId(#[source] AccountIdError),
+    #[error("asset amount {0} is not one of the provided options")]
+    AssetAmount(u64),
+    #[error("POW error: {0}")]
+    PowError(#[from] PowError),
+    #[error("API key {0} is invalid")]
+    InvalidApiKey(String),
+    #[error("POW parameters are missing")]
+    MissingPowParameters,
+}
+
 pub enum GetTokenError {
     InvalidRequest(MintRequestError),
+    MintError(MintError),
     FaucetOverloaded,
     FaucetClosed,
     FaucetReturnChannelClosed,
@@ -99,6 +115,7 @@ impl GetTokenError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+            Self::MintError(_) => StatusCode::BAD_REQUEST,
             Self::FaucetOverloaded | Self::FaucetClosed => StatusCode::SERVICE_UNAVAILABLE,
             Self::FaucetReturnChannelClosed => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -108,6 +125,7 @@ impl GetTokenError {
     fn user_facing_error(&self) -> String {
         match self {
             Self::InvalidRequest(error) => error.as_report(),
+            Self::MintError(error) => error.as_report(),
             Self::FaucetOverloaded => {
                 "The faucet is currently overloaded, please try again later.".to_owned()
             },
@@ -122,6 +140,7 @@ impl GetTokenError {
     fn trace(&self) {
         match self {
             Self::InvalidRequest(_) => {},
+            Self::MintError(_) => {},
             Self::FaucetOverloaded => tracing::warn!("faucet client is overloaded"),
             Self::FaucetClosed => {
                 tracing::error!("faucet channel is closed but requests are still coming in");
