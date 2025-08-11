@@ -127,7 +127,9 @@ const txId = json.tx_id;
 const explorerUrl = json.explorer_url;
 ```
 
-4. **Request note** to download generated private notes
+4. **Request note** to download generated notes
+
+You must complete this step to retrieve private notes. For public notes, normal client sync is sufficient.
 
 ```typescript
 const response = await fetch(`${baseUrl}/get_note?note_id=${noteId}`);
@@ -168,7 +170,7 @@ Check out the complete working examples below. Make sure the faucet is running a
   - `asset_amount` (number, required): Amount of tokens to request
   - `challenge` (string, required): The encoded challenge from the `/pow` endpoint
   - `nonce` (number, required): The nonce used to solve the challenge
-  - `api_key` (string, required): API key for authentication
+  - `api_key` (string, optional): API key for authentication
 - **Response**: JSON object containing:
   - `tx_id` (string): ID of the created transaction
   - `note_id` (string): ID of the created note

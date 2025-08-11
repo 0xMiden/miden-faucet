@@ -1,7 +1,7 @@
 import { sha3_256 } from '@noble/hashes/sha3';
 import fs from 'fs';
 
-async function sendPowRequest(baseUrl: string, accountId: string) {
+async function sendPowRequest(baseUrl: string, accountId: string): Promise<{ challenge: string, target: bigint }> {
     const powUrl = new URL('/pow', baseUrl);
     powUrl.searchParams.set('account_id', accountId);
     const powResp = await fetch(powUrl);
@@ -12,7 +12,7 @@ async function sendPowRequest(baseUrl: string, accountId: string) {
     return { challenge, target };
 }
 
-async function solveChallenge(challenge: string, target: bigint) {
+async function solveChallenge(challenge: string, target: bigint): Promise<number> {
     let nonce = 0;
     while (true) {
         nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
@@ -45,7 +45,7 @@ async function solveChallenge(challenge: string, target: bigint) {
 }
 
 
-async function getTokens(baseUrl: string, account_id: string, nonce: number, challenge: string) {
+async function getTokens(baseUrl: string, account_id: string, nonce: number, challenge: string): Promise<{ noteId: string, txId: string, explorerUrl: string }> {
     const params = new URLSearchParams({
         account_id: account_id,
         is_private_note: 'true',
@@ -65,7 +65,7 @@ async function getTokens(baseUrl: string, account_id: string, nonce: number, cha
     return { noteId, txId, explorerUrl };
 }
 
-async function downloadNote(baseUrl: string, noteId: string) {
+async function downloadNote(baseUrl: string, noteId: string): Promise<void> {
     const url = `${baseUrl}/get_note?note_id=${noteId}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Get note error: ${response.status} ${await response.text()}`);
@@ -79,7 +79,7 @@ async function downloadNote(baseUrl: string, noteId: string) {
     fs.writeFileSync('note.mno', noteData);
 }
 
-async function main() {
+async function main(): Promise<void> {
     const baseUrl = 'http://localhost:8080';
     const accountId = 'mlcl1qq8mcy8pdvl0cgqfkjzf8efjjsnlzf7q';
 

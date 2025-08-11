@@ -9,5 +9,6 @@
   "dependencies": {
     "typescript": "^5.9.2",
     "@noble/hashes": "^1.8.0"
-  }
+  },
+  "type": "module"
 }
