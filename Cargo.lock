@@ -1762,7 +1762,7 @@ dependencies = [
  "http 1.3.1",
  "humantime",
  "miden-client",
- "miden-faucet-client",
+ "miden-faucet-lib",
  "miden-node-proto",
  "miden-testing",
  "opentelemetry",
@@ -1787,7 +1787,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "miden-faucet-client"
+name = "miden-faucet-lib"
 version = "0.10.0"
 dependencies = [
  "anyhow",

@@ -3,8 +3,8 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, AccountIdError};
-use miden_faucet_client::requests::{MintError, MintRequest, MintRequestSender};
-use miden_faucet_client::types::{AssetOptions, NoteType};
+use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
+use miden_faucet_lib::types::{AssetOptions, NoteType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
@@ -59,7 +59,7 @@ pub async fn get_tokens(
     Ok(Json(GetTokensResponse {
         tx_id: mint_response.tx_id.to_string(),
         note_id: mint_response.note_id.to_string(),
-        explorer_url: ExplorerUrl::from_network_id(server.metadata.id.network_id).unwrap(),
+        explorer_url: ExplorerUrl::from_network_id(server.metadata.id.network_id),
     }))
 }
 
@@ -67,7 +67,7 @@ pub async fn get_tokens(
 pub struct GetTokensResponse {
     tx_id: String,
     note_id: String,
-    explorer_url: ExplorerUrl,
+    explorer_url: Option<ExplorerUrl>,
 }
 
 // STATE
