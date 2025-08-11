@@ -1,10 +1,9 @@
 use miden_client::account::AccountId;
 use miden_client::note::NoteId;
 use miden_client::transaction::TransactionId;
-use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::types::{AssetAmount, ExplorerUrl, NoteType};
+use crate::types::{AssetAmount, NoteType};
 
 pub type MintResponseSender = oneshot::Sender<Result<MintResponse, MintError>>;
 pub type MintRequestSender = mpsc::Sender<(MintRequest, MintResponseSender)>;
@@ -22,21 +21,6 @@ pub struct MintRequest {
 pub struct MintResponse {
     pub tx_id: TransactionId,
     pub note_id: NoteId,
-    pub explorer_url: Option<ExplorerUrl>,
-}
-
-impl Serialize for MintResponse {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("MintResponse", 3)?;
-        state.serialize_field("tx_id", &self.tx_id.to_string())?;
-        state.serialize_field("note_id", &self.note_id.to_string())?;
-        state.serialize_field("explorer_url", &self.explorer_url)?;
-        state.end()
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

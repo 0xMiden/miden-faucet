@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, AccountIdError};
 use miden_faucet_client::requests::{MintError, MintRequest, MintRequestSender};
 use miden_faucet_client::types::{AssetOptions, NoteType};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
 use tracing::instrument;
@@ -13,6 +13,7 @@ use tracing::instrument;
 use crate::COMPONENT;
 use crate::api::Server;
 use crate::error_report::ErrorReport;
+use crate::network::ExplorerUrl;
 use crate::pow::PowError;
 use crate::pow::api_key::ApiKey;
 
@@ -30,7 +31,7 @@ use crate::pow::api_key::ApiKey;
 pub async fn get_tokens(
     State(server): State<Server>,
     Query(request): Query<RawMintRequest>,
-) -> Result<impl IntoResponse, GetTokenError> {
+) -> Result<Json<GetTokensResponse>, GetTokenError> {
     let (mint_response_sender, mint_response_receiver) = oneshot::channel();
 
     let validated_request = request.validate(&server).map_err(GetTokenError::InvalidRequest)?;
@@ -55,7 +56,18 @@ pub async fn get_tokens(
         .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
         .map_err(GetTokenError::MintError)?;
 
-    Ok(Json(mint_response))
+    Ok(Json(GetTokensResponse {
+        tx_id: mint_response.tx_id.to_string(),
+        note_id: mint_response.note_id.to_string(),
+        explorer_url: ExplorerUrl::from_network_id(server.metadata.id.network_id).unwrap(),
+    }))
+}
+
+#[derive(Serialize)]
+pub struct GetTokensResponse {
+    tx_id: String,
+    note_id: String,
+    explorer_url: ExplorerUrl,
 }
 
 // STATE
@@ -114,8 +126,7 @@ pub enum GetTokenError {
 impl GetTokenError {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-            Self::MintError(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidRequest(_) | Self::MintError(_) => StatusCode::BAD_REQUEST,
             Self::FaucetOverloaded | Self::FaucetClosed => StatusCode::SERVICE_UNAVAILABLE,
             Self::FaucetReturnChannelClosed => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -139,8 +150,7 @@ impl GetTokenError {
     /// Write a trace log for the error, if applicable.
     fn trace(&self) {
         match self {
-            Self::InvalidRequest(_) => {},
-            Self::MintError(_) => {},
+            Self::InvalidRequest(_) | Self::MintError(_) => {},
             Self::FaucetOverloaded => tracing::warn!("faucet client is overloaded"),
             Self::FaucetClosed => {
                 tracing::error!("faucet channel is closed but requests are still coming in");

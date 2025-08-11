@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 use crate::error_report::ErrorReport;
 use crate::pow::api_key::ApiKey;
+use crate::pow::challenge::Challenge;
 use crate::pow::{PoW, PowRequest};
 
 // ENDPOINT
@@ -15,7 +16,7 @@ use crate::pow::{PoW, PowRequest};
 pub async fn get_pow(
     State(pow): State<PoW>,
     Query(params): Query<RawPowRequest>,
-) -> Result<impl IntoResponse, PowRequestError> {
+) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
     let challenge = pow.build_challenge(request);
     Ok(Json(challenge))

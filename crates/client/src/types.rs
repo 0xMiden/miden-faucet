@@ -1,6 +1,5 @@
 //! A collection of new types and safety wrappers used throughout the faucet.
 
-use miden_client::account::NetworkId;
 use miden_client::asset::FungibleAsset;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
@@ -116,21 +115,6 @@ impl std::fmt::Display for NoteType {
         match self {
             Self::Private => f.write_str("private"),
             Self::Public => f.write_str("public"),
-        }
-    }
-}
-
-/// A type wrapper for the explorer URL.
-#[derive(Debug, Clone, Serialize)]
-pub struct ExplorerUrl(&'static str);
-
-impl ExplorerUrl {
-    /// Returns the explorer URL for the given network ID.
-    /// Currently only testnet explorer is available.
-    pub fn from_network_id(network_id: NetworkId) -> Option<Self> {
-        match network_id {
-            NetworkId::Testnet => Some(Self("https://testnet.midenscan.com")),
-            _ => None,
         }
     }
 }

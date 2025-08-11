@@ -13,7 +13,11 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
+    LocalTransactionProver,
+    OutputNote,
+    TransactionId,
+    TransactionProver,
+    TransactionRequestBuilder,
 };
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use rand::rngs::StdRng;
@@ -27,7 +31,6 @@ pub mod requests;
 pub mod types;
 
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
-use crate::types::ExplorerUrl;
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -178,7 +181,6 @@ impl Faucet {
     ) -> anyhow::Result<()> {
         let mut buffer = Vec::new();
         let limit = 256; // also limited by the queue size `REQUESTS_QUEUE_SIZE`
-        let explorer_url = ExplorerUrl::from_network_id(self.id.network_id);
 
         while requests.recv_many(&mut buffer, limit).await > 0 {
             // Check if there are enough tokens available and update the supply counter for each
@@ -215,11 +217,7 @@ impl Faucet {
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
-                let _ = sender.send(Ok(MintResponse {
-                    tx_id,
-                    note_id,
-                    explorer_url: explorer_url.clone(),
-                }));
+                let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
             }
             self.client.sync_state().await?;
         }
