@@ -1,7 +1,6 @@
 mod api;
 mod error_report;
 mod logging;
-mod network;
 mod pow;
 #[cfg(test)]
 mod testing;
@@ -18,10 +17,11 @@ use miden_client::account::{AccountBuilder, AccountFile, AccountStorageMode, Acc
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
 use miden_client::crypto::{RpoRandomCoin, SecretKey};
+use miden_client::rpc::Endpoint;
 use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
-use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetOptions;
+use miden_faucet_lib::{Faucet, FaucetConfig};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
@@ -29,7 +29,6 @@ use url::Url;
 
 use crate::api::Server;
 use crate::logging::OpenTelemetry;
-use crate::network::FaucetNetwork;
 use crate::pow::PoWConfig;
 use crate::pow::api_key::ApiKey;
 
@@ -52,8 +51,8 @@ const ENV_POW_GROWTH_RATE: &str = "MIDEN_FAUCET_POW_GROWTH_RATE";
 const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
 const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
-const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
+const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 
 // COMMANDS
 // ================================================================================================
@@ -73,11 +72,6 @@ pub enum Command {
         /// Endpoint of the faucet in the format `<ip>:<port>`.
         #[arg(long = "endpoint", value_name = "URL", env = ENV_ENDPOINT)]
         endpoint: Url,
-
-        /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
-        /// network. It is used to show the correct addresses and explorer URL in the UI.
-        #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
-        network: FaucetNetwork,
 
         /// Node RPC gRPC endpoint in the format `http://<host>[:<port>]`.
         #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
@@ -139,6 +133,10 @@ pub enum Command {
         /// Path to the `SQLite` store.
         #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
         store_path: PathBuf,
+
+        /// Explorer URL.
+        #[arg(long = "explorer-url", value_name = "URL", env = ENV_EXPLORER_URL)]
+        explorer_url: Option<Url>,
     },
 
     /// Create a new public faucet account and save to the specified file.
@@ -196,7 +194,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         // Note: open-telemetry is handled in main.
         Command::Start {
             endpoint,
-            network,
             node_url,
             timeout,
             faucet_account_path,
@@ -210,6 +207,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             api_keys,
             open_telemetry: _,
             store_path,
+            explorer_url,
         } => {
             let account_file = AccountFile::read(&faucet_account_path).context(format!(
                 "failed to load faucet account from file ({})",
@@ -217,16 +215,29 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             ))?;
             let faucet_component = BasicFungibleFaucet::try_from(&account_file.account)?;
 
-            let faucet = Faucet::load(
-                store_path.clone(),
-                network.to_network_id()?,
-                account_file,
-                &node_url,
+            let node_endpoint = Endpoint::try_from(node_url.as_str())
+                .map_err(anyhow::Error::msg)
+                .with_context(|| format!("failed to parse node url: {node_url}"))?;
+
+            let config = FaucetConfig {
+                account_id: account_file.account.id(),
+                store_path: store_path.to_str().context("invalid store path")?.to_string(),
+                keystore_path: "keystore".into(),
+                node_endpoint,
                 timeout,
                 remote_tx_prover_url,
+            };
+            Faucet::init(&config, &account_file.auth_secret_keys[0])
+                .await
+                .context("failed to initialize faucet")?;
+            Faucet::import_account(
+                &config,
+                account_file.account,
+                account_file.account_seed.unwrap(),
             )
             .await
-            .context("failed to load faucet")?;
+            .context("failed to import account")?;
+            let faucet = Faucet::load(config).await.context("failed to load faucet")?;
 
             let decimals = faucet_component.decimals();
             let max_supply = faucet_component.max_supply().as_int() / 10u64.pow(decimals.into());
@@ -260,6 +271,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 pow_config,
                 &api_keys,
                 store,
+                explorer_url,
             );
 
             // Use select to concurrently:
@@ -361,7 +373,7 @@ mod test {
     use url::Url;
 
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, FaucetNetwork, run_faucet_command};
+    use crate::{Cli, run_faucet_command};
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
     /// to test the faucet website. It then loads the website and checks that all the requests
@@ -466,8 +478,8 @@ mod test {
             rt.block_on(async {
                 run_faucet_command(Cli {
                     command: crate::Command::Start {
+                        explorer_url: None,
                         endpoint: endpoint_clone,
-                        network: FaucetNetwork::Testnet,
                         node_url: stub_node_url,
                         timeout: Duration::from_millis(5000),
                         asset_amounts: vec![100, 500, 1000],

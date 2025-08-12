@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
 use tracing::instrument;
+use url::Url;
 
 use crate::COMPONENT;
 use crate::api::Server;
 use crate::error_report::ErrorReport;
-use crate::network::ExplorerUrl;
 use crate::pow::PowError;
 use crate::pow::api_key::ApiKey;
 
@@ -59,7 +59,7 @@ pub async fn get_tokens(
     Ok(Json(GetTokensResponse {
         tx_id: mint_response.tx_id.to_string(),
         note_id: mint_response.note_id.to_string(),
-        explorer_url: ExplorerUrl::from_network_id(server.metadata.id.network_id),
+        explorer_url: server.metadata.explorer_url.clone(),
     }))
 }
 
@@ -67,7 +67,7 @@ pub async fn get_tokens(
 pub struct GetTokensResponse {
     tx_id: String,
     note_id: String,
-    explorer_url: Option<ExplorerUrl>,
+    explorer_url: Option<Url>,
 }
 
 // STATE

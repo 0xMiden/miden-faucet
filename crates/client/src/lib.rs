@@ -1,23 +1,19 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{AccountFile, AccountId, NetworkId};
+use miden_client::account::{Account, AccountId, NetworkId};
 use miden_client::asset::FungibleAsset;
+use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::RpoRandomCoin;
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    OutputNote,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
 };
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use rand::rngs::StdRng;
@@ -26,7 +22,6 @@ use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
 use tracing::{error, info, instrument, warn};
 use url::Url;
-
 pub mod requests;
 pub mod types;
 
@@ -70,89 +65,93 @@ pub struct Faucet {
     max_supply: u64,
 }
 
+/// Configuration for initializing and loading a faucet.
+pub struct FaucetConfig {
+    pub account_id: AccountId,
+    pub store_path: String,
+    pub keystore_path: String,
+    pub node_endpoint: Endpoint,
+    pub timeout: Duration,
+    /// If a remote transaction prover url is provided, it is used to prove transactions.
+    /// Otherwise, a local transaction prover is used.
+    pub remote_tx_prover_url: Option<Url>,
+}
+
 impl Faucet {
+    /// Initializes a new faucet client, creating the keystore and the database.
+    #[instrument(name = "faucet.init", skip_all)]
+    pub async fn init(config: &FaucetConfig, secret_key: &AuthSecretKey) -> anyhow::Result<()> {
+        let keystore = FilesystemKeyStore::<StdRng>::new(config.keystore_path.clone().into())
+            .context("failed to create keystore")?;
+        keystore.add_key(secret_key)?;
+
+        ClientBuilder::<FilesystemKeyStore<StdRng>>::new()
+            .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
+            .authenticator(Arc::new(keystore))
+            .sqlite_store(&config.store_path)
+            .build()
+            .await?;
+        Ok(())
+    }
+
+    /// Adds an account to the faucet database.
+    #[instrument(name = "faucet.import_account", skip_all)]
+    pub async fn import_account(
+        config: &FaucetConfig,
+        account: Account,
+        account_seed: Word,
+    ) -> Result<(), ClientError> {
+        let mut client: Client<FilesystemKeyStore<StdRng>> = ClientBuilder::new()
+            .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
+            .sqlite_store(&config.store_path)
+            .build()
+            .await?;
+
+        client.add_account(&account, Some(account_seed), false).await
+    }
+
     /// Loads the faucet.
     ///
-    /// A client is instantiated with the provided store path, node url and timeout. The account is
-    /// loaded from the provided account file. If the account is already tracked by the current
-    /// store, it is loaded. Otherwise, the account is added from the file state.
-    ///
-    /// If a remote transaction prover url is provided, it is used to prove transactions. Otherwise,
-    /// a local transaction prover is used.
-    #[instrument(name = "faucet.load", fields(id), skip_all)]
-    pub async fn load(
-        store_path: PathBuf,
-        network_id: NetworkId,
-        account_file: AccountFile,
-        node_url: &Url,
-        timeout: Duration,
-        remote_tx_prover_url: Option<Url>,
-    ) -> anyhow::Result<Self> {
-        let account = account_file.account;
-        tracing::Span::current().record("id", account.id().to_string());
-
-        let keystore = FilesystemKeyStore::<StdRng>::new(PathBuf::from("keystore"))
-            .context("failed to create keystore")?;
-        for key in account_file.auth_secret_keys {
-            keystore.add_key(&key)?;
-        }
-        let endpoint = Endpoint::try_from(node_url.as_str())
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("failed to parse node url: {node_url}"))?;
-
+    /// The account is loaded from the local store. If it is not tracked, it is fetched from the
+    /// node and added to the local store.
+    #[instrument(name = "faucet.load", skip_all)]
+    pub async fn load(config: FaucetConfig) -> anyhow::Result<Self> {
         let mut client = ClientBuilder::new()
-            .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
-            .authenticator(Arc::new(keystore))
-            .sqlite_store(store_path.to_str().context("invalid store path")?)
+            .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
+            .filesystem_keystore(&config.keystore_path)
+            .sqlite_store(&config.store_path)
             .build()
             .await?;
 
         info!("Fetching faucet state from node");
 
-        let issuance = match client.import_account_by_id(account.id()).await {
+        match client.import_account_by_id(config.account_id).await {
             Ok(()) => {
-                // SAFETY: if import was successful, the account is tracked by the client
-                let record = client.get_account(account.id()).await?.unwrap();
-                info!(
-                    commitment = %record.account().commitment(),
-                    nonce = %record.account().nonce(),
-                    "Received faucet account state from the node",
-                );
-                record.account().get_token_issuance()?
+                info!("Received faucet account state from the node");
             },
-            Err(_) => match client.add_account(&account, account_file.account_seed, false).await {
-                Ok(()) => {
-                    info!(
-                        commitment = %account.commitment(),
-                        nonce = %account.nonce(),
-                        "Loaded state from account file"
-                    );
-                    account.get_token_issuance()?
-                },
-                Err(ClientError::AccountAlreadyTracked(_)) => {
-                    // SAFETY: account is tracked, so its present in the db
-                    let record = client.get_account(account.id()).await?.unwrap();
-                    info!(
-                        commitment = %record.account().commitment(),
-                        nonce = %record.account().nonce(),
-                        "Loaded state from existing local client db"
-                    );
-                    record.account().get_token_issuance()?
-                },
-                Err(err) => anyhow::bail!("failed to add account from file: {err}"),
+            Err(ClientError::AccountAlreadyTracked(_)) => {
+                info!("Loaded state from existing local client db");
             },
-        };
+            Err(error) => anyhow::bail!("failed to load account: {error}"),
+        }
+
+        let record = client.get_account(config.account_id).await?.unwrap();
+        let account = record.account();
+        info!(
+            commitment = %account.commitment(),
+            nonce = %account.nonce(),
+        );
 
         client.ensure_genesis_in_place().await?;
 
-        let faucet = BasicFungibleFaucet::try_from(&account)?;
-        let tx_prover: Arc<dyn TransactionProver> = match remote_tx_prover_url {
+        let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
         };
-        let id = FaucetId::new(account.id(), network_id);
+        let id = FaucetId::new(config.account_id, config.node_endpoint.to_network_id()?);
+        let faucet = BasicFungibleFaucet::try_from(account)?;
         let decimal_divisor = 10u64.pow(faucet.decimals().into());
-        let issuance = issuance.as_int() / decimal_divisor;
+        let issuance = account.get_token_issuance()?.as_int() / decimal_divisor;
         let max_supply = faucet.max_supply().as_int() / decimal_divisor;
 
         Ok(Self {
