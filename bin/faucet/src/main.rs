@@ -230,13 +230,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             Faucet::init(&config, &account_file.auth_secret_keys[0])
                 .await
                 .context("failed to initialize faucet")?;
-            Faucet::import_account(
+            // ignore if import fails because account is already tracked
+            let _ = Faucet::import_account(
                 &config,
                 account_file.account,
                 account_file.account_seed.unwrap(),
             )
-            .await
-            .context("failed to import account")?;
+            .await;
             let faucet = Faucet::load(config).await.context("failed to load faucet")?;
 
             let decimals = faucet_component.decimals();

@@ -8,6 +8,7 @@ class MidenFaucet {
         this.progressFill = document.getElementById('progress-fill');
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
+        this.explorer_url = null;
 
         // Check if SHA3 is available right from the start
         if (typeof sha3_256 === 'undefined') {
@@ -67,6 +68,7 @@ class MidenFaucet {
             .then(response => response.json())
             .then(data => {
                 this.faucetAddress.textContent = data.id;
+                this.explorer_url = data.explorer_url;
                 for (const amount of data.asset_amount_options) {
                     const option = document.createElement('option');
                     option.value = amount;
@@ -234,8 +236,8 @@ class MidenFaucet {
             completedPublicModal.classList.add('active');
 
             const explorerButton = document.getElementById('explorer-button');
-            if (mintingData.explorer_url) {
-                explorerButton.onclick = () => window.open(mintingData.explorer_url + '/tx/' + mintingData.transaction_id, '_blank');
+            if (this.explorer_url) {
+                explorerButton.onclick = () => window.open(this.explorer_url + '/tx/' + mintingData.transaction_id, '_blank');
             } else {
                 explorerButton.onclick = () => this.showPublicModalError('Explorer URL not available');
             }

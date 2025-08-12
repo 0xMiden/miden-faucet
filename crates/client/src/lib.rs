@@ -121,21 +121,27 @@ impl Faucet {
             .filesystem_keystore(&config.keystore_path)
             .sqlite_store(&config.store_path)
             .build()
-            .await?;
+            .await
+            .context("failed to build client")?;
 
-        info!("Fetching faucet state from node");
-
-        match client.import_account_by_id(config.account_id).await {
-            Ok(()) => {
-                info!("Received faucet account state from the node");
+        let record = match client.get_account(config.account_id).await? {
+            Some(record) => {
+                info!("Loaded account from local db");
+                record
             },
-            Err(ClientError::AccountAlreadyTracked(_)) => {
-                info!("Loaded state from existing local client db");
+            None => {
+                // If the account is not tracked, we try to fetch it from the node.
+                client
+                    .import_account_by_id(config.account_id)
+                    .await
+                    .context("failed to fetch account from the node")?;
+                info!("Fetched faucet account state from the node");
+                client
+                    .get_account(config.account_id)
+                    .await?
+                    .context("failed to load fetched account")?
             },
-            Err(error) => anyhow::bail!("failed to load account: {error}"),
-        }
-
-        let record = client.get_account(config.account_id).await?.unwrap();
+        };
         let account = record.account();
         info!(
             commitment = %account.commitment(),
