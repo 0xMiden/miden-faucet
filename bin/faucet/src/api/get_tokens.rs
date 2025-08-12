@@ -107,11 +107,11 @@ pub enum MintRequestError {
     AccountId(#[source] AccountIdError),
     #[error("asset amount {0} is not one of the provided options")]
     AssetAmount(u64),
-    #[error("POW error: {0}")]
+    #[error("PoW error")]
     PowError(#[from] PowError),
     #[error("API key {0} is invalid")]
     InvalidApiKey(String),
-    #[error("POW parameters are missing")]
+    #[error("PoW parameters are missing")]
     MissingPowParameters,
 }
 
