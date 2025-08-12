@@ -189,7 +189,8 @@ Check out the complete working examples below. Make sure the faucet is running a
 
 The API returns appropriate HTTP status codes:
 - `200`: Success
-- `400`: Bad request (invalid parameters or rate limited)
+- `400`: Bad request
+- `429`: Rate limited
 - `500`: Server error
 
 Error responses include a `message` field with details about the error.
