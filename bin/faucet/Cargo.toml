@@ -52,8 +52,9 @@ url                   = { workspace = true }
 fantoccini       = { version = "0.22" }
 miden-node-proto = { branch = "next", git = "https://github.com/0xMiden/miden-node" }
 miden-testing    = { branch = "next", features = ["async"], git = "https://github.com/0xMiden/miden-base" }
+reqwest          = { default-features = false, features = ["json"], version = "0.12" }
 serde_json       = { version = "1.0" }
-tokio            = { features = ["process"], workspace = true }
+tokio            = { features = ["macros", "process"], workspace = true }
 tonic-web        = { version = "0.13" }
 
 # Required to avoid false positives in cargo-machete
