@@ -78,36 +78,29 @@ pub struct FaucetConfig {
 }
 
 impl Faucet {
-    /// Initializes a new faucet client, creating the keystore and the database.
+    /// Initializes a new faucet client, creating the keystore and the database with the provided
+    /// account.
     #[instrument(name = "faucet.init", skip_all)]
-    pub async fn init(config: &FaucetConfig, secret_key: &AuthSecretKey) -> anyhow::Result<()> {
+    pub async fn init(
+        config: &FaucetConfig,
+        account: &Account,
+        account_seed: Word,
+        secret_key: &AuthSecretKey,
+    ) -> anyhow::Result<()> {
         let keystore = FilesystemKeyStore::<StdRng>::new(config.keystore_path.clone().into())
             .context("failed to create keystore")?;
         keystore.add_key(secret_key)?;
 
-        ClientBuilder::<FilesystemKeyStore<StdRng>>::new()
+        let mut client: Client<FilesystemKeyStore<StdRng>> = ClientBuilder::new()
             .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
             .sqlite_store(&config.store_path)
             .build()
             .await?;
+
+        client.add_account(account, Some(account_seed), false).await?;
+
         Ok(())
-    }
-
-    /// Adds an account to the faucet database.
-    #[instrument(name = "faucet.import_account", skip_all)]
-    pub async fn import_account(
-        config: &FaucetConfig,
-        account: Account,
-        account_seed: Word,
-    ) -> Result<(), ClientError> {
-        let mut client: Client<FilesystemKeyStore<StdRng>> = ClientBuilder::new()
-            .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
-            .sqlite_store(&config.store_path)
-            .build()
-            .await?;
-
-        client.add_account(&account, Some(account_seed), false).await
     }
 
     /// Loads the faucet.
@@ -124,24 +117,10 @@ impl Faucet {
             .await
             .context("failed to build client")?;
 
-        let record = match client.get_account(config.account_id).await? {
-            Some(record) => {
-                info!("Loaded account from local db");
-                record
-            },
-            None => {
-                // If the account is not tracked, we try to fetch it from the node.
-                client
-                    .import_account_by_id(config.account_id)
-                    .await
-                    .context("failed to fetch account from the node")?;
-                info!("Fetched faucet account state from the node");
-                client
-                    .get_account(config.account_id)
-                    .await?
-                    .context("failed to load fetched account")?
-            },
-        };
+        let record = client
+            .get_account(config.account_id)
+            .await?
+            .context("failed to get account from local db")?;
         let account = record.account();
         info!(
             commitment = %account.commitment(),
