@@ -167,7 +167,7 @@ Check out the complete working examples below. Make sure the faucet is running a
 - **Query Parameters**:
   - `account_id` (string, required): The account ID requesting tokens
   - `is_private_note` (boolean, required): Whether to create a private note
-  - `asset_amount` (number, required): Amount of tokens to request
+  - `asset_amount` (number, required): Amount of assets to request (in base units)
   - `challenge` (string, required): The encoded challenge from the `/pow` endpoint
   - `nonce` (number, required): The nonce used to solve the challenge
   - `api_key` (string, optional): API key for authentication

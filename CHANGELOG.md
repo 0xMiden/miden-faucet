@@ -11,6 +11,7 @@
 - Added faucet supply amounts to the metadata ([#30](https://github.com/0xMiden/miden-faucet/pull/30)).
 - Added supply exceeded check ([#31](https://github.com/0xMiden/miden-faucet/pull/31)). 
 - Introduced `miden-faucet-client` crate ([#10](https://github.com/0xMiden/miden-faucet/pull/10)).
+- Replace amount options validation for maximum claimable amount ([#52](https://github.com/0xMiden/miden-faucet/pull/52)).
 
 ## 0.10.0 (2025-07-10)
 

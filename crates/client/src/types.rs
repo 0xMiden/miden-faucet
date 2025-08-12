@@ -1,10 +1,10 @@
 //! A collection of new types and safety wrappers used throughout the faucet.
 
 use miden_client::asset::FungibleAsset;
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::Serialize;
 
 /// Describes the asset amounts allowed by the faucet.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct AssetOptions(Vec<AssetAmount>);
 
 impl std::fmt::Display for AssetOptions {
@@ -24,26 +24,11 @@ impl std::fmt::Display for AssetOptions {
 }
 
 impl AssetOptions {
-    /// Converts the given amount into an [`AssetAmount`] _iff_ if it
-    /// matches one of the allowed options.
-    ///
-    /// This is the only valid way to create an [`AssetAmount`].
-    pub fn validate(&self, amount: u64) -> Option<AssetAmount> {
-        // SAFETY: Invalid amounts will be discarded because our
-        //         options only contain value amounts.
-        let amount = AssetAmount(amount);
-        self.0.contains(&amount).then_some(amount)
-    }
-
     /// Creates [`AssetOptions`] if all options are valid [`AssetAmount`]'s
     ///
     /// The error value contains the invalid option.
-    pub fn new(options: Vec<u64>) -> Result<Self, u64> {
-        if let Some(invalid) = options.iter().find(|x| **x > AssetAmount::MAX) {
-            return Err(*invalid);
-        }
-
-        Ok(Self(options.into_iter().map(AssetAmount).collect()))
+    pub fn new(options: Vec<u64>) -> Result<Self, AssetAmountError> {
+        Ok(Self(options.into_iter().map(AssetAmount::new).collect::<Result<Vec<_>, _>>()?))
     }
 }
 
@@ -53,7 +38,7 @@ impl AssetOptions {
 ///
 /// A [`FungibleAsset`] has a maximum representable amount
 /// and this type guarantees that its value is within this range.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Serialize)]
+#[derive(Copy, Clone, Debug, Serialize)]
 pub struct AssetAmount(u64);
 
 impl std::fmt::Display for AssetAmount {
@@ -72,26 +57,26 @@ impl AssetAmount {
     pub fn inner(self) -> u64 {
         self.0
     }
+
+    /// Creates an [`AssetAmount`] from a base unit amount.
+    ///
+    /// Returns an error if the amount is greater than the maximum allowed amount.
+    pub fn new(base_units: u64) -> Result<Self, AssetAmountError> {
+        if base_units > Self::MAX {
+            return Err(AssetAmountError::AssetAmountTooBig(base_units));
+        }
+
+        Ok(Self(base_units))
+    }
 }
 
-impl<'de> Deserialize<'de> for AssetOptions {
-    fn deserialize<D>(de: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let options = Vec::<u64>::deserialize(de)?;
-
-        AssetOptions::new(options).map_err(|invalid_option| {
-            de::Error::invalid_value(
-                de::Unexpected::Unsigned(invalid_option),
-                &format!(
-                    "Maximum fungible asset value allowed by the network is {}",
-                    AssetAmount::MAX
-                )
-                .as_str(),
-            )
-        })
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum AssetAmountError {
+    #[error(
+        "fungible asset amount {0} exceeds the max allowed amount of {max_amount}",
+        max_amount = FungibleAsset::MAX_AMOUNT
+      )]
+    AssetAmountTooBig(u64),
 }
 
 /// Type of note to generate for a mint request.

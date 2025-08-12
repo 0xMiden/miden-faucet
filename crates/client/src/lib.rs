@@ -63,7 +63,6 @@ impl Serialize for FaucetId {
 /// Stores the current faucet state and handles minting requests.
 pub struct Faucet {
     id: FaucetId,
-    decimals: u8,
     client: Client<FilesystemKeyStore<StdRng>>,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<AtomicU64>,
@@ -157,7 +156,6 @@ impl Faucet {
 
         Ok(Self {
             id,
-            decimals: faucet.decimals(),
             client,
             tx_prover,
             issuance: Arc::new(AtomicU64::new(issuance)),
@@ -211,7 +209,7 @@ impl Faucet {
                 let rng_seed = Word::from(auth_seed.map(Felt::new));
                 RpoRandomCoin::new(rng_seed)
             };
-            let notes = build_p2id_notes(self.id, self.decimals, &valid_requests, &mut rng)?;
+            let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
             let tx_id = self.create_transaction(notes).await?;
 
@@ -281,7 +279,6 @@ impl Faucet {
 /// Returns an error if creating any p2id note fails.
 fn build_p2id_notes(
     source: FaucetId,
-    decimals: u8,
     requests: &[MintRequest],
     rng: &mut RpoRandomCoin,
 ) -> Result<Vec<OutputNote>, NoteError> {
@@ -289,9 +286,8 @@ fn build_p2id_notes(
     // ids are validated on the request level.
     let mut notes = Vec::new();
     for request in requests {
-        let amount = request.asset_amount.inner() * 10u64.pow(decimals.into());
         // SAFETY: source is definitely a faucet account, and the amount is valid.
-        let asset = FungibleAsset::new(source.account_id, amount).unwrap();
+        let asset = FungibleAsset::new(source.account_id, request.asset_amount.inner()).unwrap();
         let note = create_p2id_note(
                 source.account_id,
                 request.account_id,
