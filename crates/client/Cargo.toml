@@ -21,7 +21,6 @@ miden-client = { features = ["sqlite", "tonic"], workspace = true }
 # External dependencies.
 anyhow    = { workspace = true }
 rand      = { features = ["thread_rng"], workspace = true }
-serde     = { features = ["derive"], version = "1.0" }
 thiserror = { workspace = true }
 tokio     = { features = ["fs"], workspace = true }
 tracing   = { workspace = true }

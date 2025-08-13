@@ -1,36 +1,10 @@
 //! A collection of new types and safety wrappers used throughout the faucet.
 
 use miden_client::asset::FungibleAsset;
-use serde::Serialize;
 
 /// Describes the asset amounts allowed by the faucet.
-#[derive(Clone, Serialize)]
-pub struct AssetOptions(Vec<AssetAmount>);
-
-impl std::fmt::Display for AssetOptions {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[")?;
-
-        let mut options = self.0.iter();
-        if let Some(first) = options.next() {
-            write!(f, " {first}")?;
-        }
-        for rest in options {
-            write!(f, ", {rest}")?;
-        }
-
-        write!(f, " ]")
-    }
-}
-
-impl AssetOptions {
-    /// Creates [`AssetOptions`] if all options are valid [`AssetAmount`]'s
-    ///
-    /// The error value contains the invalid option.
-    pub fn new(options: Vec<u64>) -> Result<Self, AssetAmountError> {
-        Ok(Self(options.into_iter().map(AssetAmount::new).collect::<Result<Vec<_>, _>>()?))
-    }
-}
+#[derive(Clone)]
+pub struct AssetOptions(pub Vec<u64>);
 
 /// Represents a valid asset amount for a [`FungibleAsset`].
 ///
@@ -38,7 +12,7 @@ impl AssetOptions {
 ///
 /// A [`FungibleAsset`] has a maximum representable amount
 /// and this type guarantees that its value is within this range.
-#[derive(Copy, Clone, Debug, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct AssetAmount(u64);
 
 impl std::fmt::Display for AssetAmount {
@@ -54,10 +28,6 @@ impl AssetAmount {
     /// [`AssetOptions`].
     pub const MAX: u64 = FungibleAsset::MAX_AMOUNT;
 
-    pub fn inner(self) -> u64 {
-        self.0
-    }
-
     /// Creates an [`AssetAmount`] from a base unit amount.
     ///
     /// Returns an error if the amount is greater than the maximum allowed amount.
@@ -67,6 +37,49 @@ impl AssetAmount {
         }
 
         Ok(Self(base_units))
+    }
+
+    pub fn from_tokens(tokens: u64, decimals: u8) -> Result<Self, AssetAmountError> {
+        Self::new(tokens * 10u64.pow(u32::from(decimals)))
+    }
+
+    /// Returns the asset amount in base units.
+    pub fn base_units(&self) -> u64 {
+        self.0
+    }
+
+    /// Returns the asset amount in tokens.
+    ///
+    /// Returns a string representation to avoid precision loss. This is only meant for display
+    /// purposes.
+    pub fn tokens(&self, decimals: u8) -> String {
+        // This code was adapted from miden-client: https://github.com/0xMiden/miden-client/blob/88ccbe4/bin/miden-cli/src/faucet_details_map.rs#L131
+        let units_str = self.base_units().to_string();
+        let len = units_str.len();
+
+        if decimals == 0 {
+            return units_str;
+        }
+
+        if decimals as usize >= len {
+            "0.".to_owned() + &"0".repeat(decimals as usize - len) + &units_str
+        } else {
+            // Insert the decimal point at the correct position
+            let integer_part = &units_str[..len - decimals as usize];
+            let fractional_part = &units_str[len - decimals as usize..];
+            format!("{integer_part}.{fractional_part}")
+        }
+    }
+
+    /// Adds another [`AssetAmount`] to the current one and returns the result if it is valid.
+    pub fn add_amount(self, other: Self) -> Option<Self> {
+        Self::new(self.0 + other.0).ok()
+    }
+
+    /// Subtracts another [`AssetAmount`] from the current one and returns the result if it is
+    /// valid.
+    pub fn sub_amount(self, other: Self) -> Option<Self> {
+        Self::new(self.0 - other.0).ok()
     }
 }
 
@@ -101,5 +114,24 @@ impl std::fmt::Display for NoteType {
             Self::Private => f.write_str("private"),
             Self::Public => f.write_str("public"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn asset_amount_converts_to_tokens() {
+        #[allow(clippy::unreadable_literal)]
+        let asset_amount = AssetAmount::new(123456789123456789).unwrap();
+        assert_eq!(asset_amount.tokens(0), "123456789123456789");
+        assert_eq!(asset_amount.tokens(1), "12345678912345678.9");
+        assert_eq!(asset_amount.tokens(2), "1234567891234567.89");
+        assert_eq!(asset_amount.tokens(3), "123456789123456.789");
+        assert_eq!(asset_amount.tokens(4), "12345678912345.6789");
+        assert_eq!(asset_amount.tokens(5), "1234567891234.56789");
+        assert_eq!(asset_amount.tokens(18), "0.123456789123456789");
+        assert_eq!(asset_amount.tokens(19), "0.0123456789123456789");
     }
 }

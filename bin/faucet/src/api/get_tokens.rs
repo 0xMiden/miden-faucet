@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, AccountIdError};
 use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
-use miden_faucet_lib::types::{AssetAmount, NoteType};
+use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
@@ -35,7 +35,7 @@ pub async fn get_tokens(
     let (mint_response_sender, mint_response_receiver) = oneshot::channel();
 
     let validated_request = request.validate(&server).map_err(GetTokenError::InvalidRequest)?;
-    let requested_amount = validated_request.asset_amount.inner();
+    let requested_amount = validated_request.asset_amount.base_units();
 
     let span = tracing::Span::current();
     span.record("account", validated_request.account_id.to_hex());
@@ -106,7 +106,9 @@ pub enum MintRequestError {
     #[error("account ID failed to parse")]
     AccountId(#[source] AccountIdError),
     #[error("requested amount {0} exceeds the maximum claimable amount of {1}")]
-    AssetAmountTooBig(u64, AssetAmount),
+    AssetAmountTooBig(AssetAmount, AssetAmount),
+    #[error("requested amount {0} is not a valid asset amount")]
+    InvalidAssetAmount(AssetAmountError),
     #[error("POW error: {0}")]
     PowError(#[from] PowError),
     #[error("API key {0} is invalid")]
@@ -198,14 +200,14 @@ impl RawMintRequest {
         }
         .map_err(MintRequestError::AccountId)?;
 
-        if self.asset_amount > server.mint_state.max_claimable_amount.inner() {
+        let asset_amount = AssetAmount::from_tokens(self.asset_amount, server.metadata.decimals)
+            .map_err(MintRequestError::InvalidAssetAmount)?;
+        if asset_amount > server.mint_state.max_claimable_amount {
             return Err(MintRequestError::AssetAmountTooBig(
-                self.asset_amount,
+                asset_amount,
                 server.mint_state.max_claimable_amount,
             ));
         }
-        // SAFETY: we just checked that is claimable, thus valid
-        let asset_amount = AssetAmount::new(self.asset_amount).unwrap();
 
         // Check the API key, if provided
         let api_key = self.api_key.as_deref().map(ApiKey::decode).transpose()?;

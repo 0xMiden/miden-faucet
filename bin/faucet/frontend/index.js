@@ -74,8 +74,8 @@ class MidenFaucet {
                     this.tokenSelect.appendChild(option);
                 }
 
-                this.issuance.textContent = data.issuance.toLocaleString();
-                this.tokensSupply.textContent = data.max_supply.toLocaleString();
+                this.issuance.textContent = Number(data.issuance).toLocaleString();
+                this.tokensSupply.textContent = Number(data.max_supply).toLocaleString();
                 this.progressFill.style.width = (data.issuance / data.max_supply) * 100 + '%';
             })
             .catch(error => {

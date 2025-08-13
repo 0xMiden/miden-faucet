@@ -222,6 +222,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 faucet_account_path.display()
             ))?;
             let faucet_component = BasicFungibleFaucet::try_from(&account_file.account)?;
+            let max_supply = AssetAmount::new(faucet_component.max_supply().as_int())?;
+            let decimals = faucet_component.decimals();
 
             let faucet = Faucet::load(
                 store_path.clone(),
@@ -234,9 +236,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             .await
             .context("failed to load faucet")?;
 
-            let decimals = faucet_component.decimals();
-            let max_supply = faucet_component.max_supply().as_int() / 10u64.pow(decimals.into());
-
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
 
@@ -248,9 +247,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .map(|k| ApiKey::decode(k))
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
-            let asset_options =
-                AssetOptions::new(asset_amounts).context("failed to create asset options")?;
-            let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
+            let asset_options = AssetOptions(asset_amounts);
+            let max_claimable_amount = AssetAmount::from_tokens(max_claimable_amount, decimals)?;
             let pow_config = PoWConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
@@ -259,6 +257,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             };
             let server = Server::new(
                 faucet.faucet_id(),
+                decimals,
                 max_supply,
                 faucet.issuance(),
                 asset_options,
