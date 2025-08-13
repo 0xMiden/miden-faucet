@@ -61,6 +61,7 @@ impl Server {
         pow_config: PoWConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
+        explorer_url: Option<Url>,
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, asset_options.clone());
         let metadata = Metadata {
@@ -68,6 +69,7 @@ impl Server {
             asset_amount_options: asset_options,
             issuance,
             max_supply,
+            explorer_url,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
         let metadata = Box::leak(Box::new(metadata));

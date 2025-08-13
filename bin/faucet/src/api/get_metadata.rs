@@ -5,6 +5,7 @@ use axum::Json;
 use axum::extract::State;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::types::AssetOptions;
+use url::Url;
 
 /// Describes the faucet metadata needed to show on the frontend.
 #[derive(Clone, serde::Serialize)]
@@ -13,6 +14,7 @@ pub struct Metadata {
     pub asset_amount_options: AssetOptions,
     pub issuance: Arc<AtomicU64>,
     pub max_supply: u64,
+    pub explorer_url: Option<Url>,
 }
 
 // ENDPOINT
