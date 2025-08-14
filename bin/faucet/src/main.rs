@@ -247,7 +247,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .map(|k| ApiKey::decode(k))
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
-            let asset_options = AssetOptions(asset_amounts);
+            let asset_options = AssetOptions::from_tokens(asset_amounts, decimals)?;
             let max_claimable_amount = AssetAmount::from_tokens(max_claimable_amount, decimals)?;
             let pow_config = PoWConfig {
                 challenge_lifetime: pow_challenge_lifetime,

@@ -25,7 +25,10 @@ impl Serialize for Metadata {
         use serde::ser::SerializeStruct;
         let mut state = serializer.serialize_struct("Metadata", 4)?;
         state.serialize_field("id", &self.id.to_bech32())?;
-        state.serialize_field("asset_amount_options", &self.asset_amount_options.0)?;
+        state.serialize_field(
+            "asset_amount_options",
+            &self.asset_amount_options.as_tokens(self.decimals),
+        )?;
         state.serialize_field("issuance", &self.issuance.read().tokens(self.decimals))?;
         state.serialize_field("max_supply", &self.max_supply.tokens(self.decimals))?;
         state.end()

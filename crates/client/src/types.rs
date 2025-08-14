@@ -4,7 +4,26 @@ use miden_client::asset::FungibleAsset;
 
 /// Describes the asset amounts allowed by the faucet.
 #[derive(Clone)]
-pub struct AssetOptions(pub Vec<u64>);
+pub struct AssetOptions(Vec<AssetAmount>);
+
+impl AssetOptions {
+    /// Creates an [`AssetOptions`] from a vector of token amounts and decimals.
+    ///
+    /// Returns an error if any of the options are greater than the maximum allowed amount.
+    pub fn from_tokens(options: Vec<u64>, decimals: u8) -> Result<Self, AssetAmountError> {
+        Ok(Self(
+            options
+                .into_iter()
+                .map(|tokens| AssetAmount::from_tokens(tokens, decimals))
+                .collect::<Result<Vec<_>, _>>()?,
+        ))
+    }
+
+    /// Returns the asset options as a vector of formatted token amounts.
+    pub fn as_tokens(&self, decimals: u8) -> Vec<String> {
+        self.0.iter().map(|amount| amount.tokens(decimals)).collect()
+    }
+}
 
 /// Represents a valid asset amount for a [`FungibleAsset`].
 ///
@@ -39,6 +58,9 @@ impl AssetAmount {
         Ok(Self(base_units))
     }
 
+    /// Creates an [`AssetAmount`] from a token amount and decimals.
+    ///
+    /// Returns an error if the amount is greater than the maximum allowed amount.
     pub fn from_tokens(tokens: u64, decimals: u8) -> Result<Self, AssetAmountError> {
         Self::new(tokens * 10u64.pow(u32::from(decimals)))
     }
@@ -124,14 +146,13 @@ mod tests {
     #[test]
     fn asset_amount_converts_to_tokens() {
         #[allow(clippy::unreadable_literal)]
-        let asset_amount = AssetAmount::new(123456789123456789).unwrap();
-        assert_eq!(asset_amount.tokens(0), "123456789123456789");
-        assert_eq!(asset_amount.tokens(1), "12345678912345678.9");
-        assert_eq!(asset_amount.tokens(2), "1234567891234567.89");
-        assert_eq!(asset_amount.tokens(3), "123456789123456.789");
-        assert_eq!(asset_amount.tokens(4), "12345678912345.6789");
-        assert_eq!(asset_amount.tokens(5), "1234567891234.56789");
-        assert_eq!(asset_amount.tokens(18), "0.123456789123456789");
-        assert_eq!(asset_amount.tokens(19), "0.0123456789123456789");
+        let asset_amount = AssetAmount::new(123456789).unwrap();
+        assert_eq!(asset_amount.tokens(0), "123456789");
+        assert_eq!(asset_amount.tokens(1), "12345678.9");
+        assert_eq!(asset_amount.tokens(2), "1234567.89");
+        assert_eq!(asset_amount.tokens(3), "123456.789");
+        assert_eq!(asset_amount.tokens(4), "12345.6789");
+        assert_eq!(asset_amount.tokens(9), "0.123456789");
+        assert_eq!(asset_amount.tokens(10), "0.0123456789");
     }
 }
