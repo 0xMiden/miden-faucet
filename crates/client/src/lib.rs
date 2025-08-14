@@ -12,11 +12,7 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    OutputNote,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
 };
 use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -195,7 +191,9 @@ impl Faucet {
                 valid_requests.push(request);
                 response_senders.push(response_sender);
                 let mut issuance = self.issuance.write();
-                *issuance = issuance.add_amount(requested_amount).unwrap(); // TODO: handle unwrap
+                *issuance = issuance
+                    .add_amount(requested_amount)
+                    .expect("issuance should never be an invalid amount");
             }
             if self.available_supply().is_none() {
                 error!("Faucet has run out of tokens");

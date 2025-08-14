@@ -70,12 +70,12 @@ class MidenFaucet {
                 for (const amount of data.asset_amount_options) {
                     const option = document.createElement('option');
                     option.value = amount;
-                    option.textContent = amount;
+                    option.textContent = Utils.formatTokenAmount(amount, data.decimals);
                     this.tokenSelect.appendChild(option);
                 }
 
-                this.issuance.textContent = Number(data.issuance).toLocaleString();
-                this.tokensSupply.textContent = Number(data.max_supply).toLocaleString();
+                this.issuance.textContent = Utils.formatTokenAmount(data.issuance, data.decimals);
+                this.tokensSupply.textContent = Utils.formatTokenAmount(data.max_supply, data.decimals);
                 this.progressFill.style.width = (data.issuance / data.max_supply) * 100 + '%';
             })
             .catch(error => {
@@ -387,5 +387,9 @@ const Utils = {
             byteArray[i] = binaryString.charCodeAt(i);
         }
         return new Blob([byteArray], { type: 'application/octet-stream' });
+    },
+
+    formatTokenAmount: (amount, decimals) => {
+        return (amount / 10 ** decimals).toLocaleString();
     }
 };

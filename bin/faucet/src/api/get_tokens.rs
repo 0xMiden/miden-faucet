@@ -200,8 +200,8 @@ impl RawMintRequest {
         }
         .map_err(MintRequestError::AccountId)?;
 
-        let asset_amount = AssetAmount::from_tokens(self.asset_amount, server.metadata.decimals)
-            .map_err(MintRequestError::InvalidAssetAmount)?;
+        let asset_amount =
+            AssetAmount::new(self.asset_amount).map_err(MintRequestError::InvalidAssetAmount)?;
         if asset_amount > server.mint_state.max_claimable_amount {
             return Err(MintRequestError::AssetAmountTooBig(
                 asset_amount,

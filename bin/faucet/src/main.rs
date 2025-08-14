@@ -93,10 +93,12 @@ pub enum Command {
         faucet_account_path: PathBuf,
 
         /// Comma-separated list of amounts of assets options to show on the frontend interface.
+        /// Note that this list is interpreted as base units, not tokens. The frontend will
+        /// format them as token amounts.
         #[arg(long = "asset-amounts", value_name = "U64", env = ENV_ASSET_AMOUNTS, num_args = 1.., value_delimiter = ',', default_value = "100,500,1000")]
         asset_amounts: Vec<u64>,
 
-        /// The maximum amount of assets that can be dispersed on each request.
+        /// The maximum amount of assets base units that can be dispersed on each request.
         #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000")]
         max_claimable_amount: u64,
 
@@ -247,8 +249,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .map(|k| ApiKey::decode(k))
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
-            let asset_options = AssetOptions::from_tokens(asset_amounts, decimals)?;
-            let max_claimable_amount = AssetAmount::from_tokens(max_claimable_amount, decimals)?;
+            let asset_options = AssetOptions::new(asset_amounts)?;
+            let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
             let pow_config = PoWConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,

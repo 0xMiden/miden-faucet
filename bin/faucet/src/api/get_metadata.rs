@@ -8,7 +8,6 @@ use miden_faucet_lib::types::{AssetAmount, AssetOptions};
 use serde::{Serialize, Serializer};
 
 /// Describes the faucet metadata needed to show on the frontend.
-#[derive(Clone)]
 pub struct Metadata {
     pub id: FaucetId,
     pub asset_amount_options: AssetOptions,
@@ -23,14 +22,12 @@ impl Serialize for Metadata {
         S: Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Metadata", 4)?;
+        let mut state = serializer.serialize_struct("Metadata", 5)?;
         state.serialize_field("id", &self.id.to_bech32())?;
-        state.serialize_field(
-            "asset_amount_options",
-            &self.asset_amount_options.as_tokens(self.decimals),
-        )?;
-        state.serialize_field("issuance", &self.issuance.read().tokens(self.decimals))?;
-        state.serialize_field("max_supply", &self.max_supply.tokens(self.decimals))?;
+        state.serialize_field("asset_amount_options", &self.asset_amount_options.base_units())?;
+        state.serialize_field("issuance", &self.issuance.read().base_units())?;
+        state.serialize_field("max_supply", &self.max_supply.base_units())?;
+        state.serialize_field("decimals", &self.decimals)?;
         state.end()
     }
 }
