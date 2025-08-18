@@ -1,5 +1,5 @@
 [workspace]
-members = ["bin/faucet", "crates/client"]
+members = ["bin/faucet", "crates/faucet"]
 
 resolver = "2"
 
@@ -19,7 +19,7 @@ version      = "0.10.0"
 opt-level = 2
 
 [workspace.dependencies]
-miden-faucet-lib = { path = "crates/client" }
+miden-faucet-lib = { path = "crates/faucet" }
 
 # miden-client dependencies.
 miden-client = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
