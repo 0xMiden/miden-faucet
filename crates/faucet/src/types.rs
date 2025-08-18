@@ -4,8 +4,6 @@ use miden_client::asset::FungibleAsset;
 
 /// Represents a valid asset amount for a [`FungibleAsset`].
 ///
-/// Can only be created via [`AssetOptions`].
-///
 /// A [`FungibleAsset`] has a maximum representable amount
 /// and this type guarantees that its value is within this range.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -19,9 +17,6 @@ impl std::fmt::Display for AssetAmount {
 
 impl AssetAmount {
     /// The absolute maximum asset amount allowed by the network.
-    ///
-    /// An [`AssetAmount`] is further restricted to the values allowed by
-    /// [`AssetOptions`].
     pub const MAX: u64 = FungibleAsset::MAX_AMOUNT;
 
     /// Creates an [`AssetAmount`] from a base unit amount.
