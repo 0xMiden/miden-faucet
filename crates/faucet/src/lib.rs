@@ -12,11 +12,7 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    OutputNote,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
 };
 use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -196,7 +192,7 @@ impl Faucet {
                 response_senders.push(response_sender);
                 let mut issuance = self.issuance.write();
                 *issuance = issuance
-                    .add_amount(requested_amount)
+                    .checked_add(requested_amount)
                     .expect("issuance should never be an invalid amount");
             }
             if self.available_supply().is_none() {
@@ -262,7 +258,7 @@ impl Faucet {
 
     /// Returns the available supply of the faucet.
     pub fn available_supply(&self) -> Option<AssetAmount> {
-        self.max_supply.sub_amount(*self.issuance.read())
+        self.max_supply.checked_sub(*self.issuance.read())
     }
 
     /// Returns the amount of tokens issued by the faucet.
