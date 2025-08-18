@@ -59,13 +59,13 @@ impl AssetAmount {
 
     /// Adds another [`AssetAmount`] to the current one and returns the result if it is valid.
     pub fn add_amount(self, other: Self) -> Option<Self> {
-        Self::new(self.0 + other.0).ok()
+        Self::new(self.0.checked_add(other.0)?).ok()
     }
 
     /// Subtracts another [`AssetAmount`] from the current one and returns the result if it is
     /// valid.
     pub fn sub_amount(self, other: Self) -> Option<Self> {
-        Self::new(self.0 - other.0).ok()
+        Self::new(self.0.checked_sub(other.0)?).ok()
     }
 }
 
