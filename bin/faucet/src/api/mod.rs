@@ -12,7 +12,7 @@ use miden_client::store::Store;
 use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::requests::MintRequestSender;
-use miden_faucet_lib::types::{AssetAmount, AssetOptions};
+use miden_faucet_lib::types::AssetAmount;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -56,7 +56,6 @@ impl Server {
         decimals: u8,
         max_supply: AssetAmount,
         issuance: Arc<RwLock<AssetAmount>>,
-        asset_options: AssetOptions,
         max_claimable_amount: AssetAmount,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
@@ -67,7 +66,6 @@ impl Server {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
         let metadata = Metadata {
             id: faucet_id,
-            asset_amount_options: asset_options,
             issuance,
             max_supply,
             decimals,

@@ -8,6 +8,7 @@ class MidenFaucet {
         this.progressFill = document.getElementById('progress-fill');
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
+        this.tokenAmountOptions = [100, 500, 1000];
 
         // Check if SHA3 is available right from the start
         if (typeof sha3_256 === 'undefined') {
@@ -68,15 +69,15 @@ class MidenFaucet {
             .then(response => response.json())
             .then(data => {
                 this.faucetAddress.textContent = data.id;
-                for (const amount of data.asset_amount_options) {
+                for (const amount of this.tokenAmountOptions) {
                     const option = document.createElement('option');
-                    option.value = amount;
-                    option.textContent = Utils.formatTokenAmount(amount, data.decimals);
+                    option.value = Utils.tokensToBaseUnits(amount, data.decimals);
+                    option.textContent = amount;
                     this.tokenSelect.appendChild(option);
                 }
 
-                this.issuance.textContent = Utils.formatTokenAmount(data.issuance, data.decimals);
-                this.tokensSupply.textContent = Utils.formatTokenAmount(data.max_supply, data.decimals);
+                this.issuance.textContent = Utils.baseUnitsToTokens(data.issuance, data.decimals);
+                this.tokensSupply.textContent = Utils.baseUnitsToTokens(data.max_supply, data.decimals);
                 this.progressFill.style.width = (data.issuance / data.max_supply) * 100 + '%';
             })
             .catch(error => {
@@ -390,7 +391,11 @@ const Utils = {
         return new Blob([byteArray], { type: 'application/octet-stream' });
     },
 
-    formatTokenAmount: (amount, decimals) => {
-        return (amount / 10 ** decimals).toLocaleString();
+    baseUnitsToTokens: (baseUnits, decimals) => {
+        return (baseUnits / 10 ** decimals).toLocaleString();
+    },
+
+    tokensToBaseUnits: (tokens, decimals) => {
+        return tokens * (10 ** decimals);
     }
 };

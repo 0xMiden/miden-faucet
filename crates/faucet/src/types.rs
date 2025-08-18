@@ -2,23 +2,6 @@
 
 use miden_client::asset::FungibleAsset;
 
-/// Describes the asset amounts allowed by the faucet.
-pub struct AssetOptions(Vec<AssetAmount>);
-
-impl AssetOptions {
-    /// Creates an [`AssetOptions`] from a vector of token base units.
-    ///
-    /// Returns an error if any of the options are greater than the maximum allowed amount.
-    pub fn new(options: Vec<u64>) -> Result<Self, AssetAmountError> {
-        Ok(Self(options.into_iter().map(AssetAmount::new).collect::<Result<Vec<_>, _>>()?))
-    }
-
-    /// Returns the asset options as a vector of base units.
-    pub fn base_units(&self) -> Vec<u64> {
-        self.0.iter().map(AssetAmount::base_units).collect()
-    }
-}
-
 /// Represents a valid asset amount for a [`FungibleAsset`].
 ///
 /// Can only be created via [`AssetOptions`].
