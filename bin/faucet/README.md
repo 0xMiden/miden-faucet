@@ -195,4 +195,5 @@ The API returns appropriate HTTP status codes:
 Error responses include a `message` field with details about the error.
 
 ## License
+
 This project is [MIT licensed](../../LICENSE).
