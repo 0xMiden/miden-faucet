@@ -107,11 +107,11 @@ pub enum MintRequestError {
     AccountId(#[source] AccountIdError),
     #[error("asset amount {0} is not one of the provided options")]
     AssetAmount(u64),
-    #[error("POW error: {0}")]
+    #[error("PoW error")]
     PowError(#[from] PowError),
     #[error("API key {0} is invalid")]
     InvalidApiKey(String),
-    #[error("POW parameters are missing")]
+    #[error("PoW parameters are missing")]
     MissingPowParameters,
 }
 
@@ -126,6 +126,9 @@ pub enum GetTokenError {
 impl GetTokenError {
     fn status_code(&self) -> StatusCode {
         match self {
+            Self::InvalidRequest(MintRequestError::PowError(PowError::RateLimited)) => {
+                StatusCode::TOO_MANY_REQUESTS
+            },
             Self::InvalidRequest(_) | Self::MintError(_) => StatusCode::BAD_REQUEST,
             Self::FaucetOverloaded | Self::FaucetClosed => StatusCode::SERVICE_UNAVAILABLE,
             Self::FaucetReturnChannelClosed => StatusCode::INTERNAL_SERVER_ERROR,
