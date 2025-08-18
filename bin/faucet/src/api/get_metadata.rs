@@ -6,9 +6,7 @@ use axum::extract::State;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::types::AssetOptions;
 
-/// Describes the faucet metadata.
-///
-/// More specifically, the faucet's account ID and allowed mint amounts.
+/// Describes the faucet metadata needed to show on the frontend.
 #[derive(Clone, serde::Serialize)]
 pub struct Metadata {
     pub id: FaucetId,
