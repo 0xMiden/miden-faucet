@@ -11,7 +11,7 @@ use serde::Deserialize;
 use tracing::instrument;
 
 use crate::COMPONENT;
-use crate::server::Server;
+use crate::api::Server;
 
 // ENDPOINT
 // ================================================================================================

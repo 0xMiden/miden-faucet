@@ -1,11 +1,10 @@
+mod api;
 mod error_report;
-mod faucet;
 mod logging;
 mod network;
-mod server;
+mod pow;
 #[cfg(test)]
 mod testing;
-mod types;
 
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -14,7 +13,6 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use faucet::Faucet;
 use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
 use miden_client::account::{AccountBuilder, AccountFile, AccountStorageMode, AccountType};
 use miden_client::asset::TokenSymbol;
@@ -22,22 +20,24 @@ use miden_client::auth::AuthSecretKey;
 use miden_client::crypto::{RpoRandomCoin, SecretKey};
 use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
+use miden_faucet_lib::Faucet;
+use miden_faucet_lib::types::AssetOptions;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use server::Server;
 use tokio::sync::mpsc;
-use types::AssetOptions;
 use url::Url;
 
+use crate::api::Server;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
-use crate::server::{ApiKey, PoWConfig};
+use crate::pow::PoWConfig;
+use crate::pow::api_key::ApiKey;
 
 // CONSTANTS
 // =================================================================================================
 
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
-const COMPONENT: &str = "miden-faucet";
+const COMPONENT: &str = "miden-faucet-server";
 
 const ENV_ENDPOINT: &str = "MIDEN_FAUCET_ENDPOINT";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";

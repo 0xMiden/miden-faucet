@@ -7,15 +7,14 @@ use anyhow::Context;
 use axum::Router;
 use axum::extract::FromRef;
 use axum::routing::get;
-use frontend::Metadata;
-use get_tokens::{GetTokensState, get_tokens};
 use http::{HeaderValue, Request};
 use miden_client::account::AccountId;
 use miden_client::store::Store;
-use pow::PoW;
+use miden_faucet_lib::FaucetId;
+use miden_faucet_lib::requests::MintRequestSender;
+use miden_faucet_lib::types::AssetOptions;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
-use tokio::sync::mpsc;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -24,26 +23,21 @@ use tracing::Level;
 use url::Url;
 
 use crate::COMPONENT;
-use crate::faucet::FaucetId;
-use crate::server::get_note::get_note;
-use crate::server::get_pow::get_pow;
-use crate::types::AssetOptions;
+use crate::api::get_metadata::{Metadata, get_metadata};
+use crate::api::get_note::get_note;
+use crate::api::get_pow::get_pow;
+use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
+use crate::pow::api_key::ApiKey;
+use crate::pow::{PoW, PoWConfig};
 
-mod api_key;
-mod challenge;
 mod frontend;
+mod get_metadata;
 mod get_note;
 mod get_pow;
 mod get_tokens;
-mod pow;
-pub use api_key::ApiKey;
-pub use get_tokens::{MintRequest, MintRequestError, MintResponse, MintResponseSender};
-pub use pow::PoWConfig;
 
 // FAUCET STATE
 // ================================================================================================
-
-type MintRequestSender = mpsc::Sender<(MintRequest, MintResponseSender)>;
 
 /// Serves the faucet's website and handles token requests.
 #[derive(Clone)]
@@ -102,7 +96,7 @@ impl Server {
                 .route("/index.css", get(frontend::get_index_css))
                 .route("/background.png", get(frontend::get_background))
                 .route("/favicon.ico", get(frontend::get_favicon))
-                .route("/get_metadata", get(frontend::get_metadata))
+                .route("/get_metadata", get(get_metadata))
                 .route("/pow", get(get_pow))
                 // TODO: This feels rather ugly, and would be nice to move but I can't figure out the types.
                 .route(
@@ -181,7 +175,9 @@ impl Server {
             .duration_since(UNIX_EPOCH)
             .expect("current timestamp should be greater than unix epoch")
             .as_secs();
-        self.pow.submit_challenge(account_id, api_key, challenge, nonce, timestamp)
+        self.pow
+            .submit_challenge(account_id, api_key, challenge, nonce, timestamp)
+            .map_err(MintRequestError::PowError)
     }
 }
 

@@ -1781,6 +1781,7 @@ dependencies = [
  "http 1.3.1",
  "humantime",
  "miden-client",
+ "miden-faucet-lib",
  "miden-node-proto",
  "miden-testing",
  "opentelemetry",
@@ -1802,6 +1803,20 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "miden-faucet-lib"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "miden-client",
+ "rand",
+ "serde",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
  "url",
 ]
 

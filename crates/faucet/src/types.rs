@@ -1,7 +1,5 @@
 //! A collection of new types and safety wrappers used throughout the faucet.
 
-use std::fmt::Debug;
-
 use miden_client::asset::FungibleAsset;
 use serde::{Deserialize, Deserializer, Serialize, de};
 

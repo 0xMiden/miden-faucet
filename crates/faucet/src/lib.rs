@@ -27,8 +27,10 @@ use tokio::sync::mpsc::Receiver;
 use tracing::{error, info, instrument, warn};
 use url::Url;
 
-use crate::network::ExplorerUrl;
-use crate::server::{MintRequest, MintRequestError, MintResponse, MintResponseSender};
+pub mod requests;
+pub mod types;
+
+use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -69,7 +71,14 @@ pub struct Faucet {
 }
 
 impl Faucet {
-    /// Loads the faucet state from the node and the account file.
+    /// Loads the faucet.
+    ///
+    /// A client is instantiated with the provided store path, node url and timeout. The account is
+    /// loaded from the provided account file. If the account is already tracked by the current
+    /// store, it is loaded. Otherwise, the account is added from the file state.
+    ///
+    /// If a remote transaction prover url is provided, it is used to prove transactions. Otherwise,
+    /// a local transaction prover is used.
     #[instrument(name = "faucet.load", fields(id), skip_all)]
     pub async fn load(
         store_path: PathBuf,
@@ -172,7 +181,6 @@ impl Faucet {
     ) -> anyhow::Result<()> {
         let mut buffer = Vec::new();
         let limit = 256; // also limited by the queue size `REQUESTS_QUEUE_SIZE`
-        let explorer_url = ExplorerUrl::from_network_id(self.id.network_id);
 
         while requests.recv_many(&mut buffer, limit).await > 0 {
             // Check if there are enough tokens available and update the supply counter for each
@@ -184,7 +192,7 @@ impl Faucet {
                 let available_amount = self.available_supply();
                 if available_amount < requested_amount {
                     error!(requested_amount, available_amount, request.account_id = %request.account_id, "Requested amount exceeds available supply");
-                    let _ = response_sender.send(Err(MintRequestError::AvailableSupplyExceeded));
+                    let _ = response_sender.send(Err(MintError::AvailableSupplyExceeded));
                     continue;
                 }
                 valid_requests.push(request);
@@ -209,11 +217,7 @@ impl Faucet {
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
-                let _ = sender.send(Ok(MintResponse {
-                    tx_id,
-                    note_id,
-                    explorer_url: explorer_url.clone(),
-                }));
+                let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
             }
             self.client.sync_state().await?;
         }

@@ -6,8 +6,9 @@ use miden_client::account::{AccountId, AccountIdError};
 use serde::Deserialize;
 
 use crate::error_report::ErrorReport;
-use crate::server::ApiKey;
-use crate::server::pow::PoW;
+use crate::pow::api_key::ApiKey;
+use crate::pow::challenge::Challenge;
+use crate::pow::{PoW, PowRequest};
 
 // ENDPOINT
 // ================================================================================================
@@ -15,7 +16,7 @@ use crate::server::pow::PoW;
 pub async fn get_pow(
     State(pow): State<PoW>,
     Query(params): Query<RawPowRequest>,
-) -> Result<impl IntoResponse, PowRequestError> {
+) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
     let challenge = pow.build_challenge(request);
     Ok(Json(challenge))
@@ -29,12 +30,6 @@ pub async fn get_pow(
 pub struct RawPowRequest {
     pub account_id: String,
     pub api_key: Option<String>,
-}
-
-/// Validated and parsed `RawPowRequest`.
-pub struct PowRequest {
-    pub account_id: AccountId,
-    pub api_key: ApiKey,
 }
 
 impl RawPowRequest {

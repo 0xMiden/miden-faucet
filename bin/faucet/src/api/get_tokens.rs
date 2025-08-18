@@ -3,24 +3,22 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, AccountIdError};
-use miden_client::note::NoteId;
-use miden_client::transaction::TransactionId;
+use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
+use miden_faucet_lib::types::{AssetOptions, NoteType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
-use tracing::{error, instrument};
+use tracing::instrument;
 
-use super::Server;
 use crate::COMPONENT;
+use crate::api::Server;
 use crate::error_report::ErrorReport;
 use crate::network::ExplorerUrl;
-use crate::server::{ApiKey, MintRequestSender};
-use crate::types::{AssetAmount, AssetOptions, NoteType};
+use crate::pow::PowError;
+use crate::pow::api_key::ApiKey;
 
 // ENDPOINT
 // ================================================================================================
-
-pub type MintResponseSender = oneshot::Sender<Result<MintResponse, MintRequestError>>;
 
 #[instrument(
     parent = None, target = COMPONENT, name = "faucet.server.get_tokens", skip_all,
@@ -33,7 +31,7 @@ pub type MintResponseSender = oneshot::Sender<Result<MintResponse, MintRequestEr
 pub async fn get_tokens(
     State(server): State<Server>,
     Query(request): Query<RawMintRequest>,
-) -> Result<impl IntoResponse, GetTokenError> {
+) -> Result<Json<GetTokensResponse>, GetTokenError> {
     let (mint_response_sender, mint_response_receiver) = oneshot::channel();
 
     let validated_request = request.validate(&server).map_err(GetTokenError::InvalidRequest)?;
@@ -56,9 +54,20 @@ pub async fn get_tokens(
     let mint_response = mint_response_receiver
         .await
         .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
-        .map_err(GetTokenError::InvalidRequest)?;
+        .map_err(GetTokenError::MintError)?;
 
-    Ok(Json(mint_response))
+    Ok(Json(GetTokensResponse {
+        tx_id: mint_response.tx_id.to_string(),
+        note_id: mint_response.note_id.to_string(),
+        explorer_url: ExplorerUrl::from_network_id(server.metadata.id.network_id),
+    }))
+}
+
+#[derive(Serialize)]
+pub struct GetTokensResponse {
+    tx_id: String,
+    note_id: String,
+    explorer_url: Option<ExplorerUrl>,
 }
 
 // STATE
@@ -98,26 +107,17 @@ pub enum MintRequestError {
     AccountId(#[source] AccountIdError),
     #[error("asset amount {0} is not one of the provided options")]
     AssetAmount(u64),
+    #[error("POW error: {0}")]
+    PowError(#[from] PowError),
     #[error("API key {0} is invalid")]
     InvalidApiKey(String),
-    #[error("invalid POW solution")]
-    InvalidPoW,
     #[error("POW parameters are missing")]
     MissingPowParameters,
-    #[error("server signatures do not match")]
-    ServerSignaturesDoNotMatch,
-    #[error("server timestamp expired, received: {0}, current time: {1}")]
-    ExpiredServerTimestamp(u64, u64),
-    #[error("challenge already used")]
-    ChallengeAlreadyUsed,
-    #[error("account is rate limited")]
-    RateLimited,
-    #[error("faucet supply exceeded")]
-    AvailableSupplyExceeded,
 }
 
 pub enum GetTokenError {
     InvalidRequest(MintRequestError),
+    MintError(MintError),
     FaucetOverloaded,
     FaucetClosed,
     FaucetReturnChannelClosed,
@@ -126,7 +126,7 @@ pub enum GetTokenError {
 impl GetTokenError {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidRequest(_) | Self::MintError(_) => StatusCode::BAD_REQUEST,
             Self::FaucetOverloaded | Self::FaucetClosed => StatusCode::SERVICE_UNAVAILABLE,
             Self::FaucetReturnChannelClosed => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -136,6 +136,7 @@ impl GetTokenError {
     fn user_facing_error(&self) -> String {
         match self {
             Self::InvalidRequest(error) => error.as_report(),
+            Self::MintError(error) => error.as_report(),
             Self::FaucetOverloaded => {
                 "The faucet is currently overloaded, please try again later.".to_owned()
             },
@@ -149,7 +150,7 @@ impl GetTokenError {
     /// Write a trace log for the error, if applicable.
     fn trace(&self) {
         match self {
-            Self::InvalidRequest(_) => {},
+            Self::InvalidRequest(_) | Self::MintError(_) => {},
             Self::FaucetOverloaded => tracing::warn!("faucet client is overloaded"),
             Self::FaucetClosed => {
                 tracing::error!("faucet channel is closed but requests are still coming in");
@@ -218,35 +219,5 @@ impl RawMintRequest {
         server.submit_challenge(&challenge_str, nonce, account_id, &api_key.unwrap_or_default())?;
 
         Ok(MintRequest { account_id, note_type, asset_amount })
-    }
-}
-
-/// A request for minting to the Faucet.
-pub struct MintRequest {
-    /// Destination account.
-    pub account_id: AccountId,
-    /// Whether to generate a public or private note to hold the minted asset.
-    pub note_type: NoteType,
-    /// The amount to mint.
-    pub asset_amount: AssetAmount,
-}
-
-pub struct MintResponse {
-    pub tx_id: TransactionId,
-    pub note_id: NoteId,
-    pub explorer_url: Option<ExplorerUrl>,
-}
-
-impl Serialize for MintResponse {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("MintResponse", 3)?;
-        state.serialize_field("tx_id", &self.tx_id.to_string())?;
-        state.serialize_field("note_id", &self.note_id.to_string())?;
-        state.serialize_field("explorer_url", &self.explorer_url)?;
-        state.end()
     }
 }
