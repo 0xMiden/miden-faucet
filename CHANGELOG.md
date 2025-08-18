@@ -11,6 +11,7 @@
 - Added faucet supply amounts to the metadata ([#30](https://github.com/0xMiden/miden-faucet/pull/30)).
 - Added supply exceeded check ([#31](https://github.com/0xMiden/miden-faucet/pull/31)). 
 - Introduced `miden-faucet-lib` crate ([#10](https://github.com/0xMiden/miden-faucet/pull/10)).
+- Use HTTP 429 status code for rate limited error ([#51](https://github.com/0xMiden/miden-faucet/pull/51)).
 
 ## 0.10.0 (2025-07-10)
 
