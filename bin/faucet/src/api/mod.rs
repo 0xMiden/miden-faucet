@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
@@ -10,9 +9,10 @@ use axum::routing::get;
 use http::{HeaderValue, Request};
 use miden_client::account::AccountId;
 use miden_client::store::Store;
+use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::requests::MintRequestSender;
-use miden_faucet_lib::types::AssetOptions;
+use miden_faucet_lib::types::AssetAmount;
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -53,21 +53,22 @@ impl Server {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         faucet_id: FaucetId,
-        max_supply: u64,
-        issuance: Arc<AtomicU64>,
-        asset_options: AssetOptions,
+        decimals: u8,
+        max_supply: AssetAmount,
+        issuance: Arc<RwLock<AssetAmount>>,
+        max_claimable_amount: AssetAmount,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
         pow_config: PoWConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
     ) -> Self {
-        let mint_state = GetTokensState::new(mint_request_sender, asset_options.clone());
+        let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
         let metadata = Metadata {
             id: faucet_id,
-            asset_amount_options: asset_options,
             issuance,
             max_supply,
+            decimals,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
         let metadata = Box::leak(Box::new(metadata));

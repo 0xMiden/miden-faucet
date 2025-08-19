@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::Context;
@@ -19,10 +18,10 @@ use miden_client::transaction::{
     TransactionProver,
     TransactionRequestBuilder,
 };
+use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
-use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
 use tracing::{error, info, instrument, warn};
 use url::Url;
@@ -31,6 +30,7 @@ pub mod requests;
 pub mod types;
 
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
+use crate::types::AssetAmount;
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -49,25 +49,19 @@ impl FaucetId {
     pub fn new(account_id: AccountId, network_id: NetworkId) -> Self {
         Self { account_id, network_id }
     }
-}
 
-impl Serialize for FaucetId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.account_id.to_bech32(self.network_id))
+    pub fn to_bech32(&self) -> String {
+        self.account_id.to_bech32(self.network_id)
     }
 }
 
 /// Stores the current faucet state and handles minting requests.
 pub struct Faucet {
     id: FaucetId,
-    decimals: u8,
     client: Client<FilesystemKeyStore<StdRng>>,
     tx_prover: Arc<dyn TransactionProver>,
-    issuance: Arc<AtomicU64>,
-    max_supply: u64,
+    issuance: Arc<RwLock<AssetAmount>>,
+    max_supply: AssetAmount,
 }
 
 impl Faucet {
@@ -151,16 +145,14 @@ impl Faucet {
             None => Arc::new(LocalTransactionProver::default()),
         };
         let id = FaucetId::new(account.id(), network_id);
-        let decimal_divisor = 10u64.pow(faucet.decimals().into());
-        let issuance = issuance.as_int() / decimal_divisor;
-        let max_supply = faucet.max_supply().as_int() / decimal_divisor;
+        let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
+        let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
 
         Ok(Self {
             id,
-            decimals: faucet.decimals(),
             client,
             tx_prover,
-            issuance: Arc::new(AtomicU64::new(issuance)),
+            issuance,
             max_supply,
         })
     }
@@ -188,18 +180,26 @@ impl Faucet {
             let mut valid_requests = vec![];
             let mut response_senders = vec![];
             for (request, response_sender) in buffer.drain(..) {
-                let requested_amount = request.asset_amount.inner();
-                let available_amount = self.available_supply();
+                let available_amount = self.available_supply().unwrap_or_default();
+                let requested_amount = request.asset_amount;
                 if available_amount < requested_amount {
-                    error!(requested_amount, available_amount, request.account_id = %request.account_id, "Requested amount exceeds available supply");
+                    error!(
+                        requested_amount = requested_amount.base_units(),
+                        available_amount = available_amount.base_units(),
+                        account_id = %request.account_id,
+                        "Requested amount exceeds available supply",
+                    );
                     let _ = response_sender.send(Err(MintError::AvailableSupplyExceeded));
                     continue;
                 }
                 valid_requests.push(request);
                 response_senders.push(response_sender);
-                self.issuance.fetch_add(requested_amount, Ordering::Relaxed);
+                let mut issuance = self.issuance.write();
+                *issuance = issuance
+                    .checked_add(requested_amount)
+                    .expect("issuance should never be an invalid amount");
             }
-            if self.available_supply() == 0 {
+            if self.available_supply().is_none() {
                 error!("Faucet has run out of tokens");
             }
             if valid_requests.is_empty() {
@@ -211,7 +211,7 @@ impl Faucet {
                 let rng_seed = Word::from(auth_seed.map(Felt::new));
                 RpoRandomCoin::new(rng_seed)
             };
-            let notes = build_p2id_notes(self.id, self.decimals, &valid_requests, &mut rng)?;
+            let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
             let tx_id = self.create_transaction(notes).await?;
 
@@ -261,12 +261,12 @@ impl Faucet {
     }
 
     /// Returns the available supply of the faucet.
-    pub fn available_supply(&self) -> u64 {
-        self.max_supply - self.issuance.load(Ordering::Relaxed)
+    pub fn available_supply(&self) -> Option<AssetAmount> {
+        self.max_supply.checked_sub(*self.issuance.read())
     }
 
     /// Returns the amount of tokens issued by the faucet.
-    pub fn issuance(&self) -> Arc<AtomicU64> {
+    pub fn issuance(&self) -> Arc<RwLock<AssetAmount>> {
         self.issuance.clone()
     }
 }
@@ -281,7 +281,6 @@ impl Faucet {
 /// Returns an error if creating any p2id note fails.
 fn build_p2id_notes(
     source: FaucetId,
-    decimals: u8,
     requests: &[MintRequest],
     rng: &mut RpoRandomCoin,
 ) -> Result<Vec<OutputNote>, NoteError> {
@@ -289,9 +288,9 @@ fn build_p2id_notes(
     // ids are validated on the request level.
     let mut notes = Vec::new();
     for request in requests {
-        let amount = request.asset_amount.inner() * 10u64.pow(decimals.into());
         // SAFETY: source is definitely a faucet account, and the amount is valid.
-        let asset = FungibleAsset::new(source.account_id, amount).unwrap();
+        let asset =
+            FungibleAsset::new(source.account_id, request.asset_amount.base_units()).unwrap();
         let note = create_p2id_note(
                 source.account_id,
                 request.account_id,
