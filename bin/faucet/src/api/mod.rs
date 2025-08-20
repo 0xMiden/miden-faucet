@@ -94,7 +94,7 @@ impl Server {
         let frontend_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/frontend");
         let static_files = get_service(
             ServeDir::new(frontend_dir)
-                .fallback(ServeFile::new(format!("{frontend_dir}/index.html"))),
+                .not_found_service(ServeFile::new(format!("{frontend_dir}/not_found.html"))),
         );
 
         let app = Router::new()
