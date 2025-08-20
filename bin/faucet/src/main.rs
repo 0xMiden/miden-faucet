@@ -21,7 +21,7 @@ use miden_client::crypto::{RpoRandomCoin, SecretKey};
 use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
 use miden_faucet_lib::Faucet;
-use miden_faucet_lib::types::AssetOptions;
+use miden_faucet_lib::types::AssetAmount;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
@@ -43,7 +43,7 @@ const ENV_ENDPOINT: &str = "MIDEN_FAUCET_ENDPOINT";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";
 const ENV_TIMEOUT: &str = "MIDEN_FAUCET_TIMEOUT";
 const ENV_ACCOUNT_PATH: &str = "MIDEN_FAUCET_ACCOUNT_PATH";
-const ENV_ASSET_AMOUNTS: &str = "MIDEN_FAUCET_ASSET_AMOUNTS";
+const ENV_MAX_CLAIMABLE_AMOUNT: &str = "MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT";
 const ENV_REMOTE_TX_PROVER_URL: &str = "MIDEN_FAUCET_REMOTE_TX_PROVER_URL";
 const ENV_POW_SECRET: &str = "MIDEN_FAUCET_POW_SECRET";
 const ENV_POW_CHALLENGE_LIFETIME: &str = "MIDEN_FAUCET_POW_CHALLENGE_LIFETIME";
@@ -91,9 +91,9 @@ pub enum Command {
         #[arg(long = "account", value_name = "FILE", env = ENV_ACCOUNT_PATH)]
         faucet_account_path: PathBuf,
 
-        /// Comma-separated list of amounts of asset that should be dispersed on each request.
-        #[arg(long = "asset-amounts", value_name = "U64", env = ENV_ASSET_AMOUNTS, num_args = 1.., value_delimiter = ',', default_value = "100,500,1000")]
-        asset_amounts: Vec<u64>,
+        /// The maximum amount of assets base units that can be dispersed on each request.
+        #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000")]
+        max_claimable_amount: u64,
 
         /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
         #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
@@ -201,7 +201,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             timeout,
             faucet_account_path,
             remote_tx_prover_url,
-            asset_amounts,
+            max_claimable_amount,
             pow_secret,
             pow_challenge_lifetime,
             pow_cleanup_interval,
@@ -216,6 +216,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 faucet_account_path.display()
             ))?;
             let faucet_component = BasicFungibleFaucet::try_from(&account_file.account)?;
+            let max_supply = AssetAmount::new(faucet_component.max_supply().as_int())?;
+            let decimals = faucet_component.decimals();
 
             let faucet = Faucet::load(
                 store_path.clone(),
@@ -228,9 +230,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             .await
             .context("failed to load faucet")?;
 
-            let decimals = faucet_component.decimals();
-            let max_supply = faucet_component.max_supply().as_int() / 10u64.pow(decimals.into());
-
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
 
@@ -242,8 +241,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .map(|k| ApiKey::decode(k))
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
-            let asset_options = AssetOptions::new(asset_amounts)
-                .map_err(|e| anyhow::anyhow!("failed to create asset options: {}", e))?;
+            let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
             let pow_config = PoWConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
@@ -252,9 +250,10 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             };
             let server = Server::new(
                 faucet.faucet_id(),
+                decimals,
                 max_supply,
                 faucet.issuance(),
-                asset_options,
+                max_claimable_amount,
                 tx_mint_requests,
                 pow_secret.unwrap_or_default().as_str(),
                 pow_config,
@@ -470,7 +469,7 @@ mod test {
                         network: FaucetNetwork::Testnet,
                         node_url: stub_node_url,
                         timeout: Duration::from_millis(5000),
-                        asset_amounts: vec![100, 500, 1000],
+                        max_claimable_amount: 1000,
                         api_keys: vec![],
                         pow_secret: None,
                         pow_challenge_lifetime: Duration::from_secs(30),

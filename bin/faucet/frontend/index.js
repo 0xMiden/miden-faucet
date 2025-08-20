@@ -8,6 +8,7 @@ class MidenFaucet {
         this.progressFill = document.getElementById('progress-fill');
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
+        this.tokenAmountOptions = [100, 500, 1000];
 
         // Check if SHA3 is available right from the start
         if (typeof sha3_256 === 'undefined') {
@@ -23,6 +24,7 @@ class MidenFaucet {
     async handleSendTokens(isPrivateNote) {
         const recipient = this.recipientInput.value.trim();
         const amount = this.tokenSelect.value;
+        const amountAsTokens = this.tokenSelect.textContent[this.tokenSelect.selectedIndex];
 
         if (!recipient) {
             this.showError('Recipient address is required.');
@@ -40,7 +42,7 @@ class MidenFaucet {
         }
 
         this.hideMessages();
-        this.showMintingModal(recipient, amount, isPrivateNote);
+        this.showMintingModal(recipient, amountAsTokens, isPrivateNote);
         this.updateProgressBar(0);
 
         this.updateMintingTitle('PREPARING THE REQUEST');
@@ -56,7 +58,7 @@ class MidenFaucet {
         this.updateProgressBar(50);
 
         try {
-            await this.getTokens(powData.challenge, nonce, recipient, amount, isPrivateNote);
+            await this.getTokens(powData.challenge, nonce, recipient, amount, amountAsTokens, isPrivateNote);
         } catch (error) {
             this.showError(`Failed to send tokens: ${error.message}`);
         }
@@ -67,15 +69,15 @@ class MidenFaucet {
             .then(response => response.json())
             .then(data => {
                 this.faucetAddress.textContent = data.id;
-                for (const amount of data.asset_amount_options) {
+                for (const amount of this.tokenAmountOptions) {
                     const option = document.createElement('option');
-                    option.value = amount;
+                    option.value = Utils.tokensToBaseUnits(amount, data.decimals);
                     option.textContent = amount;
                     this.tokenSelect.appendChild(option);
                 }
 
-                this.issuance.textContent = data.issuance.toLocaleString();
-                this.tokensSupply.textContent = data.max_supply.toLocaleString();
+                this.issuance.textContent = Utils.baseUnitsToTokens(data.issuance, data.decimals);
+                this.tokensSupply.textContent = Utils.baseUnitsToTokens(data.max_supply, data.decimals);
                 this.progressFill.style.width = (data.issuance / data.max_supply) * 100 + '%';
             })
             .catch(error => {
@@ -106,7 +108,7 @@ class MidenFaucet {
         return await powResponse.json();
     }
 
-    async getTokens(challenge, nonce, recipient, amount, isPrivateNote) {
+    async getTokens(challenge, nonce, recipient, amount, amountAsTokens, isPrivateNote) {
         const params = {
             account_id: recipient,
             is_private_note: isPrivateNote,
@@ -134,7 +136,7 @@ class MidenFaucet {
         let data = await response.json();
 
         // TODO: this state should wait until note is committed - use web-client for this
-        this.showCompletedModal(recipient, amount, isPrivateNote, data);
+        this.showCompletedModal(recipient, amountAsTokens, isPrivateNote, data);
     }
 
     async requestNote(noteId) {
@@ -185,27 +187,27 @@ class MidenFaucet {
         this.hideProgressBar();
     }
 
-    showMintingModal(recipient, amount, isPrivateNote) {
+    showMintingModal(recipient, amountAsTokens, isPrivateNote) {
         const modal = document.getElementById('minting-modal');
         const tokenAmount = document.getElementById('modal-token-amount');
         const recipientAddress = document.getElementById('modal-recipient-address');
         const noteType = document.getElementById('modal-note-type');
 
         // Update modal content
-        tokenAmount.textContent = amount;
+        tokenAmount.textContent = amountAsTokens;
         recipientAddress.textContent = recipient;
         noteType.textContent = isPrivateNote ? 'PRIVATE' : 'PUBLIC';
 
         modal.classList.add('active');
     }
 
-    showCompletedModal(recipient, amount, isPrivateNote, mintingData) {
+    showCompletedModal(recipient, amountAsTokens, isPrivateNote, mintingData) {
         const mintingModal = document.getElementById('minting-modal');
         mintingModal.classList.remove('active');
 
-        document.getElementById('completed-public-token-amount').textContent = amount;
+        document.getElementById('completed-public-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-public-recipient-address').textContent = recipient;
-        document.getElementById('completed-private-token-amount').textContent = amount;
+        document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-private-recipient-address').textContent = recipient;
 
         this.updateMintingTitle('TOKENS MINTED!');
@@ -387,5 +389,13 @@ const Utils = {
             byteArray[i] = binaryString.charCodeAt(i);
         }
         return new Blob([byteArray], { type: 'application/octet-stream' });
+    },
+
+    baseUnitsToTokens: (baseUnits, decimals) => {
+        return (baseUnits / 10 ** decimals).toLocaleString();
+    },
+
+    tokensToBaseUnits: (tokens, decimals) => {
+        return tokens * (10 ** decimals);
     }
 };

@@ -1796,7 +1796,6 @@ dependencies = [
  "anyhow",
  "miden-client",
  "rand",
- "serde",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
