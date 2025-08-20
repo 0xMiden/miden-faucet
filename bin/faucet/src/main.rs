@@ -469,7 +469,7 @@ mod test {
                         network: FaucetNetwork::Testnet,
                         node_url: stub_node_url,
                         timeout: Duration::from_millis(5000),
-                        max_claimable_amount: 1000,
+                        max_claimable_amount: 1_000_000_000,
                         api_keys: vec![],
                         pow_secret: None,
                         pow_challenge_lifetime: Duration::from_secs(30),
