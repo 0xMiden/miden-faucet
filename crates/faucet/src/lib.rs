@@ -12,12 +12,8 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionKernel,
-    TransactionProver,
-    TransactionRequestBuilder,
-    TransactionScript,
+    LocalTransactionProver, TransactionId, TransactionKernel, TransactionProver,
+    TransactionRequestBuilder, TransactionScript,
 };
 use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -218,7 +214,7 @@ impl Faucet {
             };
             let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
-            let tx_id = self.create_transaction(notes).await?;
+            let tx_id = Box::pin(self.create_transaction(notes)).await?;
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
@@ -265,18 +261,19 @@ impl Faucet {
             .build()?;
 
         // Execute the transaction
-        let tx_result = self.client.new_transaction(self.id.account_id, tx).await?;
+        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx)).await?;
         let tx_id = tx_result.executed_transaction().id();
 
         // Prove and submit the transaction
-        let prover_failed = self
-            .client
-            .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone())
-            .await
-            .is_err();
+        let prover_failed = Box::pin(
+            self.client
+                .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
+        )
+        .await
+        .is_err();
         if prover_failed {
             warn!("Failed to prove transaction with remote prover, falling back to local prover");
-            self.client.submit_transaction(tx_result).await?;
+            Box::pin(self.client.submit_transaction(tx_result)).await?;
         }
 
         Ok(tx_id)
