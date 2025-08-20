@@ -12,8 +12,8 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver, TransactionId, TransactionKernel, TransactionProver,
-    TransactionRequestBuilder, TransactionScript,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequestBuilder,
+    TransactionScript,
 };
 use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -28,6 +28,8 @@ pub mod types;
 
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
+
+const TX_SCRIPT: &str = include_str!("scripts/transaction_script.masm");
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -146,7 +148,10 @@ impl Faucet {
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
 
-        let script = Self::compile_script()?;
+        let script = client
+            .script_builder()
+            .compile_tx_script(TX_SCRIPT)
+            .context("failed to compile transaction script")?;
 
         Ok(Self {
             id,
@@ -292,60 +297,6 @@ impl Faucet {
     /// Returns the amount of tokens issued by the faucet.
     pub fn issuance(&self) -> Arc<RwLock<AssetAmount>> {
         self.issuance.clone()
-    }
-
-    /// Returns the compiled custom transaction script used by the faucet.
-    ///
-    /// The script expects the following advice map:
-    /// `{ COMMITMENT => [ N, NOTE_DATA_1, NOTE_DATA_2, ... ] }`
-    ///
-    /// Where N is the number of notes, and `NOTE_DATA_i` is the data of the i-th note. Each
-    /// `NOTE_DATA_i` should contain 7 Felt values: `[ RECIPIENT, note_type, tag, amount ]`
-    pub fn compile_script() -> anyhow::Result<TransactionScript> {
-        let source = r"
-            proc.check_continue_neq
-                # [i, n]
-                dup.1
-                dup.1
-                neq
-                # [ i != n , i, n ]
-            end
-
-            begin
-                # load the advice stack with values from the advice map and drop the key
-                adv.push_mapval
-                dropw
-
-                adv_push.1
-                push.0
-                # [ 0, n ]
-                exec.check_continue_neq
-                while.true
-                    # [ i, n ]
-                    
-                    # set the params for the distribute call by getting values from the advice stack
-                    push.0.0.0.0.0.0.0
-                    adv_push.4
-                    # execution hint = 1
-                    push.1
-                    adv_push.1
-                    # aux = 0
-                    push.0
-                    adv_push.2
-
-                    # [ amount, tag, aux, note_type, execution_hint, RECIPIENT, pad(7), ... ]
-                    call.::miden::contracts::faucets::basic_fungible::distribute 
-                    # [ note_idx, pad(15), ... ]
-                    dropw dropw dropw dropw
-                    
-                    add.1
-                    # [ i + 1, n ]
-                    exec.check_continue_neq
-                end
-                # [ n, n ]
-                drop drop
-            end";
-        Ok(TransactionScript::compile(source, TransactionKernel::assembler())?)
     }
 }
 
