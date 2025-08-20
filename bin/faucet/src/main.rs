@@ -187,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
     // Configure tracing with optional OpenTelemetry exporting support.
     logging::setup_tracing(cli.command.open_telemetry()).context("failed to initialize logging")?;
 
-    run_faucet_command(cli).await
+    Box::pin(run_faucet_command(cli)).await
 }
 
 #[allow(clippy::too_many_lines)]
@@ -367,7 +367,7 @@ mod test {
     /// made return status 200.
     #[tokio::test]
     async fn test_website() {
-        let website_url = start_test_faucet().await;
+        let website_url = Box::pin(start_test_faucet()).await;
         let client = start_fantoccini_client().await;
 
         // Open the website
@@ -440,14 +440,14 @@ mod test {
         let faucet_account_path = temp_dir().join("faucet.mac");
 
         // Create faucet account
-        run_faucet_command(Cli {
+        Box::pin(run_faucet_command(Cli {
             command: crate::Command::CreateFaucetAccount {
                 output_path: faucet_account_path.clone(),
                 token_symbol: "TEST".to_string(),
                 decimals: 6,
                 max_supply: 1_000_000_000_000,
             },
-        })
+        }))
         .await
         .unwrap();
 
@@ -463,7 +463,7 @@ mod test {
 
             // Run the faucet on this thread's runtime
             rt.block_on(async {
-                run_faucet_command(Cli {
+                Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
                         endpoint: endpoint_clone,
                         network: FaucetNetwork::Testnet,
@@ -479,9 +479,9 @@ mod test {
                         faucet_account_path: faucet_account_path.clone(),
                         remote_tx_prover_url: None,
                         open_telemetry: false,
-                        store_path: PathBuf::from("faucet_client_store.sqlite3"),
+                        store_path: PathBuf::from(temp_dir().join("test_store.sqlite3")),
                     },
-                })
+                }))
                 .await
                 .unwrap();
             });

@@ -80,6 +80,13 @@ impl api_server::Api for StubRpcApi {
         }))
     }
 
+    async fn submit_proven_batch(
+        &self,
+        _request: Request<proto::transaction::ProvenTransactionBatch>,
+    ) -> Result<Response<proto::block_producer::SubmitProvenBatchResponse>, Status> {
+        unimplemented!()
+    }
+
     async fn get_account_details(
         &self,
         _request: Request<proto::account::AccountId>,
