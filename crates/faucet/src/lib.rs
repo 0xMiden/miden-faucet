@@ -7,7 +7,7 @@ use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{AccountFile, AccountId, NetworkId};
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
-use miden_client::crypto::RpoRandomCoin;
+use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
@@ -256,9 +256,7 @@ impl Faucet {
             note_data.push(Felt::from(note.metadata().tag()));
             note_data.push(Felt::new(amount));
         }
-        // TODO: reexport Rpo256 from miden-client and remove dependency on miden-objects
-        let note_data_commitment =
-            miden_objects::crypto::hash::rpo::Rpo256::hash_elements(&note_data);
+        let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
 
         let tx = TransactionRequestBuilder::new()

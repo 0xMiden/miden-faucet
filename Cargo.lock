@@ -1673,7 +1673,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#f015b766b154659f87acba2f919f12f60ecef22d"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#b37ace789fab1d8148875b8a71258b943e1ab49f"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1796,7 +1796,6 @@ version = "0.10.0"
 dependencies = [
  "anyhow",
  "miden-client",
- "miden-objects",
  "rand",
  "thiserror 2.0.12",
  "tokio",
