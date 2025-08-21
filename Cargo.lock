@@ -1796,6 +1796,7 @@ version = "0.10.0"
 dependencies = [
  "anyhow",
  "miden-client",
+ "miden-objects",
  "rand",
  "thiserror 2.0.12",
  "tokio",

@@ -18,8 +18,10 @@ use miden_client::transaction::{
     TransactionRequestBuilder,
     TransactionScript,
 };
-use miden_client::utils::RwLock;
+use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
+// TODO: import from miden-client
+use miden_objects::vm::Program;
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
@@ -32,7 +34,7 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
-const TX_SCRIPT: &str = include_str!("scripts/transaction_script.masm");
+const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.masb"));
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -151,10 +153,8 @@ impl Faucet {
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
 
-        let script = client
-            .script_builder()
-            .compile_tx_script(TX_SCRIPT)
-            .context("failed to compile transaction script")?;
+        let code = Program::read_from_bytes(TX_SCRIPT)?;
+        let script = TransactionScript::new(code);
 
         Ok(Self {
             id,

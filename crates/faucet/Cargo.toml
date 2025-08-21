@@ -17,6 +17,8 @@ workspace = true
 [dependencies]
 # Miden dependencies.
 miden-client = { features = ["sqlite", "tonic"], workspace = true }
+# TODO: replace with miden-client
+miden-objects = { branch = "next", default-features = false, git = "https://github.com/0xMiden/miden-base" }
 
 # External dependencies.
 anyhow    = { workspace = true }
@@ -25,3 +27,6 @@ thiserror = { workspace = true }
 tokio     = { features = ["fs"], workspace = true }
 tracing   = { workspace = true }
 url       = { workspace = true }
+
+[build-dependencies]
+miden-client = { workspace = true }
