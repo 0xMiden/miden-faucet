@@ -3,7 +3,7 @@ use std::fs::{self};
 use std::io::{self};
 use std::path::{Path, PathBuf};
 
-use miden_client::transaction::TransactionKernel;
+use miden_client::transaction::{TransactionKernel, TransactionScript};
 use miden_client::utils::Serializable;
 
 const ASSETS_DIR: &str = "assets";
@@ -42,8 +42,9 @@ fn compile_transaction_scripts(source_dir: &Path, target_dir: &Path) {
             .clone()
             .assemble_program(masm_file_path.clone())
             .expect("program should assemble correctly");
+        let script = TransactionScript::new(code);
 
-        let bytes = code.to_bytes();
+        let bytes = script.to_bytes();
 
         let masm_file_name = masm_file_path.file_name().expect("file name should exist");
         let mut masb_file_path = target_dir.join(masm_file_name);

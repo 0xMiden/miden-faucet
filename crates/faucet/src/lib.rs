@@ -20,8 +20,6 @@ use miden_client::transaction::{
 };
 use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
-// TODO: import from miden-client
-use miden_objects::vm::Program;
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
@@ -153,8 +151,7 @@ impl Faucet {
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
 
-        let code = Program::read_from_bytes(TX_SCRIPT)?;
-        let script = TransactionScript::new(code);
+        let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
         Ok(Self {
             id,
