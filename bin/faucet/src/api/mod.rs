@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Context;
 use axum::Router;
 use axum::extract::FromRef;
-use axum::routing::{get, get_service};
+use axum::routing::get;
 use http::{HeaderValue, Request};
 use miden_client::account::AccountId;
 use miden_client::store::Store;
@@ -17,7 +17,6 @@ use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
-use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
@@ -31,6 +30,7 @@ use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::pow::api_key::ApiKey;
 use crate::pow::{PoW, PoWConfig};
 
+mod frontend;
 mod get_metadata;
 mod get_note;
 mod get_pow;
@@ -91,14 +91,13 @@ impl Server {
 
     #[allow(clippy::too_many_lines)]
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
-        let frontend_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/frontend");
-        let static_files = get_service(
-            ServeDir::new(frontend_dir)
-                .not_found_service(ServeFile::new(format!("{frontend_dir}/not_found.html"))),
-        );
-
         let app = Router::new()
-                .fallback_service(static_files)
+                .route("/", get(frontend::get_index_html))
+                .route("/index.js", get(frontend::get_index_js))
+                .route("/index.css", get(frontend::get_index_css))
+                .route("/background.png", get(frontend::get_background))
+                .route("/favicon.ico", get(frontend::get_favicon))
+                .fallback(get(frontend::get_not_found_html))
                 .route("/get_metadata", get(get_metadata))
                 .route("/pow", get(get_pow))
                 // TODO: This feels rather ugly, and would be nice to move but I can't figure out the types.
