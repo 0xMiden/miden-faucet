@@ -24,6 +24,7 @@ miden-client = { features = ["sqlite", "tonic"], workspace = true }
 anyhow                = { workspace = true }
 async-trait           = { version = "0.1" }
 axum                  = { features = ["tokio"], version = "0.8" }
+axum-extra            = { version = "0.10" }
 base64                = { version = "0.22" }
 clap                  = { features = ["derive", "env", "string"], version = "4.5" }
 http                  = { workspace = true }
@@ -41,7 +42,7 @@ tokio                 = { features = ["fs"], workspace = true }
 tokio-stream          = { features = ["net"], workspace = true }
 tonic                 = { features = ["tls-native-roots"], workspace = true }
 tower                 = { workspace = true }
-tower-http            = { features = ["cors", "fs", "set-header", "trace"], workspace = true }
+tower-http            = { features = ["cors", "set-header", "trace"], workspace = true }
 tracing               = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber    = { workspace = true }
