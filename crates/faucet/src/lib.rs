@@ -32,7 +32,7 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
-const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.masb"));
+const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 
 // FAUCET CLIENT
 // ================================================================================================

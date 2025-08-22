@@ -10,7 +10,7 @@ const ASSETS_DIR: &str = "assets";
 const ASM_DIR: &str = "asm";
 const ASM_TX_SCRIPTS_DIR: &str = "tx_scripts";
 
-/// Compile contents of asm directory into .masb files.
+/// Compile contents of asm directory into .txs files.
 fn main() {
     // re-build when the MASM code changes
     println!("cargo::rerun-if-changed={ASM_DIR}/");
@@ -27,7 +27,7 @@ fn main() {
     );
 }
 
-/// Reads all MASM files from the `source_dir`, complies each file individually into a MASB
+/// Reads all MASM files from the `source_dir`, complies each file individually into a TXS
 /// file, and stores the compiled files into the `target_dir`.
 ///
 /// The source files are expected to contain executable programs.
@@ -47,11 +47,11 @@ fn compile_transaction_scripts(source_dir: &Path, target_dir: &Path) {
         let bytes = script.to_bytes();
 
         let masm_file_name = masm_file_path.file_name().expect("file name should exist");
-        let mut masb_file_path = target_dir.join(masm_file_name);
+        let mut txs_file_path = target_dir.join(masm_file_name);
 
-        // write the binary MASB to the output dir
-        masb_file_path.set_extension("masb");
-        fs::write(masb_file_path, bytes).expect("should write .masb file");
+        // write the binary TXS to the output dir
+        txs_file_path.set_extension("txs");
+        fs::write(txs_file_path, bytes).expect("should write .txs file");
     }
 }
 
