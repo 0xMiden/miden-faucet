@@ -348,7 +348,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 mod test {
     use std::env::temp_dir;
     use std::num::NonZeroUsize;
-    use std::path::PathBuf;
+    
     use std::process::Stdio;
     use std::str::FromStr;
     use std::time::{Duration, Instant};
@@ -479,7 +479,7 @@ mod test {
                         faucet_account_path: faucet_account_path.clone(),
                         remote_tx_prover_url: None,
                         open_telemetry: false,
-                        store_path: PathBuf::from(temp_dir().join("test_store.sqlite3")),
+                        store_path: temp_dir().join("test_store.sqlite3"),
                     },
                 }))
                 .await
