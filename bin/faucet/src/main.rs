@@ -348,7 +348,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 mod test {
     use std::env::temp_dir;
     use std::num::NonZeroUsize;
-    
     use std::process::Stdio;
     use std::str::FromStr;
     use std::time::{Duration, Instant};

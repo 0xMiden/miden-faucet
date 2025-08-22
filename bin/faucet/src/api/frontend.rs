@@ -1,3 +1,6 @@
+//! This file explicitly embeds each of the frontend files into the binary using `include_str!` and
+//! `include_bytes!`.
+
 use axum::response::{Html, IntoResponse, Response};
 use axum_extra::response::{Css, JavaScript};
 use http::header::{self};
