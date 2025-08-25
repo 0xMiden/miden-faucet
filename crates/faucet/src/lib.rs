@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{AccountFile, AccountId, NetworkId};
+use miden_client::account::{AccountFile, AccountId};
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::RpoRandomCoin;
@@ -40,18 +40,15 @@ use crate::types::AssetAmount;
 /// Used as a type safety mechanism to avoid confusion with user account IDs, and allows us to
 /// implement traits.
 #[derive(Clone, Copy)]
-pub struct FaucetId {
-    pub account_id: AccountId,
-    pub network_id: NetworkId,
-}
+pub struct FaucetId(AccountId);
 
 impl FaucetId {
-    pub fn new(account_id: AccountId, network_id: NetworkId) -> Self {
-        Self { account_id, network_id }
+    pub fn new(account_id: AccountId) -> Self {
+        Self(account_id)
     }
 
-    pub fn to_bech32(&self) -> String {
-        self.account_id.to_bech32(self.network_id)
+    pub fn inner(&self) -> &AccountId {
+        &self.0
     }
 }
 
@@ -76,7 +73,6 @@ impl Faucet {
     #[instrument(name = "faucet.load", fields(id), skip_all)]
     pub async fn load(
         store_path: PathBuf,
-        network_id: NetworkId,
         account_file: AccountFile,
         node_url: &Url,
         timeout: Duration,
@@ -144,7 +140,7 @@ impl Faucet {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
         };
-        let id = FaucetId::new(account.id(), network_id);
+        let id = FaucetId::new(account.id());
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
 
@@ -238,7 +234,7 @@ impl Faucet {
         let tx = TransactionRequestBuilder::new().own_output_notes(notes).build()?;
 
         // Execute the transaction
-        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx)).await?;
+        let tx_result = Box::pin(self.client.new_transaction(*self.id.inner(), tx)).await?;
         let tx_id = tx_result.executed_transaction().id();
 
         // Prove and submit the transaction
@@ -290,10 +286,9 @@ fn build_p2id_notes(
     let mut notes = Vec::new();
     for request in requests {
         // SAFETY: source is definitely a faucet account, and the amount is valid.
-        let asset =
-            FungibleAsset::new(source.account_id, request.asset_amount.base_units()).unwrap();
+        let asset = FungibleAsset::new(*source.inner(), request.asset_amount.base_units()).unwrap();
         let note = create_p2id_note(
-                source.account_id,
+                *source.inner(),
                 request.account_id,
                 vec![asset.into()],
                 request.note_type.into(),
