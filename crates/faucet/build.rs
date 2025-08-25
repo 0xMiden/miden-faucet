@@ -27,7 +27,7 @@ fn main() {
     );
 }
 
-/// Reads all MASM files from the `source_dir`, complies each file individually into a TXS
+/// Reads all MASM files from the `source_dir`, compiles each file individually into a TXS
 /// file, and stores the compiled files into the `target_dir`.
 ///
 /// The source files are expected to contain executable programs.
