@@ -174,7 +174,6 @@ Check out the complete working examples below. Make sure the faucet is running a
 - **Response**: JSON object containing:
   - `tx_id` (string): ID of the created transaction
   - `note_id` (string): ID of the created note
-  - `explorer_url` (string): URL to view the transaction in the explorer. Only present if available for the current network.
 
 
 **GET /get_note**
