@@ -237,9 +237,10 @@ class MidenFaucet {
 
             const explorerButton = document.getElementById('explorer-button');
             if (mintingData.explorer_url) {
-                explorerButton.onclick = () => window.open(mintingData.explorer_url + '/tx/' + mintingData.transaction_id, '_blank');
+                explorerButton.style.display = 'block';
+                explorerButton.onclick = () => window.open(mintingData.explorer_url + '/tx/' + mintingData.tx_id, '_blank');
             } else {
-                explorerButton.onclick = () => this.showPublicModalError('Explorer URL not available');
+                explorerButton.style.display = 'none';
             }
 
             completedPublicModal.onclick = (e) => {
