@@ -73,9 +73,8 @@ The basic HTTP requests for minting tokens involves `/pow` and `/get_tokens`. Th
    - Transaction is created, executed, and stored in the local database
    - Transaction is proven and submitted to Miden Node
 
-- **Response Delivery**
+- **Response**
    - Transaction ID and Note ID returned
-   - Note data provided (if private)
 
 ## Security Features
 
