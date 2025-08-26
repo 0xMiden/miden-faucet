@@ -85,7 +85,7 @@ pub enum Command {
         faucet_account_path: PathBuf,
 
         /// The maximum amount of assets base units that can be dispersed on each request.
-        #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000")]
+        #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
         max_claimable_amount: u64,
 
         /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
