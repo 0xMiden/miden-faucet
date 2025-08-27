@@ -1679,7 +1679,8 @@ dependencies = [
 [[package]]
 name = "miden-block-prover"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#66020c312d1ce05ec53057906e7356f3ecd028ce"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d527e83bdb0d41cd33fd85687ff87a97d270b29aaaac596c4a8ab60d2025697c"
 dependencies = [
  "miden-lib",
  "miden-objects",
@@ -1689,7 +1690,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#e1a718a021ef356a02b058007a903528abeb91f9"
+source = "git+https://github.com/0xMiden/miden-client?branch=tomyrd-0.11-base#4e5aa6228669bed1a2cd7ff01f1497c1960fbb3d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1833,12 +1834,14 @@ dependencies = [
 [[package]]
 name = "miden-lib"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#66020c312d1ce05ec53057906e7356f3ecd028ce"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b0fa273f407c77701c298bb446436b895de15a3869a765be189129f5e6186ac"
 dependencies = [
  "miden-assembly",
  "miden-objects",
  "miden-processor",
  "miden-stdlib",
+ "rand",
  "regex",
  "thiserror 2.0.12",
  "walkdir",
@@ -1900,7 +1903,7 @@ dependencies = [
 [[package]]
 name = "miden-node-proto"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#7434171ce33eaf8cb58d928193d11fbcb7219a0b"
+source = "git+https://github.com/0xMiden/miden-node?branch=tomyrd-0.11-base#388cdd38c98aa9133be5fcc309a5313241b134fc"
 dependencies = [
  "anyhow",
  "hex",
@@ -1920,7 +1923,7 @@ dependencies = [
 [[package]]
 name = "miden-node-proto-build"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#7434171ce33eaf8cb58d928193d11fbcb7219a0b"
+source = "git+https://github.com/0xMiden/miden-node?branch=tomyrd-0.11-base#388cdd38c98aa9133be5fcc309a5313241b134fc"
 dependencies = [
  "anyhow",
  "prost",
@@ -1931,7 +1934,7 @@ dependencies = [
 [[package]]
 name = "miden-node-utils"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#7434171ce33eaf8cb58d928193d11fbcb7219a0b"
+source = "git+https://github.com/0xMiden/miden-node?branch=tomyrd-0.11-base#388cdd38c98aa9133be5fcc309a5313241b134fc"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1957,7 +1960,8 @@ dependencies = [
 [[package]]
 name = "miden-objects"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#66020c312d1ce05ec53057906e7356f3ecd028ce"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a20d48144b3ada8cf075f37c823eb30bbda26deac69688a5f34ecf56f74087df"
 dependencies = [
  "bech32",
  "getrandom 0.3.3",
@@ -2009,7 +2013,7 @@ dependencies = [
 [[package]]
 name = "miden-remote-prover-client"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#7434171ce33eaf8cb58d928193d11fbcb7219a0b"
+source = "git+https://github.com/0xMiden/miden-node?branch=tomyrd-0.11-base#388cdd38c98aa9133be5fcc309a5313241b134fc"
 dependencies = [
  "getrandom 0.3.3",
  "miden-node-proto-build",
@@ -2043,7 +2047,8 @@ dependencies = [
 [[package]]
 name = "miden-testing"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#66020c312d1ce05ec53057906e7356f3ecd028ce"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9692738753d42edbb4c6f62902f824fc4d26219de8e7713c6aa9ebd002ac7e70"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2062,7 +2067,8 @@ dependencies = [
 [[package]]
 name = "miden-tx"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#66020c312d1ce05ec53057906e7356f3ecd028ce"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e3688c9134c6aa6613b01025c22545cc6966f5133155c47856451dc2524cda"
 dependencies = [
  "miden-lib",
  "miden-objects",
