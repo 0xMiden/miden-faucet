@@ -21,7 +21,7 @@ pub async fn get_pow(
     let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
     let mut requestor = [0u8; 32];
     requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
-    let challenge = rate_limiter.build_challenge(requestor, request.api_key);
+    let challenge = rate_limiter.build_challenge(request.amount, requestor, request.api_key);
     Ok(Json(challenge))
 }
 
@@ -30,6 +30,7 @@ pub async fn get_pow(
 
 /// Validated and parsed request for the `PoW` challenge.
 pub struct PowRequest {
+    pub amount: u64,
     pub account_id: AccountId,
     pub api_key: ApiKey,
 }
@@ -37,6 +38,7 @@ pub struct PowRequest {
 /// Used to receive the initial `get_pow` request from the user.
 #[derive(Deserialize)]
 pub struct RawPowRequest {
+    amount: u64,
     account_id: String,
     api_key: Option<String>,
 }
@@ -63,7 +65,7 @@ impl RawPowRequest {
             .map_err(|_| PowRequestError::InvalidApiKey(self.api_key.unwrap_or_default()))?
             .unwrap_or_default();
 
-        Ok(PowRequest { account_id, api_key })
+        Ok(PowRequest { amount: self.amount, account_id, api_key })
     }
 }
 

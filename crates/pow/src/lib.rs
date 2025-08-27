@@ -49,6 +49,7 @@ pub struct PoWRateLimiterConfig {
     /// The interval at which the challenge cache is cleaned up. Only expired challenges are
     /// removed during cleanup.
     pub cleanup_interval: Duration,
+    pub base_difficulty_amount: u64,
 }
 
 impl PoWRateLimiter {
@@ -77,6 +78,7 @@ impl PoWRateLimiter {
     /// Generates a new challenge.
     pub fn build_challenge(
         &self,
+        amount: u64,
         requestor: impl Into<Requestor>,
         domain: impl Into<Domain>,
     ) -> Challenge {
@@ -86,30 +88,36 @@ impl PoWRateLimiter {
             .as_secs();
         let requestor = requestor.into();
         let domain = domain.into();
-        let target = self.get_challenge_target(&domain);
+        let target = self.get_challenge_target(&domain, amount);
 
-        Challenge::new(target, current_time, requestor, domain, self.secret)
+        Challenge::new(target, current_time, amount, requestor, domain, self.secret)
     }
 
     /// Computes the target for a given domain by checking the amount of active challenges in the
     /// cache. This sets the difficulty of the challenge.
+    /// Also the requested amount is used to scale the difficulty. The amount is divided by the
+    /// `base_difficulty_amount` to get a scaling factor.
     ///
-    /// It is computed as:
+    /// The target is computed as:
     /// `max_target / difficulty`
     ///
     /// Where:
     /// * `max_target = u64::MAX >> baseline`
-    /// * `difficulty = max(num_active_challenges << growth_rate, 1)`
-    fn get_challenge_target(&self, domain: &Domain) -> u64 {
+    /// * `difficulty = max(load_difficulty * amount_scaling, 1)`
+    /// * `load_difficulty = num_active_challenges << growth_rate`
+    /// * `amount_scaling = ceil(amount / base_difficulty_amount)`
+    fn get_challenge_target(&self, domain: &Domain, amount: u64) -> u64 {
         let num_challenges = self
             .challenges
             .lock()
             .expect("challenge cache lock should not be poisoned")
-            .num_challenges_for_domain(domain);
+            .num_challenges_for_domain(domain) as u64;
 
         let max_target = u64::MAX >> self.config.baseline;
-        let difficulty = usize::max(num_challenges << self.config.growth_rate.get(), 1);
-        max_target / difficulty as u64
+        let load_difficulty = u64::max(num_challenges << self.config.growth_rate.get(), 1);
+        let amount_scaling = amount.div_ceil(self.config.base_difficulty_amount);
+        let difficulty = load_difficulty * amount_scaling;
+        max_target / difficulty
     }
 
     /// Submits a challenge.
@@ -208,6 +216,7 @@ mod tests {
                 cleanup_interval: Duration::from_millis(500),
                 growth_rate: NonZeroUsize::new(2).unwrap(),
                 baseline: 0,
+                base_difficulty_amount: 10000,
             },
         )
     }
@@ -219,7 +228,7 @@ mod tests {
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         let requestor = [0u8; 32];
-        let challenge = pow.build_challenge(requestor, domain);
+        let challenge = pow.build_challenge(1000, requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         // Submit challenge with correct nonce - should succeed
@@ -241,7 +250,7 @@ mod tests {
         let requestor = [0u8; 32];
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
-        let challenge = pow.build_challenge(requestor, domain);
+        let challenge = pow.build_challenge(1000, requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         // Submit challenge with expired timestamp - should fail
@@ -267,7 +276,7 @@ mod tests {
         let requestor = [0u8; 32];
 
         // Solve first challenge
-        let challenge = pow.build_challenge(requestor, domain);
+        let challenge = pow.build_challenge(1000, requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -277,7 +286,7 @@ mod tests {
 
         // Try to submit second challenge - should fail because of rate limiting
         tokio::time::sleep(pow.config.cleanup_interval).await;
-        let challenge = pow.build_challenge(requestor, domain);
+        let challenge = pow.build_challenge(1000, requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -294,17 +303,47 @@ mod tests {
         let domain = [1u8; 32];
         let requestor = [0u8; 32];
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let amount = 10000;
 
-        assert_eq!(pow.get_challenge_target(&domain), u64::MAX >> pow.config.baseline);
+        assert_eq!(pow.get_challenge_target(&domain, amount), u64::MAX >> pow.config.baseline);
 
-        let challenge = pow.build_challenge(requestor, domain);
+        let challenge = pow.build_challenge(amount, requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
             .unwrap();
 
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
-        assert_eq!(pow.get_challenge_target(&domain), (u64::MAX >> pow.config.baseline) / 2);
+        assert_eq!(
+            pow.get_challenge_target(&domain, amount),
+            (u64::MAX >> pow.config.baseline) / 2
+        );
+    }
+
+    #[tokio::test]
+    async fn difficulty_increases_with_requested_amount() {
+        let mut pow = create_test_pow();
+        pow.config.growth_rate = NonZeroUsize::new(1).unwrap();
+        pow.config.base_difficulty_amount = 1_000;
+        let domain = [1u8; 32];
+
+        // test: requesting 1_000 tokens should have difficulty 1
+        let amount = 1_000;
+
+        let difficulty = 1;
+        assert_eq!(
+            pow.get_challenge_target(&domain, amount),
+            (u64::MAX >> pow.config.baseline) / difficulty
+        );
+
+        // test: requesting 2_300 tokens should have difficulty 3
+        let amount = 2_300;
+
+        let difficulty = 3;
+        assert_eq!(
+            pow.get_challenge_target(&domain, amount),
+            (u64::MAX >> pow.config.baseline) / difficulty
+        );
     }
 
     #[tokio::test]
@@ -319,7 +358,8 @@ mod tests {
         let timestamp = current_time - pow.config.challenge_lifetime.as_secs();
         let signature =
             Challenge::compute_signature(pow.secret, target, timestamp, &requestor, &domain);
-        let challenge = Challenge::from_parts(target, timestamp, requestor, domain, signature);
+        let challenge =
+            Challenge::from_parts(target, timestamp, 1000, requestor, domain, signature);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
@@ -333,7 +373,7 @@ mod tests {
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 0);
 
         // submit second challenge - should succeed
-        let challenge = pow.build_challenge(requestor, domain);
+        let challenge = pow.build_challenge(1000, requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();

@@ -38,10 +38,12 @@ A challenge solution is valid when:
 
 ## Dynamic Difficulty
 
-The system automatically adjusts challenge difficulty based on usage:
+The system automatically adjusts challenge difficulty based on usage and the requested amount:
 - **Target calculation**: `max_target / difficulty`
 - **Max target**: `u64::MAX >> baseline`
-- **Difficulty**: `max(num_active_challenges << growth_rate, 1)`
+- **Difficulty**: `max(load_difficulty * amount_scaling, 1)`
+- **Load difficulty**: `num_active_challenges << growth_rate`
+- **Amount scaling**: `ceil(amount / base_difficulty_amount)`
 
 This means as more users solve challenges, the difficulty increases exponentially, providing automatic rate limiting.
 
