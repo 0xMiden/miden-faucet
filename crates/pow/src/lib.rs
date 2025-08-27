@@ -52,14 +52,14 @@ impl PoW {
     }
 
     /// Generates a new challenge.
-    pub fn build_challenge(&self, request: PowRequest) -> Challenge {
+    pub fn build_challenge(&self, account_id: AccountId, api_key: ApiKey) -> Challenge {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("current timestamp should be greater than unix epoch")
             .as_secs();
-        let target = self.get_challenge_target(&request.api_key);
+        let target = self.get_challenge_target(&api_key);
 
-        Challenge::new(target, current_time, request.account_id, request.api_key, self.secret)
+        Challenge::new(target, current_time, account_id, api_key, self.secret)
     }
 
     /// Computes the target for a given API key by checking the amount of active challenges in the
@@ -138,12 +138,6 @@ impl PoW {
     }
 }
 
-/// Validated and parsed request for the `PoW` challenge.
-pub struct PowRequest {
-    pub account_id: AccountId,
-    pub api_key: ApiKey,
-}
-
 /// `PoW` challenge related errors.
 #[derive(Debug, thiserror::Error)]
 pub enum PowError {
@@ -200,7 +194,7 @@ mod tests {
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         let account_id = 0_u128.try_into().unwrap();
-        let challenge = pow.build_challenge(PowRequest { account_id, api_key: api_key.clone() });
+        let challenge = pow.build_challenge(account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         // Submit challenge with correct nonce - should succeed
@@ -223,7 +217,7 @@ mod tests {
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
-        let challenge = pow.build_challenge(PowRequest { account_id, api_key: api_key.clone() });
+        let challenge = pow.build_challenge(account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         // Submit challenge with expired timestamp - should fail
@@ -250,7 +244,7 @@ mod tests {
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();
 
         // Solve first challenge
-        let challenge = pow.build_challenge(PowRequest { account_id, api_key: api_key.clone() });
+        let challenge = pow.build_challenge(account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -260,7 +254,7 @@ mod tests {
 
         // Try to submit second challenge - should fail because of rate limiting
         tokio::time::sleep(pow.config.cleanup_interval).await;
-        let challenge = pow.build_challenge(PowRequest { account_id, api_key: api_key.clone() });
+        let challenge = pow.build_challenge(account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -281,7 +275,7 @@ mod tests {
 
         assert_eq!(pow.get_challenge_target(&api_key), u64::MAX >> pow.config.baseline);
 
-        let challenge = pow.build_challenge(PowRequest { account_id, api_key: api_key.clone() });
+        let challenge = pow.build_challenge(account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         pow.submit_challenge(account_id, &api_key, &challenge.encode(), nonce, current_time)
@@ -324,7 +318,7 @@ mod tests {
         assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_api_key(&api_key), 0);
 
         // submit second challenge - should succeed
-        let challenge = pow.build_challenge(PowRequest { account_id, api_key: api_key.clone() });
+        let challenge = pow.build_challenge(account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();

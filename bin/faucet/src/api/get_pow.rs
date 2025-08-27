@@ -3,7 +3,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, AccountIdError};
-use miden_faucet_pow::{ApiKey, Challenge, PoW, PowRequest};
+use miden_faucet_pow::{ApiKey, Challenge, PoW};
 use serde::Deserialize;
 
 use crate::error_report::ErrorReport;
@@ -16,18 +16,24 @@ pub async fn get_pow(
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
-    let challenge = pow.build_challenge(request);
+    let challenge = pow.build_challenge(request.account_id, request.api_key);
     Ok(Json(challenge))
 }
 
 // REQUEST VALIDATION
 // ================================================================================================
 
+/// Validated and parsed request for the `PoW` challenge.
+pub struct PowRequest {
+    pub account_id: AccountId,
+    pub api_key: ApiKey,
+}
+
 /// Used to receive the initial `get_pow` request from the user.
 #[derive(Deserialize)]
 pub struct RawPowRequest {
-    pub account_id: String,
-    pub api_key: Option<String>,
+    account_id: String,
+    api_key: Option<String>,
 }
 
 impl RawPowRequest {
