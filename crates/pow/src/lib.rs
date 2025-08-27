@@ -5,9 +5,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use miden_client::account::AccountId;
 use tokio::time::Duration;
 
-use crate::pow::api_key::ApiKey;
-use crate::pow::challenge::Challenge;
-use crate::pow::challenge_cache::ChallengeCache;
+use crate::api_key::ApiKey;
+use crate::challenge::Challenge;
+use crate::challenge_cache::ChallengeCache;
 
 pub mod api_key;
 pub mod challenge;
@@ -17,7 +17,7 @@ mod challenge_cache;
 // ================================================================================================
 
 #[derive(Clone)]
-pub(crate) struct PoW {
+pub struct PoW {
     secret: [u8; 32],
     challenge_cache: Arc<Mutex<ChallengeCache>>,
     config: PoWConfig,
@@ -95,7 +95,7 @@ impl PoW {
     ///
     /// # Panics
     /// Panics if the challenge cache lock is poisoned.
-    pub(crate) fn submit_challenge(
+    pub fn submit_challenge(
         &self,
         account_id: AccountId,
         api_key: &ApiKey,

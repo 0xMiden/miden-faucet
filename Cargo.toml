@@ -20,6 +20,7 @@ opt-level = 2
 
 [workspace.dependencies]
 miden-faucet-lib = { path = "crates/faucet" }
+miden-faucet-pow = { path = "crates/pow" }
 
 # miden-client dependencies.
 miden-client = { branch = "next", git = "https://github.com/0xMiden/miden-client" }

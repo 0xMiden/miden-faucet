@@ -5,8 +5,8 @@ use miden_client::utils::{Deserializable, Serializable, ToHex, hex_to_bytes};
 use serde::{Serialize, Serializer};
 use sha3::{Digest, Sha3_256};
 
-use crate::pow::PowError;
-use crate::pow::api_key::ApiKey;
+use crate::PowError;
+use crate::api_key::ApiKey;
 
 /// The size of the encoded challenge in bytes.
 const CHALLENGE_ENCODED_SIZE: usize = 95;

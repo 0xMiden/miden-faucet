@@ -5,6 +5,8 @@ use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, AccountIdError};
 use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
+use miden_faucet_pow::PowError;
+use miden_faucet_pow::api_key::ApiKey;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
@@ -14,8 +16,6 @@ use crate::COMPONENT;
 use crate::api::Server;
 use crate::error_report::ErrorReport;
 use crate::network::ExplorerUrl;
-use crate::pow::PowError;
-use crate::pow::api_key::ApiKey;
 
 // ENDPOINT
 // ================================================================================================

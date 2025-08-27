@@ -3,12 +3,12 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, AccountIdError};
+use miden_faucet_pow::api_key::ApiKey;
+use miden_faucet_pow::challenge::Challenge;
+use miden_faucet_pow::{PoW, PowRequest};
 use serde::Deserialize;
 
 use crate::error_report::ErrorReport;
-use crate::pow::api_key::ApiKey;
-use crate::pow::challenge::Challenge;
-use crate::pow::{PoW, PowRequest};
 
 // ENDPOINT
 // ================================================================================================

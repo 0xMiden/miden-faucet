@@ -13,6 +13,8 @@ use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
+use miden_faucet_pow::api_key::ApiKey;
+use miden_faucet_pow::{PoW, PoWConfig};
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -27,8 +29,6 @@ use crate::api::get_metadata::{Metadata, get_metadata};
 use crate::api::get_note::get_note;
 use crate::api::get_pow::get_pow;
 use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
-use crate::pow::api_key::ApiKey;
-use crate::pow::{PoW, PoWConfig};
 
 mod frontend;
 mod get_metadata;
