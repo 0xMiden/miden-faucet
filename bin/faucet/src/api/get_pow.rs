@@ -16,7 +16,7 @@ pub async fn get_pow(
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
-    let challenge = pow.build_challenge(request.account_id, request.api_key);
+    let challenge = pow.build_challenge(request.amount, request.account_id, request.api_key);
     Ok(Json(challenge))
 }
 
@@ -25,6 +25,7 @@ pub async fn get_pow(
 
 /// Validated and parsed request for the `PoW` challenge.
 pub struct PowRequest {
+    pub amount: u64,
     pub account_id: AccountId,
     pub api_key: ApiKey,
 }
@@ -32,6 +33,7 @@ pub struct PowRequest {
 /// Used to receive the initial `get_pow` request from the user.
 #[derive(Deserialize)]
 pub struct RawPowRequest {
+    amount: u64,
     account_id: String,
     api_key: Option<String>,
 }
@@ -53,7 +55,7 @@ impl RawPowRequest {
             .map_err(|_| PowRequestError::InvalidApiKey(self.api_key.unwrap_or_default()))?
             .unwrap_or_default();
 
-        Ok(PowRequest { account_id, api_key })
+        Ok(PowRequest { amount: self.amount, account_id, api_key })
     }
 }
 

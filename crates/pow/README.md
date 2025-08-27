@@ -26,6 +26,7 @@ Represents a cryptographic challenge that users must solve:
 pub struct Challenge {
     pub target: u64,           // Difficulty target (lower = harder)
     pub timestamp: u64,        // Creation timestamp
+    pub amount: u64,           // Requested amount
     pub account_id: AccountId, // Associated account
     pub api_key: ApiKey,       // Associated API key
     pub signature: [u8; 32],   // Server signature
@@ -42,10 +43,12 @@ A challenge solution is valid when:
 
 ## Dynamic Difficulty
 
-The system automatically adjusts challenge difficulty based on usage:
+The system automatically adjusts challenge difficulty based on usage and the requested amount:
 - **Target calculation**: `max_target / difficulty`
 - **Max target**: `u64::MAX >> baseline`
-- **Difficulty**: `max(num_active_challenges << growth_rate, 1)`
+- **Difficulty**: `max(load_difficulty * amount_scaling, 1)`
+- **Load difficulty**: `num_active_challenges << growth_rate`
+- **Amount scaling**: `amount / max_claimable_amount`
 
 This means as more users solve challenges, the difficulty increases exponentially, providing automatic rate limiting. Each API key has it's own difficulty based on it's usage.
 

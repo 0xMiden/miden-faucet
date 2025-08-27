@@ -30,6 +30,7 @@ pub struct PoWConfig {
     pub growth_rate: NonZeroUsize,
     pub baseline: u8,
     pub cleanup_interval: Duration,
+    pub max_claimable_amount: NonZeroUsize,
 }
 
 impl PoW {
@@ -52,35 +53,46 @@ impl PoW {
     }
 
     /// Generates a new challenge.
-    pub fn build_challenge(&self, account_id: AccountId, api_key: ApiKey) -> Challenge {
+    pub fn build_challenge(
+        &self,
+        amount: u64,
+        account_id: AccountId,
+        api_key: ApiKey,
+    ) -> Challenge {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("current timestamp should be greater than unix epoch")
             .as_secs();
-        let target = self.get_challenge_target(&api_key);
+        let target = self.get_challenge_target(&api_key, amount);
 
-        Challenge::new(target, current_time, account_id, api_key, self.secret)
+        Challenge::new(target, current_time, amount, account_id, api_key, self.secret)
     }
 
     /// Computes the target for a given API key by checking the amount of active challenges in the
     /// cache. This sets the difficulty of the challenge.
+    /// Also the requested amount is used to scale the difficulty. The amount is divided by the
+    /// `max_claimable_amount` to get a scaling factor.
     ///
-    /// It is computed as:
+    /// The target is computed as:
     /// `max_target / difficulty`
     ///
     /// Where:
     /// * `max_target = u64::MAX >> baseline`
-    /// * `difficulty = max(num_active_challenges << growth_rate, 1)`
-    fn get_challenge_target(&self, api_key: &ApiKey) -> u64 {
+    /// * `difficulty = max(load_difficulty * amount_scaling, 1)`
+    /// * `load_difficulty = num_active_challenges << growth_rate`
+    /// * `amount_scaling = amount / max_claimable_amount`
+    fn get_challenge_target(&self, api_key: &ApiKey, amount: u64) -> u64 {
         let num_challenges = self
             .challenge_cache
             .lock()
             .expect("challenge cache lock should not be poisoned")
-            .num_challenges_for_api_key(api_key);
+            .num_challenges_for_api_key(api_key) as u64;
 
         let max_target = u64::MAX >> self.config.baseline;
-        let difficulty = usize::max(num_challenges << self.config.growth_rate.get(), 1);
-        max_target / difficulty as u64
+        let load_difficulty = num_challenges << self.config.growth_rate.get();
+        let amount_scaling = amount / self.config.max_claimable_amount.get() as u64;
+        let difficulty = u64::max(load_difficulty * amount_scaling, 1);
+        max_target / difficulty
     }
 
     /// Submits a challenge.
@@ -182,6 +194,7 @@ mod tests {
                 cleanup_interval: Duration::from_millis(500),
                 growth_rate: NonZeroUsize::new(2).unwrap(),
                 baseline: 0,
+                max_claimable_amount: NonZeroUsize::new(10000).unwrap(),
             },
         )
     }
@@ -194,7 +207,7 @@ mod tests {
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         let account_id = 0_u128.try_into().unwrap();
-        let challenge = pow.build_challenge(account_id, api_key.clone());
+        let challenge = pow.build_challenge(1000, account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         // Submit challenge with correct nonce - should succeed
@@ -217,7 +230,7 @@ mod tests {
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
-        let challenge = pow.build_challenge(account_id, api_key.clone());
+        let challenge = pow.build_challenge(1000, account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         // Submit challenge with expired timestamp - should fail
@@ -244,7 +257,7 @@ mod tests {
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();
 
         // Solve first challenge
-        let challenge = pow.build_challenge(account_id, api_key.clone());
+        let challenge = pow.build_challenge(1000, account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -254,7 +267,7 @@ mod tests {
 
         // Try to submit second challenge - should fail because of rate limiting
         tokio::time::sleep(pow.config.cleanup_interval).await;
-        let challenge = pow.build_challenge(account_id, api_key.clone());
+        let challenge = pow.build_challenge(1000, account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -272,17 +285,21 @@ mod tests {
         let api_key = ApiKey::generate(&mut rng);
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let amount = 10000;
 
-        assert_eq!(pow.get_challenge_target(&api_key), u64::MAX >> pow.config.baseline);
+        assert_eq!(pow.get_challenge_target(&api_key, amount), u64::MAX >> pow.config.baseline);
 
-        let challenge = pow.build_challenge(account_id, api_key.clone());
+        let challenge = pow.build_challenge(amount, account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         pow.submit_challenge(account_id, &api_key, &challenge.encode(), nonce, current_time)
             .unwrap();
 
         assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_api_key(&api_key), 1);
-        assert_eq!(pow.get_challenge_target(&api_key), (u64::MAX >> pow.config.baseline) / 2);
+        assert_eq!(
+            pow.get_challenge_target(&api_key, amount),
+            (u64::MAX >> pow.config.baseline) / 2
+        );
     }
 
     #[tokio::test]
@@ -304,7 +321,7 @@ mod tests {
             &api_key.inner(),
         );
         let challenge =
-            Challenge::from_parts(target, timestamp, account_id, api_key.clone(), signature);
+            Challenge::from_parts(target, timestamp, 1000, account_id, api_key.clone(), signature);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         pow.submit_challenge(account_id, &api_key, &challenge.encode(), nonce, current_time)
@@ -318,7 +335,7 @@ mod tests {
         assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_api_key(&api_key), 0);
 
         // submit second challenge - should succeed
-        let challenge = pow.build_challenge(account_id, api_key.clone());
+        let challenge = pow.build_challenge(1000, account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();

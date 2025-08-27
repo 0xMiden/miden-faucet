@@ -89,9 +89,11 @@ pub enum Command {
         #[arg(long = "account", value_name = "FILE", env = ENV_ACCOUNT_PATH)]
         faucet_account_path: PathBuf,
 
-        /// The maximum amount of assets base units that can be dispersed on each request.
-        #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
-        max_claimable_amount: u64,
+        /// The maximum amount of assets base units that can be dispersed on each request. It is
+        /// also used to scale the difficulty of the `PoW` challenges with the requested
+        /// amount.
+        #[arg(long = "max-claimable-amount", value_name = "NON_ZERO_USIZE", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
+        max_claimable_amount: NonZeroUsize,
 
         /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
         #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
@@ -239,13 +241,14 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .map(|k| ApiKey::decode(k))
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
-            let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
             let pow_config = PoWConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
+                max_claimable_amount,
             };
+            let max_claimable_amount = AssetAmount::new(max_claimable_amount.get() as u64)?;
             let server = Server::new(
                 faucet.faucet_id(),
                 decimals,
@@ -466,7 +469,7 @@ mod test {
                         network: FaucetNetwork::Testnet,
                         node_url: stub_node_url,
                         timeout: Duration::from_millis(5000),
-                        max_claimable_amount: 1_000_000_000,
+                        max_claimable_amount: NonZeroUsize::new(1_000_000_000).unwrap(),
                         api_keys: vec![],
                         pow_secret: None,
                         pow_challenge_lifetime: Duration::from_secs(30),
