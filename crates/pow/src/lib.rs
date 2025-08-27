@@ -5,13 +5,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use miden_client::account::AccountId;
 use tokio::time::Duration;
 
-use crate::api_key::ApiKey;
-use crate::challenge::Challenge;
 use crate::challenge_cache::ChallengeCache;
 
-pub mod api_key;
-pub mod challenge;
+mod api_key;
+mod challenge;
 mod challenge_cache;
+
+pub use api_key::ApiKey;
+pub use challenge::Challenge;
 
 // POW
 // ================================================================================================
