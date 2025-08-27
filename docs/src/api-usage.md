@@ -6,7 +6,7 @@ The faucet can be accessed by the HTTP API interactively through the frontend or
 
 The faucet provides a REST API. The typical flow to request tokens involves:
 
-1. **Request a Proof-of-Work challenge** from `/pow`
+1. **Requesting a Proof-of-Work challenge** from `/pow`
 
 ```typescript
 const baseUrl = 'http://localhost:8080';
@@ -21,7 +21,7 @@ const challenge: string = powJson.challenge;
 const target: bigint = BigInt(powJson.target);
 ```
 
-2. **Solve the computational challenge**
+2. **Solving the computational challenge**
 
 ```typescript
 // Dependencies: npm i @noble/hashes
@@ -58,7 +58,7 @@ while (true) {
 }
 ```
 
-3. **Request tokens** along with your solved challenge to `/get_tokens`
+3. **Requesting tokens** along with your solved challenge to `/get_tokens`
 
 ```typescript
 const params = new URLSearchParams({
@@ -79,7 +79,7 @@ const txId = json.tx_id;
 const explorerUrl = json.explorer_url;
 ```
 
-4. **Request note** to download generated notes
+4. **Requesting note** to download generated notes
 
 You must complete this step to retrieve private notes. For public notes, normal client sync is sufficient.
 
