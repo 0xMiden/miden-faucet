@@ -240,7 +240,7 @@ class MidenFaucet {
             const explorerButton = document.getElementById('explorer-button');
             if (this.explorer_url) {
                 explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(this.explorer_url + '/tx/' + mintingData.tx_id, '_blank');
+                explorerButton.onclick = () => window.open(this.explorer_url + 'tx/' + mintingData.tx_id, '_blank');
             } else {
                 explorerButton.style.display = 'none';
             }
