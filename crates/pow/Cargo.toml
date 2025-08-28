@@ -1,11 +1,11 @@
 [package]
 authors.workspace      = true
-description            = "Miden faucet's logic"
+description            = "Miden faucet's PoW"
 edition.workspace      = true
 homepage.workspace     = true
-keywords               = ["faucet", "lib", "miden"]
+keywords               = ["faucet", "miden", "pow"]
 license.workspace      = true
-name                   = "miden-faucet-lib"
+name                   = "miden-faucet-pow"
 readme                 = "README.md"
 repository.workspace   = true
 rust-version.workspace = true
@@ -16,12 +16,16 @@ workspace = true
 
 [dependencies]
 # Miden dependencies.
-miden-client = { features = ["sqlite", "tonic"], workspace = true }
+miden-client = { workspace = true }
 
 # External dependencies.
-anyhow    = { workspace = true }
+base64    = { version = "0.22" }
 rand      = { features = ["thread_rng"], workspace = true }
+serde     = { features = ["derive"], version = "1.0" }
+sha3      = { version = "0.10" }
 thiserror = { workspace = true }
 tokio     = { features = ["fs"], workspace = true }
-tracing   = { workspace = true }
-url       = { workspace = true }
+
+[dev-dependencies]
+rand_chacha = { version = "0.9" }
+serde_json  = { version = "1.0" }

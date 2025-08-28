@@ -2,7 +2,6 @@ mod api;
 mod error_report;
 mod logging;
 mod network;
-mod pow;
 #[cfg(test)]
 mod testing;
 
@@ -22,6 +21,7 @@ use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
 use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetAmount;
+use miden_faucet_pow::{ApiKey, PoWConfig};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
@@ -30,8 +30,6 @@ use url::Url;
 use crate::api::Server;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
-use crate::pow::PoWConfig;
-use crate::pow::api_key::ApiKey;
 
 // CONSTANTS
 // =================================================================================================
