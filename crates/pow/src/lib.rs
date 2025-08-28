@@ -17,18 +17,32 @@ pub use challenge::Challenge;
 // POW
 // ================================================================================================
 
+/// Proof-of-Work implementation.
+///
+/// This struct is used to generate and validate `PoW` challenges.
 #[derive(Clone)]
 pub struct PoW {
+    /// The server secret used to sign and validate challenges.
     secret: [u8; 32],
+    /// The cache used to store submitted challenges.
     challenge_cache: Arc<Mutex<ChallengeCache>>,
+    /// The configuration settings.
     config: PoWConfig,
 }
 
+/// The configuration settings for `PoW`.
 #[derive(Clone)]
 pub struct PoWConfig {
+    /// The lifetime for challenges. After this time, challenges are considered expired.
     pub challenge_lifetime: Duration,
+    /// Determines how much the difficulty increases with the amount of active challenges. The
+    /// difficulty is computed as `num_active_challenges << growth_rate`.
     pub growth_rate: NonZeroUsize,
+    /// Sets the `max_target` used for challenges. The initial target (with difficulty = 1) for
+    /// challenges will be `u64::MAX >> baseline`.
     pub baseline: u8,
+    /// The interval at which the challenge cache is cleaned up. Only expired challenges are
+    /// removed during cleanup.
     pub cleanup_interval: Duration,
 }
 
