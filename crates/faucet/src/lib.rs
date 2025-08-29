@@ -5,7 +5,12 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{
-    AccountFile, AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
+    AccountFile,
+    AccountId,
+    AccountIdAddress,
+    Address,
+    AddressInterface,
+    NetworkId,
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
@@ -14,7 +19,11 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
+    LocalTransactionProver,
+    OutputNote,
+    TransactionId,
+    TransactionProver,
+    TransactionRequestBuilder,
 };
 use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
