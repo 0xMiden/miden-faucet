@@ -114,6 +114,20 @@ impl api_server::Api for StubRpcApi {
     ) -> Result<Response<proto::rpc::RpcStatus>, Status> {
         unimplemented!()
     }
+
+    async fn sync_account_vault(
+        &self,
+        _request: Request<proto::rpc_store::SyncAccountVaultRequest>,
+    ) -> Result<Response<proto::rpc_store::SyncAccountVaultResponse>, Status> {
+        unimplemented!()
+    }
+
+    async fn sync_storage_maps(
+        &self,
+        _request: Request<proto::rpc_store::SyncStorageMapsRequest>,
+    ) -> Result<Response<proto::rpc_store::SyncStorageMapsResponse>, Status> {
+        unimplemented!()
+    }
 }
 
 pub async fn serve_stub(endpoint: &Url) -> anyhow::Result<()> {
