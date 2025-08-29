@@ -1690,7 +1690,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=tomyrd-0.11-base#4e5aa6228669bed1a2cd7ff01f1497c1960fbb3d"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#0498ad629002c8ee21839c668fc0c6bacec47072"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1699,7 +1699,7 @@ dependencies = [
  "deadpool-sync",
  "hex",
  "miden-lib",
- "miden-node-proto-build",
+ "miden-node-proto-build 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "miden-objects",
  "miden-remote-prover-client",
  "miden-tx",
@@ -1908,7 +1908,7 @@ dependencies = [
  "anyhow",
  "hex",
  "http 1.3.1",
- "miden-node-proto-build",
+ "miden-node-proto-build 0.11.0 (git+https://github.com/0xMiden/miden-node?branch=tomyrd-0.11-base)",
  "miden-node-utils",
  "miden-objects",
  "prost",
@@ -1918,6 +1918,18 @@ dependencies = [
  "tonic",
  "tonic-build",
  "url",
+]
+
+[[package]]
+name = "miden-node-proto-build"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "233a0ef0afeace15f08acfb0b377cbdd50914c6574f74209f87eab44ce92e1e2"
+dependencies = [
+ "anyhow",
+ "prost",
+ "protox 0.8.0",
+ "tonic-build",
 ]
 
 [[package]]
@@ -2013,10 +2025,11 @@ dependencies = [
 [[package]]
 name = "miden-remote-prover-client"
 version = "0.11.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=tomyrd-0.11-base#388cdd38c98aa9133be5fcc309a5313241b134fc"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "352c63eb48e52b440580aa7f6682e925fefd31166421fdc836714811dd9823af"
 dependencies = [
  "getrandom 0.3.3",
- "miden-node-proto-build",
+ "miden-node-proto-build 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "miden-objects",
  "miden-tx",
  "miette",
