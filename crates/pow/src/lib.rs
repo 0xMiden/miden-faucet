@@ -139,8 +139,14 @@ impl PoW {
             .expect("challenge cache lock should not be poisoned");
 
         // Check if account has recently submitted a challenge.
-        if challenge_cache.has_challenge_for_account(account_id) {
-            return Err(PowError::RateLimited);
+        if let Some(timestamp) =
+            challenge_cache.has_challenge_for_account(account_id, api_key.clone())
+        {
+            return Err(PowError::RateLimited(
+                timestamp
+                    + self.config.challenge_lifetime.as_secs()
+                    + self.config.cleanup_interval.as_secs(),
+            ));
         }
 
         // Check if the cache already contains the challenge. If not, it is inserted.
@@ -160,7 +166,7 @@ pub enum PowError {
     #[error("invalid POW solution")]
     InvalidPoW,
     #[error("account is rate limited")]
-    RateLimited,
+    RateLimited(u64),
     #[error("challenge already used")]
     ChallengeAlreadyUsed,
     #[error("server signatures do not match")]
@@ -271,11 +277,17 @@ mod tests {
         let challenge = pow.build_challenge(account_id, api_key.clone());
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let second_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let result =
-            pow.submit_challenge(account_id, &api_key, &challenge.encode(), nonce, current_time);
+            pow.submit_challenge(account_id, &api_key, &challenge.encode(), nonce, second_time);
         assert!(result.is_err());
-        assert!(matches!(result.err(), Some(PowError::RateLimited)));
+        let expected_timestamp = current_time
+            + pow.config.challenge_lifetime.as_secs()
+            + pow.config.cleanup_interval.as_secs();
+        match result {
+            Err(PowError::RateLimited(timestamp)) => assert_eq!(timestamp, expected_timestamp),
+            _ => panic!("Expected RateLimited error"),
+        }
     }
 
     #[tokio::test]
@@ -328,7 +340,13 @@ mod tests {
         tokio::time::sleep(pow.config.cleanup_interval + Duration::from_secs(1)).await;
 
         // check that the challenge is removed from the cache
-        assert!(!pow.challenge_cache.lock().unwrap().has_challenge_for_account(account_id));
+        assert!(
+            pow.challenge_cache
+                .lock()
+                .unwrap()
+                .has_challenge_for_account(account_id, api_key.clone())
+                .is_none()
+        );
         assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_api_key(&api_key), 0);
 
         // submit second challenge - should succeed
@@ -339,7 +357,13 @@ mod tests {
         pow.submit_challenge(account_id, &api_key, &challenge.encode(), nonce, current_time)
             .unwrap();
 
-        assert!(pow.challenge_cache.lock().unwrap().has_challenge_for_account(account_id));
+        assert!(
+            pow.challenge_cache
+                .lock()
+                .unwrap()
+                .has_challenge_for_account(account_id, api_key.clone())
+                .is_some()
+        );
         assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_api_key(&api_key), 1);
     }
 }

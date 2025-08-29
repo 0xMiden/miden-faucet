@@ -14,6 +14,7 @@
 - Use HTTP 429 status code for rate limited error ([#51](https://github.com/0xMiden/miden-faucet/pull/51)).
 - Replace amount options validation for maximum claimable amount ([#52](https://github.com/0xMiden/miden-faucet/pull/52)).
 - Introduced `miden-faucet-pow` crate ([#67](https://github.com/0xMiden/miden-faucet/pull/67))
+- Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
 
 ## 0.10.0 (2025-07-10)
 
