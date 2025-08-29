@@ -5,12 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{
-    AccountFile,
-    AccountId,
-    AccountIdAddress,
-    Address,
-    AddressInterface,
-    NetworkId,
+    AccountFile, AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
@@ -19,11 +14,7 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    OutputNote,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
 };
 use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -97,7 +88,8 @@ impl Faucet {
         for key in account_file.auth_secret_keys {
             keystore.add_key(&key)?;
         }
-        let endpoint = Endpoint::try_from(node_url.as_str())
+        let url: &str = node_url.as_str().trim_end_matches('/');
+        let endpoint = Endpoint::try_from(url)
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("failed to parse node url: {node_url}"))?;
 
