@@ -4,7 +4,14 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{AccountFile, AccountId, NetworkId};
+use miden_client::account::{
+    AccountFile,
+    AccountId,
+    AccountIdAddress,
+    Address,
+    AddressInterface,
+    NetworkId,
+};
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::RpoRandomCoin;
@@ -51,7 +58,8 @@ impl FaucetId {
     }
 
     pub fn to_bech32(&self) -> String {
-        self.account_id.to_bech32(self.network_id)
+        let address = AccountIdAddress::new(self.account_id, AddressInterface::Unspecified);
+        Address::from(address).to_bech32(self.network_id)
     }
 }
 
@@ -76,7 +84,6 @@ impl Faucet {
     #[instrument(name = "faucet.load", fields(id), skip_all)]
     pub async fn load(
         store_path: PathBuf,
-        network_id: NetworkId,
         account_file: AccountFile,
         node_url: &Url,
         timeout: Duration,
@@ -90,7 +97,8 @@ impl Faucet {
         for key in account_file.auth_secret_keys {
             keystore.add_key(&key)?;
         }
-        let endpoint = Endpoint::try_from(node_url.as_str())
+        let url: &str = node_url.as_str().trim_end_matches('/');
+        let endpoint = Endpoint::try_from(url)
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("failed to parse node url: {node_url}"))?;
 
@@ -144,7 +152,7 @@ impl Faucet {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
         };
-        let id = FaucetId::new(account.id(), network_id);
+        let id = FaucetId::new(account.id(), endpoint.to_network_id());
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
 

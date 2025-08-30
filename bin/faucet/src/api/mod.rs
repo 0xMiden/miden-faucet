@@ -7,7 +7,7 @@ use axum::Router;
 use axum::extract::FromRef;
 use axum::routing::get;
 use http::{HeaderValue, Request};
-use miden_client::account::AccountId;
+use miden_client::account::{AccountId, AccountIdError, AddressError};
 use miden_client::store::Store;
 use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
@@ -62,6 +62,7 @@ impl Server {
         pow_config: PoWConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
+        explorer_url: Option<Url>,
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
         let metadata = Metadata {
@@ -69,6 +70,7 @@ impl Server {
             issuance,
             max_supply,
             decimals,
+            explorer_url,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
         let metadata = Box::leak(Box::new(metadata));
@@ -200,4 +202,18 @@ impl FromRef<Server> for PoW {
         // Clone is cheap: only copies a 32-byte array and increments Arc reference counters.
         input.pow.clone()
     }
+}
+
+// ERRORS
+// ================================================================================================
+
+/// Errors that can occur when parsing an account ID or address.
+#[derive(Debug, thiserror::Error)]
+pub enum AccountError {
+    #[error("account ID failed to parse")]
+    ParseId(#[source] AccountIdError),
+    #[error("account address failed to parse")]
+    ParseAddress(#[source] AddressError),
+    #[error("account address is not an ID based")]
+    AddressNotIdBased,
 }

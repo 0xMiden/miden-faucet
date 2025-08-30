@@ -2,7 +2,7 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use miden_client::account::{AccountId, AccountIdError};
+use miden_client::account::{AccountId, Address};
 use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
 use serde::{Deserialize, Serialize};
@@ -11,9 +11,8 @@ use tokio::sync::oneshot;
 use tracing::instrument;
 
 use crate::COMPONENT;
-use crate::api::Server;
+use crate::api::{AccountError, Server};
 use crate::error_report::ErrorReport;
-use crate::network::ExplorerUrl;
 use crate::pow::PowError;
 use crate::pow::api_key::ApiKey;
 
@@ -59,7 +58,6 @@ pub async fn get_tokens(
     Ok(Json(GetTokensResponse {
         tx_id: mint_response.tx_id.to_string(),
         note_id: mint_response.note_id.to_string(),
-        explorer_url: ExplorerUrl::from_network_id(server.metadata.id.network_id),
     }))
 }
 
@@ -67,7 +65,6 @@ pub async fn get_tokens(
 pub struct GetTokensResponse {
     tx_id: String,
     note_id: String,
-    explorer_url: Option<ExplorerUrl>,
 }
 
 // STATE
@@ -103,8 +100,8 @@ pub struct RawMintRequest {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MintRequestError {
-    #[error("account ID failed to parse")]
-    AccountId(#[source] AccountIdError),
+    #[error("account error")]
+    AccountError(#[source] AccountError),
     #[error("requested amount {0} exceeds the maximum claimable amount of {1}")]
     AssetAmountTooBig(AssetAmount, AssetAmount),
     #[error("requested amount {0} is not a valid asset amount")]
@@ -197,11 +194,16 @@ impl RawMintRequest {
         };
 
         let account_id = if self.account_id.starts_with("0x") {
-            AccountId::from_hex(&self.account_id)
+            AccountId::from_hex(&self.account_id).map_err(AccountError::ParseId)
         } else {
-            AccountId::from_bech32(&self.account_id).map(|(_, account_id)| account_id)
+            Address::from_bech32(&self.account_id)
+                .map_err(AccountError::ParseAddress)
+                .and_then(|(_, address)| match address {
+                    Address::AccountId(account_id_address) => Ok(account_id_address.id()),
+                    _ => Err(AccountError::AddressNotIdBased),
+                })
         }
-        .map_err(MintRequestError::AccountId)?;
+        .map_err(MintRequestError::AccountError)?;
 
         let asset_amount =
             AssetAmount::new(self.asset_amount).map_err(MintRequestError::InvalidAssetAmount)?;
