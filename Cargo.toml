@@ -19,7 +19,7 @@ version      = "0.11.0"
 opt-level = 2
 
 [workspace.dependencies]
-miden-faucet-lib = { path = "crates/faucet" }
+miden-faucet-lib = { path = "crates/faucet", version = "0.11" }
 
 # miden-client dependencies.
 miden-client = { version = "0.11" }
