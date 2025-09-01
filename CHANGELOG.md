@@ -4,6 +4,12 @@
 
 ### Changes
 
+- [BREAKING] Incremented MSRV to 1.89.
+
+## 0.11.0 (2025-09-01)
+
+### Changes
+
 - Introduced `miden-faucet-lib` crate ([#10](https://github.com/0xMiden/miden-faucet/pull/10)).
 - Integrated miden-client ([#11](https://github.com/0xMiden/miden-faucet/pull/11)).
 - Added `/get_note` endpoint ([#19](https://github.com/0xMiden/miden-faucet/pull/19)).
