@@ -1,15 +1,12 @@
 use std::time::Duration;
 
-use miden_objects::{
-    account::AccountId,
-    utils::{Deserializable, Serializable},
-};
-use miden_tx::utils::{ToHex, hex_to_bytes};
+use miden_client::account::AccountId;
+use miden_client::utils::{Deserializable, Serializable, ToHex, hex_to_bytes};
 use serde::{Serialize, Serializer};
 use sha3::{Digest, Sha3_256};
 
-use super::get_tokens::MintRequestError;
-use crate::server::ApiKey;
+use crate::pow::PowError;
+use crate::pow::api_key::ApiKey;
 
 /// The size of the encoded challenge in bytes.
 const CHALLENGE_ENCODED_SIZE: usize = 95;
@@ -85,10 +82,10 @@ impl Challenge {
 
     /// Decodes the challenge and verifies that the signature part of the challenge is valid
     /// in the context of the specified secret.
-    pub fn decode(value: &str, secret: [u8; 32]) -> Result<Self, MintRequestError> {
+    pub fn decode(value: &str, secret: [u8; 32]) -> Result<Self, PowError> {
         // Parse the hex-encoded challenge string
         let bytes: [u8; CHALLENGE_ENCODED_SIZE] =
-            hex_to_bytes(value).map_err(|_| MintRequestError::MissingPowParameters)?;
+            hex_to_bytes(value).map_err(|_| PowError::InvalidChallenge)?;
 
         // SAFETY: Length of the bytes is enforced above.
         let target = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
@@ -104,7 +101,7 @@ impl Challenge {
         if signature == expected_signature {
             Ok(Self::from_parts(target, timestamp, account_id, api_key, signature))
         } else {
-            Err(MintRequestError::ServerSignaturesDoNotMatch)
+            Err(PowError::ServerSignaturesDoNotMatch)
         }
     }
 
@@ -205,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn test_challenge_encode_decode() {
+    fn challenge_encode_decode() {
         let secret = create_test_secret();
         let target = 3;
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -222,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn test_timestamp_validation() {
+    fn timestamp_validation() {
         let secret = create_test_secret();
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();

@@ -1,13 +1,15 @@
-use axum::{
-    Json,
-    extract::{Query, State},
-    response::IntoResponse,
-};
+use axum::Json;
+use axum::extract::{Query, State};
+use axum::response::IntoResponse;
 use http::StatusCode;
-use miden_objects::{AccountIdError, account::AccountId};
+use miden_client::account::{AccountId, Address};
 use serde::Deserialize;
 
-use crate::server::{ApiKey, pow::PoW};
+use crate::api::AccountError;
+use crate::error_report::ErrorReport;
+use crate::pow::api_key::ApiKey;
+use crate::pow::challenge::Challenge;
+use crate::pow::{PoW, PowRequest};
 
 // ENDPOINT
 // ================================================================================================
@@ -15,7 +17,7 @@ use crate::server::{ApiKey, pow::PoW};
 pub async fn get_pow(
     State(pow): State<PoW>,
     Query(params): Query<RawPowRequest>,
-) -> Result<impl IntoResponse, MintRequestError> {
+) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
     let challenge = pow.build_challenge(request);
     Ok(Json(challenge))
@@ -31,27 +33,26 @@ pub struct RawPowRequest {
     pub api_key: Option<String>,
 }
 
-/// Validated and parsed `RawPowRequest`.
-pub struct PowRequest {
-    pub account_id: AccountId,
-    pub api_key: ApiKey,
-}
-
 impl RawPowRequest {
-    pub fn validate(self) -> Result<PowRequest, MintRequestError> {
+    pub fn validate(self) -> Result<PowRequest, PowRequestError> {
         let account_id = if self.account_id.starts_with("0x") {
-            AccountId::from_hex(&self.account_id)
+            AccountId::from_hex(&self.account_id).map_err(AccountError::ParseId)
         } else {
-            AccountId::from_bech32(&self.account_id).map(|(_, account_id)| account_id)
+            Address::from_bech32(&self.account_id)
+                .map_err(AccountError::ParseAddress)
+                .and_then(|(_, address)| match address {
+                    Address::AccountId(account_id_address) => Ok(account_id_address.id()),
+                    _ => Err(AccountError::AddressNotIdBased),
+                })
         }
-        .map_err(MintRequestError::InvalidAccount)?;
+        .map_err(PowRequestError::AccountError)?;
 
         let api_key = self
             .api_key
             .as_deref()
             .map(ApiKey::decode)
             .transpose()
-            .map_err(|_| MintRequestError::InvalidApiKey(self.api_key.unwrap_or_default()))?
+            .map_err(|_| PowRequestError::InvalidApiKey(self.api_key.unwrap_or_default()))?
             .unwrap_or_default();
 
         Ok(PowRequest { account_id, api_key })
@@ -59,24 +60,24 @@ impl RawPowRequest {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum MintRequestError {
-    #[error("account address failed to parse")]
-    InvalidAccount(#[source] AccountIdError),
+pub enum PowRequestError {
+    #[error("account error")]
+    AccountError(#[source] AccountError),
     #[error("API key failed to parse")]
     InvalidApiKey(String),
 }
 
-impl MintRequestError {
+impl PowRequestError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::InvalidAccount(_) => "Invalid Account address".to_owned(),
+            Self::AccountError(error) => error.as_report(),
             Self::InvalidApiKey(_) => "Invalid API key".to_owned(),
         }
     }
 }
 
-impl IntoResponse for MintRequestError {
+impl IntoResponse for PowRequestError {
     fn into_response(self) -> axum::response::Response {
         (StatusCode::BAD_REQUEST, self.user_facing_error()).into_response()
     }

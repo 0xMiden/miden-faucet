@@ -14,3 +14,9 @@ target
 **/mutants.out*/
 
 .DS_Store
+keystore/
+faucet_client_store.sqlite3
+
+# Node files used for examples
+node_modules/
+package-lock.json

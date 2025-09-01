@@ -1,48 +1,43 @@
-use std::{
-    collections::HashSet,
-    convert::Infallible,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
-use axum::{Router, extract::FromRef, response::sse::Event, routing::get};
-use frontend::Metadata;
-use get_tokens::{GetTokensState, get_tokens};
+use axum::Router;
+use axum::extract::FromRef;
+use axum::routing::get;
 use http::{HeaderValue, Request};
-use miden_node_utils::grpc::UrlExt;
-use miden_objects::account::AccountId;
-use pow::PoW;
+use miden_client::account::{AccountId, AccountIdError, AddressError};
+use miden_client::store::Store;
+use miden_client::utils::RwLock;
+use miden_faucet_lib::FaucetId;
+use miden_faucet_lib::requests::MintRequestSender;
+use miden_faucet_lib::types::AssetAmount;
 use sha3::{Digest, Sha3_256};
-use tokio::{net::TcpListener, sync::mpsc};
+use tokio::net::TcpListener;
 use tower::ServiceBuilder;
-use tower_http::{
-    cors::CorsLayer,
-    set_header::SetResponseHeaderLayer,
-    trace::{DefaultOnResponse, TraceLayer},
-};
+use tower_http::cors::CorsLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 use url::Url;
 
-use crate::{
-    COMPONENT,
-    faucet::{FaucetId, MintRequest},
-    server::{get_pow::get_pow, get_tokens::MintRequestError},
-    types::AssetOptions,
-};
+use crate::COMPONENT;
+use crate::api::get_metadata::{Metadata, get_metadata};
+use crate::api::get_note::get_note;
+use crate::api::get_pow::get_pow;
+use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
+use crate::pow::api_key::ApiKey;
+use crate::pow::{PoW, PoWConfig};
 
-mod api_key;
-mod challenge;
 mod frontend;
+mod get_metadata;
+mod get_note;
 mod get_pow;
 mod get_tokens;
-mod pow;
-pub use api_key::ApiKey;
-pub use pow::PoWConfig;
 
 // FAUCET STATE
 // ================================================================================================
-
-type RequestSender = mpsc::Sender<(MintRequest, mpsc::Sender<Result<Event, Infallible>>)>;
 
 /// Serves the faucet's website and handles token requests.
 #[derive(Clone)]
@@ -51,21 +46,31 @@ pub struct Server {
     metadata: &'static Metadata,
     pow: PoW,
     api_keys: HashSet<ApiKey>,
+    store: Arc<dyn Store>,
 }
 
 impl Server {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         faucet_id: FaucetId,
-        asset_options: AssetOptions,
-        request_sender: RequestSender,
+        decimals: u8,
+        max_supply: AssetAmount,
+        issuance: Arc<RwLock<AssetAmount>>,
+        max_claimable_amount: AssetAmount,
+        mint_request_sender: MintRequestSender,
         pow_secret: &str,
         pow_config: PoWConfig,
         api_keys: &[ApiKey],
+        store: Arc<dyn Store>,
+        explorer_url: Option<Url>,
     ) -> Self {
-        let mint_state = GetTokensState::new(request_sender, asset_options.clone());
+        let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
         let metadata = Metadata {
             id: faucet_id,
-            asset_amount_options: asset_options,
+            issuance,
+            max_supply,
+            decimals,
+            explorer_url,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
         let metadata = Box::leak(Box::new(metadata));
@@ -82,6 +87,7 @@ impl Server {
             metadata,
             pow,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
+            store,
         }
     }
 
@@ -93,7 +99,8 @@ impl Server {
                 .route("/index.css", get(frontend::get_index_css))
                 .route("/background.png", get(frontend::get_background))
                 .route("/favicon.ico", get(frontend::get_favicon))
-                .route("/get_metadata", get(frontend::get_metadata))
+                .fallback(get(frontend::get_not_found_html))
+                .route("/get_metadata", get(get_metadata))
                 .route("/pow", get(get_pow))
                 // TODO: This feels rather ugly, and would be nice to move but I can't figure out the types.
                 .route(
@@ -121,6 +128,7 @@ impl Server {
                                         .on_failure(())
                                 ))
                 )
+                .route("/get_note", get(get_note))
                 .layer(
                     ServiceBuilder::new()
                         .layer(SetResponseHeaderLayer::if_not_present(
@@ -136,8 +144,10 @@ impl Server {
                 )
                 .with_state(self);
 
-        let listener = url.to_socket().with_context(|| format!("failed to parse url {url}"))?;
-        let listener = TcpListener::bind(listener)
+        let listener = url
+            .socket_addrs(|| None)
+            .with_context(|| format!("failed to parse url {url}"))?;
+        let listener = TcpListener::bind(&*listener)
             .await
             .with_context(|| format!("failed to bind TCP listener on {url}"))?;
 
@@ -169,7 +179,9 @@ impl Server {
             .duration_since(UNIX_EPOCH)
             .expect("current timestamp should be greater than unix epoch")
             .as_secs();
-        self.pow.submit_challenge(account_id, api_key, challenge, nonce, timestamp)
+        self.pow
+            .submit_challenge(account_id, api_key, challenge, nonce, timestamp)
+            .map_err(MintRequestError::PowError)
     }
 }
 
@@ -190,4 +202,18 @@ impl FromRef<Server> for PoW {
         // Clone is cheap: only copies a 32-byte array and increments Arc reference counters.
         input.pow.clone()
     }
+}
+
+// ERRORS
+// ================================================================================================
+
+/// Errors that can occur when parsing an account ID or address.
+#[derive(Debug, thiserror::Error)]
+pub enum AccountError {
+    #[error("account ID failed to parse")]
+    ParseId(#[source] AccountIdError),
+    #[error("account address failed to parse")]
+    ParseAddress(#[source] AddressError),
+    #[error("account address is not an ID based")]
+    AddressNotIdBased,
 }

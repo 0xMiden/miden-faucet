@@ -1,0 +1,14 @@
+{
+  "name": "faucet-example",
+  "scripts": {
+    "start": "node request_tokens.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "typescript": "^5.9.2",
+    "@noble/hashes": "^1.8.0"
+  },
+  "type": "module"
+}
