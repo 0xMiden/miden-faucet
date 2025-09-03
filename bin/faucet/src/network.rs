@@ -41,18 +41,3 @@ impl FaucetNetwork {
         })
     }
 }
-
-/// A type wrapper for the explorer URL.
-#[derive(Debug, Clone, Serialize)]
-pub struct ExplorerUrl(&'static str);
-
-impl ExplorerUrl {
-    /// Returns the explorer URL for the given network ID.
-    /// Currently only testnet explorer is available.
-    pub fn from_network_id(network_id: NetworkId) -> Option<Self> {
-        match network_id {
-            NetworkId::Testnet => Some(Self("https://testnet.midenscan.com")),
-            _ => None,
-        }
-    }
-}

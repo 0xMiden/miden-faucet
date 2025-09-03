@@ -6,6 +6,7 @@ use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::types::AssetAmount;
 use serde::{Serialize, Serializer};
+use url::Url;
 
 /// Describes the faucet metadata needed to show on the frontend.
 pub struct Metadata {
@@ -13,6 +14,7 @@ pub struct Metadata {
     pub issuance: Arc<RwLock<AssetAmount>>,
     pub max_supply: AssetAmount,
     pub decimals: u8,
+    pub explorer_url: Option<Url>,
 }
 
 impl Serialize for Metadata {
@@ -21,11 +23,12 @@ impl Serialize for Metadata {
         S: Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Metadata", 4)?;
+        let mut state = serializer.serialize_struct("Metadata", 5)?;
         state.serialize_field("id", &self.id.to_bech32())?;
         state.serialize_field("issuance", &self.issuance.read().base_units())?;
         state.serialize_field("max_supply", &self.max_supply.base_units())?;
         state.serialize_field("decimals", &self.decimals)?;
+        state.serialize_field("explorer_url", &self.explorer_url)?;
         state.end()
     }
 }
