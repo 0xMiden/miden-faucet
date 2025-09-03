@@ -1,3 +1,6 @@
+const.AUX=0
+const.EXECUTION_HINT=1
+
 #! Returns a boolean indicating if the notes counter `i` has reached `n`
 #!
 #! Inputs:  [i, n]
@@ -29,8 +32,8 @@ end
 #!   hash(hash(hash(serial_num, [0; 4]), script_root), input_commitment).
 begin
     adv.push_mapval dropw
-    # AS => [n, RECIPIENT_1, note_type_1, tag_1, amount_1, ...]
     # OS => []
+    # AS => [n, RECIPIENT_1, note_type_1, tag_1, amount_1, ...]
 
     adv_push.1 push.0
     # OS => [0, n]
@@ -43,9 +46,8 @@ begin
         # OS => [i, n]
         # AS => [RECIPIENT_i, note_type_i, tag_i, amount_i, ...]
 
-        # set the params for the distribute call by getting values from the advice stack and use:
-        # execution_hint = 1, aux = 0
-        push.0.0.0.0.0.0.0 adv_push.4 push.1 adv_push.1 push.0 adv_push.2
+        # set the params for the distribute call by getting values from the advice stack
+        push.0.0.0.0.0.0.0 adv_push.4 push.EXECUTION_HINT adv_push.1 push.AUX adv_push.2
         # OS => [amount_i, tag_i, 0, note_type_i, 1, RECIPIENT_i, pad(7), i, n]
         # AS => [...]
 

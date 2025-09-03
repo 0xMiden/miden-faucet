@@ -12,10 +12,7 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequestBuilder,
     TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
@@ -245,10 +242,7 @@ impl Faucet {
             // SAFETY: these are p2id notes with only one fungible asset
             let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
 
-            note_data.push(note.recipient().digest()[0]);
-            note_data.push(note.recipient().digest()[1]);
-            note_data.push(note.recipient().digest()[2]);
-            note_data.push(note.recipient().digest()[3]);
+            note_data.extend(note.recipient().digest().iter());
             note_data.push(Felt::from(note.metadata().note_type()));
             note_data.push(Felt::from(note.metadata().tag()));
             note_data.push(Felt::new(amount));
@@ -256,7 +250,7 @@ impl Faucet {
         let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
 
-        let tx = TransactionRequestBuilder::new()
+        let tx_request = TransactionRequestBuilder::new()
             .custom_script(self.script.clone())
             .extend_advice_map(advice_map)
             .expected_output_recipients(expected_output_recipients)
@@ -264,7 +258,8 @@ impl Faucet {
             .build()?;
 
         // Execute the transaction
-        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx)).await?;
+        let tx_result =
+            Box::pin(self.client.new_transaction(self.id.account_id, tx_request)).await?;
         let tx_id = tx_result.executed_transaction().id();
 
         // Prove and submit the transaction
