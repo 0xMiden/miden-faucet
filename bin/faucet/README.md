@@ -1,6 +1,8 @@
 # Miden faucet
 
-This crate contains a binary for running a Miden testnet faucet.
+This crate contains a binary for running a Miden testnet faucet. 
+
+For comprehensive guides, API reference, and examples, see the [Miden Faucet Documentation](/docs/src/SUMMARY.md).
 
 ## Running the faucet
 
@@ -45,10 +47,6 @@ The faucet implements several security measures to prevent abuse:
   - Maximum batch size: 100 requests
   - Requests are processed in batches to optimize performance
   - Failed requests within a batch are handled individually
-
-## Examples
-
-See [Faucet docs](../../docs/src/api-usage.md) for more info on how to interact with the REST API.
 
 #### API Endpoints Reference
 

@@ -1,6 +1,10 @@
 # Miden Faucet
 
-The Miden faucet contains a library and a binary CLI.
+The Miden Faucet is a token distribution service that provides developers and users with test tokens for the Miden blockchain without cost.
+
+It implements proof-of-work challenges to ensure fair distribution of tokens, balancing accessibility for legitimate users while preventing malicious actors from draining the token supply.
+
+It contains a library and a binary CLI.
 
 ### Miden faucet library
 

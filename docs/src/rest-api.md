@@ -2,26 +2,12 @@
 
 REST API for programmatic access to the faucet service.
 
-## Authentication
+The Miden Faucet API follows a two-step process to request tokens:
 
-### API Keys
+1. **Request a Challenge** (`GET /pow`): Obtain a proof-of-work challenge that must be solved computationally
+2. **Request tokens** (`GET /get_tokens`): Submit the solved challenge along with your token request
 
-Some endpoints support API key authentication for enhanced PoW.
-
-The PoW difficulty of the faucet scales with the number of active requests. When using an API key, the difficulty will only depend on the number of active requests under that API key.
-
-To request a challenge using an API key:
-
-```bash
-GET /pow?account_id=mdev1qpfpnrkpk3dg7gqsvrnxlsv7fqc4gcwt&api_key=miden_faucet_wONsvRXLZ9FgQG+nlkaq9f2X53cLswe4HSzEIUjFIkQ=
-```
-
-### Rate Limiting
-
-When a challenge is submitted for an account, that same account cannot submit a new challenge while the previous one is still valid. This effectively rate limits accounts minting requests. Though, the same account can use API keys to submit multiple challenges simultaneously:
-
-- **Without API Key**: Global rate limiting based on account ID
-- **With API Key**: Separate rate limits per API key
+For detailed information about the token request flow, see the [Architecture](/docs/src/architecture/overview.md#token-request-flow) section.
 
 ## Responses
 
@@ -94,3 +80,22 @@ When a challenge is submitted for an account, that same account cannot submit a 
 - **Response**: JSON object containing:
   - `note_id` (string): The ID of the requested note
   - `data_base64` (string): The note data encoded in base64 format. This data should be decoded and saved as a file with `.mno` extension and `application/octet-stream` media type
+
+## Rate Limiting
+
+When a challenge is submitted for an account, that same account cannot submit a new challenge while the previous one is still valid. This effectively rate limits accounts minting requests. Though, the same account can use API keys to submit multiple challenges simultaneously:
+
+- **Without API Key**: Global rate limiting based on account ID
+- **With API Key**: Separate rate limits per API key
+
+### API Keys
+
+Some endpoints support API key authentication for enhanced PoW.
+
+The PoW difficulty of the faucet scales with the number of active requests. When using an API key, the difficulty will only depend on the number of active requests under that API key.
+
+To request a challenge using an API key:
+
+```bash
+GET /pow?account_id=mdev1qpfpnrkpk3dg7gqsvrnxlsv7fqc4gcwt&api_key=miden_faucet_wONsvRXLZ9FgQG+nlkaq9f2X53cLswe4HSzEIUjFIkQ=
+```
