@@ -6,8 +6,7 @@
 
 - [Installation](./getting-started/installation.md)
 - [Quick Start](./getting-started/quick-start.md)
-- [CLI Commands](./getting-started/cli.md)
-- [Configuration](./getting-started/configuration.md)
+- [CLI usage](./getting-started/cli.md)
 
 # User Guide
 
