@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.11.0 (TBD)
+## 0.11.1 (2025-09-02)
+
+- Added `--network` CLI parameter to specify the type of network to which the faucet connects ([#74](https://github.com/0xMiden/miden-faucet/pull/74)).
+
+## 0.11.0 (2025-09-01)
+
+### Changes
+
+- [BREAKING] Incremented MSRV to 1.89.
+
+## 0.11.0 (2025-09-01)
 
 ### Changes
 
@@ -14,6 +24,7 @@
 - Use HTTP 429 status code for rate limited error ([#51](https://github.com/0xMiden/miden-faucet/pull/51)).
 - Replace amount options validation for maximum claimable amount ([#52](https://github.com/0xMiden/miden-faucet/pull/52)).
 - Added `mdbook` documentation ([#61](https://github.com/0xMiden/miden-faucet/pull/61)).
+- Added `--explorer-url` CLI parameter to optionally set the explorer url ([#63](https://github.com/0xMiden/miden-faucet/pull/63)).
 
 ## 0.10.0 (2025-07-10)
 

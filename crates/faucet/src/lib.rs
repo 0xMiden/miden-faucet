@@ -4,7 +4,14 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{AccountFile, AccountId, NetworkId};
+use miden_client::account::{
+    AccountFile,
+    AccountId,
+    AccountIdAddress,
+    Address,
+    AddressInterface,
+    NetworkId,
+};
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::RpoRandomCoin;
@@ -51,7 +58,8 @@ impl FaucetId {
     }
 
     pub fn to_bech32(&self) -> String {
-        self.account_id.to_bech32(self.network_id)
+        let address = AccountIdAddress::new(self.account_id, AddressInterface::Unspecified);
+        Address::from(address).to_bech32(self.network_id)
     }
 }
 
@@ -90,7 +98,8 @@ impl Faucet {
         for key in account_file.auth_secret_keys {
             keystore.add_key(&key)?;
         }
-        let endpoint = Endpoint::try_from(node_url.as_str())
+        let url: &str = node_url.as_str().trim_end_matches('/');
+        let endpoint = Endpoint::try_from(url)
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("failed to parse node url: {node_url}"))?;
 
@@ -213,7 +222,7 @@ impl Faucet {
             };
             let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
-            let tx_id = self.create_transaction(notes).await?;
+            let tx_id = Box::pin(self.create_transaction(notes)).await?;
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
@@ -238,18 +247,19 @@ impl Faucet {
         let tx = TransactionRequestBuilder::new().own_output_notes(notes).build()?;
 
         // Execute the transaction
-        let tx_result = self.client.new_transaction(self.id.account_id, tx).await?;
+        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx)).await?;
         let tx_id = tx_result.executed_transaction().id();
 
         // Prove and submit the transaction
-        let prover_failed = self
-            .client
-            .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone())
-            .await
-            .is_err();
+        let prover_failed = Box::pin(
+            self.client
+                .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
+        )
+        .await
+        .is_err();
         if prover_failed {
             warn!("Failed to prove transaction with remote prover, falling back to local prover");
-            self.client.submit_transaction(tx_result).await?;
+            Box::pin(self.client.submit_transaction(tx_result)).await?;
         }
 
         Ok(tx_id)

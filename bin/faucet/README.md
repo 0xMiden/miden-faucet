@@ -26,11 +26,11 @@ miden-faucet create-faucet-account \
 miden-faucet start \
   --endpoint http://localhost:8080 \
   --node-url https://rpc.testnet.miden.io:443 \
+  --network testnet \
   --account <path to faucet.mac>
 ```
 
 After a few seconds you may go to `http://localhost:8080` and see the faucet UI.
-
 
 ## Faucet security features:
 The faucet implements several security measures to prevent abuse:
@@ -74,7 +74,6 @@ See [Faucet docs](../../docs/src/api-usage.md) for more info on how to interact 
 - **Response**: JSON object containing:
   - `tx_id` (string): ID of the created transaction
   - `note_id` (string): ID of the created note
-  - `explorer_url` (string): URL to view the transaction in the explorer. Only present if available for the current network.
 
 
 **GET /get_note**
