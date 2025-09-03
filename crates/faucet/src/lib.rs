@@ -84,6 +84,7 @@ impl Faucet {
     #[instrument(name = "faucet.load", fields(id), skip_all)]
     pub async fn load(
         store_path: PathBuf,
+        network_id: NetworkId,
         account_file: AccountFile,
         node_url: &Url,
         timeout: Duration,
@@ -152,7 +153,7 @@ impl Faucet {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
         };
-        let id = FaucetId::new(account.id(), endpoint.to_network_id());
+        let id = FaucetId::new(account.id(), network_id);
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
 
