@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 // NETWORK
 // ================================================================================================
 
-/// Represents the network where the faucet is running. It is used to show the correct bech32
-/// addresses and explorer URL in the UI.
+/// Represents the network where the faucet is running. It is used to display the correct bech32
+/// addresses in the UI.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum FaucetNetwork {
     Testnet,
