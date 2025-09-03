@@ -1,6 +1,7 @@
 mod api;
 mod error_report;
 mod logging;
+mod network;
 mod pow;
 #[cfg(test)]
 mod testing;
@@ -28,6 +29,7 @@ use url::Url;
 
 use crate::api::Server;
 use crate::logging::OpenTelemetry;
+use crate::network::FaucetNetwork;
 use crate::pow::PoWConfig;
 use crate::pow::api_key::ApiKey;
 
@@ -52,6 +54,7 @@ const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
+const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 
 // COMMANDS
 // ================================================================================================
@@ -91,6 +94,11 @@ pub enum Command {
         /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
         #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
         remote_tx_prover_url: Option<Url>,
+
+        /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
+        /// network. It is used to show the correct addresses and explorer URL in the UI.
+        #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
+        network: FaucetNetwork,
 
         /// The secret to be used by the server to generate the `PoW` seed.
         #[arg(long = "pow-secret", value_name = "STRING", env = ENV_POW_SECRET)]
@@ -197,6 +205,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             timeout,
             faucet_account_path,
             remote_tx_prover_url,
+            network,
             max_claimable_amount,
             pow_secret,
             pow_challenge_lifetime,
@@ -218,6 +227,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             let faucet = Faucet::load(
                 store_path.clone(),
+                network.to_network_id()?,
                 account_file,
                 &node_url,
                 timeout,
@@ -244,6 +254,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
             };
+
             let server = Server::new(
                 faucet.faucet_id(),
                 decimals,
@@ -362,6 +373,7 @@ mod test {
     use tokio::time::sleep;
     use url::Url;
 
+    use crate::network::FaucetNetwork;
     use crate::testing::stub_rpc_api::serve_stub;
     use crate::{Cli, run_faucet_command};
 
@@ -478,6 +490,7 @@ mod test {
                         node_url: stub_node_url,
                         timeout: Duration::from_millis(5000),
                         max_claimable_amount: 1_000_000_000,
+                        network: FaucetNetwork::Localhost,
                         api_keys: vec![],
                         pow_secret: None,
                         pow_challenge_lifetime: Duration::from_secs(30),

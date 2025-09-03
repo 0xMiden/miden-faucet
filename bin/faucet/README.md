@@ -26,11 +26,11 @@ miden-faucet create-faucet-account \
 miden-faucet start \
   --endpoint http://localhost:8080 \
   --node-url https://rpc.testnet.miden.io:443 \
+  --network testnet \
   --account <path to faucet.mac>
 ```
 
 After a few seconds you may go to `http://localhost:8080` and see the faucet UI.
-
 
 ## Faucet security features:
 The faucet implements several security measures to prevent abuse:
