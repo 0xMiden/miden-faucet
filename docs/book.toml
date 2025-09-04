@@ -8,9 +8,4 @@ title        = "The Miden Faucet"
 [output.html]
 git-repository-url = "https://github.com/0xMiden/miden-faucet"
 
-[preprocessor.katex]
-after = ["links"]
-
-[preprocessor.alerts]
-
 [output.linkcheck]

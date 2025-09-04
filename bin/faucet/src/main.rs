@@ -100,7 +100,8 @@ pub enum Command {
         #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
         network: FaucetNetwork,
 
-        /// The secret to be used by the server to generate the `PoW` seed.
+        /// The secret to be used by the server to sign the `PoW` challenges. This should NOT be
+        /// shared.
         #[arg(long = "pow-secret", value_name = "STRING", default_value = "", env = ENV_POW_SECRET)]
         pow_secret: String,
 

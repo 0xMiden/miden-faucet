@@ -7,7 +7,7 @@ The Miden Faucet API follows a two-step process to request tokens:
 1. **Request a Challenge** (`GET /pow`): Obtain a proof-of-work challenge that must be solved computationally
 2. **Request tokens** (`GET /get_tokens`): Submit the solved challenge along with your token request
 
-For detailed information about the token request flow, see the [Architecture](/docs/src/architecture/overview.md#token-request-flow) section.
+For detailed information about the token request flow, see the [Architecture](./architecture/overview.md#token-request-flow) section.
 
 ## Responses
 

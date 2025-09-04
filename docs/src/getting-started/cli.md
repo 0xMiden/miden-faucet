@@ -46,7 +46,7 @@ miden-faucet start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--pow-secret` | Secret for PoW challenges | "" | No |
+| `--pow-secret` | Secret to sign PoW challenges | "" | No |
 | `--pow-baseline` | Base PoW difficulty (0-32) | `12` | No |
 | `--pow-challenge-lifetime` | Challenge validity duration | `30s` | No |
 | `--pow-cleanup-interval` | Cache cleanup interval | `2s` | No |
@@ -56,10 +56,11 @@ miden-faucet start \
 
 The Proof of Work system prevents abuse by requiring computational work:
 
-1. **Baseline Difficulty**: Starting difficulty when no requests are pending
-2. **Growth Rate**: How quickly difficulty increases with load
-3. **Challenge Lifetime**: How long challenges remain valid
+1. **Secret**: A string used to sign challenges. This should NOT be shared
+2. **Baseline Difficulty**: Starting difficulty when no requests are pending
+3. **Challenge Lifetime**: How long challenges remain valid. This affects the rate limiting, since it works by rejecting new submissions while the previous submitted challenge is still valid
 4. **Cleanup Interval**: How often expired challenges are removed
+5. **Growth Rate**: How quickly difficulty increases with load. When set to 1, the difficulty will roughly double when the number of requests doubles.
 
 ### Advanced Configuration
 
