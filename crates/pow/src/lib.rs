@@ -30,7 +30,7 @@ pub struct PoWConfig {
     pub growth_rate: NonZeroUsize,
     pub baseline: u8,
     pub cleanup_interval: Duration,
-    pub max_claimable_amount: NonZeroUsize,
+    pub base_difficulty_amount: u64,
 }
 
 impl PoW {
@@ -80,7 +80,7 @@ impl PoW {
     /// * `max_target = u64::MAX >> baseline`
     /// * `difficulty = max(load_difficulty * amount_scaling, 1)`
     /// * `load_difficulty = num_active_challenges << growth_rate`
-    /// * `amount_scaling = amount / max_claimable_amount`
+    /// * `amount_scaling = ceil(amount / max_claimable_amount)`
     fn get_challenge_target(&self, api_key: &ApiKey, amount: u64) -> u64 {
         let num_challenges = self
             .challenge_cache
@@ -89,9 +89,9 @@ impl PoW {
             .num_challenges_for_api_key(api_key) as u64;
 
         let max_target = u64::MAX >> self.config.baseline;
-        let load_difficulty = num_challenges << self.config.growth_rate.get();
-        let amount_scaling = amount / self.config.max_claimable_amount.get() as u64;
-        let difficulty = u64::max(load_difficulty * amount_scaling, 1);
+        let load_difficulty = u64::max(num_challenges << self.config.growth_rate.get(), 1);
+        let amount_scaling = amount.div_ceil(self.config.base_difficulty_amount);
+        let difficulty = load_difficulty * amount_scaling;
         max_target / difficulty
     }
 
@@ -194,7 +194,7 @@ mod tests {
                 cleanup_interval: Duration::from_millis(500),
                 growth_rate: NonZeroUsize::new(2).unwrap(),
                 baseline: 0,
-                max_claimable_amount: NonZeroUsize::new(10000).unwrap(),
+                base_difficulty_amount: 10000,
             },
         )
     }
@@ -299,6 +299,34 @@ mod tests {
         assert_eq!(
             pow.get_challenge_target(&api_key, amount),
             (u64::MAX >> pow.config.baseline) / 2
+        );
+    }
+
+    #[tokio::test]
+    async fn difficulty_increases_with_requested_amount() {
+        let mut pow = create_test_pow();
+        pow.config.growth_rate = NonZeroUsize::new(1).unwrap();
+        pow.config.base_difficulty_amount = 1_000;
+        let mut rng = ChaCha20Rng::from_seed(rand::random());
+
+        let api_key = ApiKey::generate(&mut rng);
+
+        // test: requesting 1_000 tokens should have difficulty 1
+        let amount = 1_000;
+
+        let difficulty = 1;
+        assert_eq!(
+            pow.get_challenge_target(&api_key, amount),
+            (u64::MAX >> pow.config.baseline) / difficulty
+        );
+
+        // test: requesting 2_300 tokens should have difficulty 3
+        let amount = 2_300;
+
+        let difficulty = 3;
+        assert_eq!(
+            pow.get_challenge_target(&api_key, amount),
+            (u64::MAX >> pow.config.baseline) / difficulty
         );
     }
 

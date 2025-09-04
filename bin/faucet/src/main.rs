@@ -52,6 +52,7 @@ const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
+const ENV_POW_BASE_DIFFICULTY_AMOUNT: &str = "MIDEN_FAUCET_POW_BASE_DIFFICULTY_AMOUNT";
 
 // COMMANDS
 // ================================================================================================
@@ -89,11 +90,9 @@ pub enum Command {
         #[arg(long = "account", value_name = "FILE", env = ENV_ACCOUNT_PATH)]
         faucet_account_path: PathBuf,
 
-        /// The maximum amount of assets base units that can be dispersed on each request. It is
-        /// also used to scale the difficulty of the `PoW` challenges with the requested
-        /// amount.
-        #[arg(long = "max-claimable-amount", value_name = "NON_ZERO_USIZE", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
-        max_claimable_amount: NonZeroUsize,
+        /// The maximum amount of assets' base units that can be dispersed on each request.
+        #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
+        max_claimable_amount: u64,
 
         /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
         #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
@@ -124,6 +123,14 @@ pub enum Command {
         #[arg(value_parser = clap::value_parser!(u8).range(0..=32))]
         #[arg(long = "pow-baseline", value_name = "U8", env = ENV_POW_BASELINE, default_value = "12")]
         pow_baseline: u8,
+
+        /// The base difficulty amount for the `PoW` challenges. This sets the requested amount at
+        /// which the difficulty of the challenges will start to increase.
+        ///
+        /// The difficulty set by the faucet load is multiplied by a scaling factor based on the
+        /// requested amount: `amount_scaling = ceil(amount / base_difficulty_amount)`
+        #[arg(long = "pow-base-difficulty-amount", value_name = "U64", env = ENV_POW_BASE_DIFFICULTY_AMOUNT, default_value = "10000")]
+        pow_base_difficulty_amount: u64,
 
         /// Comma-separated list of API keys.
         #[arg(long = "api-keys", value_name = "STRING", env = ENV_API_KEYS, num_args = 1.., value_delimiter = ',')]
@@ -207,6 +214,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             pow_cleanup_interval,
             pow_growth_rate,
             pow_baseline,
+            pow_base_difficulty_amount,
             api_keys,
             open_telemetry: _,
             store_path,
@@ -241,14 +249,14 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .map(|k| ApiKey::decode(k))
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
+            let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
             let pow_config = PoWConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
-                max_claimable_amount,
+                base_difficulty_amount: pow_base_difficulty_amount,
             };
-            let max_claimable_amount = AssetAmount::new(max_claimable_amount.get() as u64)?;
             let server = Server::new(
                 faucet.faucet_id(),
                 decimals,
@@ -469,13 +477,14 @@ mod test {
                         network: FaucetNetwork::Testnet,
                         node_url: stub_node_url,
                         timeout: Duration::from_millis(5000),
-                        max_claimable_amount: NonZeroUsize::new(1_000_000_000).unwrap(),
+                        max_claimable_amount: 1_000_000_000,
                         api_keys: vec![],
                         pow_secret: None,
                         pow_challenge_lifetime: Duration::from_secs(30),
                         pow_cleanup_interval: Duration::from_secs(1),
                         pow_growth_rate: NonZeroUsize::new(1).unwrap(),
                         pow_baseline: 12,
+                        pow_base_difficulty_amount: 100_000,
                         faucet_account_path: faucet_account_path.clone(),
                         remote_tx_prover_url: None,
                         open_telemetry: false,

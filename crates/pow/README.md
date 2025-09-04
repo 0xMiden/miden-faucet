@@ -48,7 +48,7 @@ The system automatically adjusts challenge difficulty based on usage and the req
 - **Max target**: `u64::MAX >> baseline`
 - **Difficulty**: `max(load_difficulty * amount_scaling, 1)`
 - **Load difficulty**: `num_active_challenges << growth_rate`
-- **Amount scaling**: `amount / max_claimable_amount`
+- **Amount scaling**: `ceil(amount / max_claimable_amount)`
 
 This means as more users solve challenges, the difficulty increases exponentially, providing automatic rate limiting. Each API key has it's own difficulty based on it's usage.
 
