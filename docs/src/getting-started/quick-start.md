@@ -86,5 +86,6 @@ miden-faucet start \
   --endpoint http://localhost:8080 \
   --node-url https://rpc.testnet.miden.io \
   --account ./faucet.mac \
+  --explorer-url https://testnet.midenscan.com \
   --network testnet
 ``` 

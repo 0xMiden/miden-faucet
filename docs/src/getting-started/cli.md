@@ -34,13 +34,14 @@ miden-faucet start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--endpoint` | Faucet endpoint (IP:PORT) | - | Yes |
+| `--endpoint` | Faucet endpoint | - | Yes |
 | `--node-url` | Miden node RPC endpoint | - | Yes |
 | `--account` | Path to faucet account file | - | Yes |
 | `--network` | Network configuration | `localhost` | No |
 | `--timeout` | RPC request timeout | `5s` | No |
 | `--max-claimable-amount` | Max claimable base units per request | `1000000000` | No |
 | `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+| `--explorer-url` | Midenscan URL | - | No |
 
 ### Proof of Work Configuration
 
@@ -77,7 +78,7 @@ All configuration options can be set using environment variables:
 ```bash
 # Basic configuration
 export MIDEN_FAUCET_ENDPOINT=http://localhost:8080
-export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io:443
+export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io
 export MIDEN_FAUCET_ACCOUNT_PATH=./faucet.mac
 export MIDEN_FAUCET_NETWORK=testnet
 
@@ -177,9 +178,7 @@ Enable OpenTelemetry for production monitoring:
 --enable-otel
 ```
 
-## Configuration Examples
-
-### Localhost Setup
+## Configuration Example
 
 ```bash
 miden-faucet start \
@@ -189,16 +188,6 @@ miden-faucet start \
   --network localhost \
   --pow-baseline 8 \
   --pow-challenge-lifetime 1s
-```
-
-### Testnet Setup
-
-```bash
-miden-faucet start \
-  --endpoint http://localhost:8080 \
-  --node-url https://rpc.testnet.miden.io \
-  --account ./faucet.mac \
-  --network testnet
 ```
 
 For detailed options, run `miden-faucet [COMMAND] --help`. 

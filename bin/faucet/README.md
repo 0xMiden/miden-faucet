@@ -2,7 +2,7 @@
 
 This crate contains a binary for running a Miden testnet faucet. 
 
-For comprehensive guides, API reference, and examples, see the [Miden Faucet Documentation](/docs/src/SUMMARY.md).
+For comprehensive guides, API reference, and examples, see the [Miden Faucet Documentation](https://0xmiden.github.io/miden-faucet).
 
 ## Running the faucet
 
