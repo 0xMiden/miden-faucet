@@ -1,6 +1,6 @@
 use base64::Engine;
 use base64::engine::general_purpose;
-use sha3::{Digest, Sha3_256};
+use sha2::{Digest, Sha256};
 
 async fn request_challenge(
     base_url: &str,
@@ -17,7 +17,7 @@ fn solve_challenge(challenge: &str, target: u64) -> u64 {
     let mut found_nonce = None;
     for nonce in 0..u64::MAX {
         // Create SHA3-256 hash
-        let mut hasher = Sha3_256::new();
+        let mut hasher = Sha256::new();
         hasher.update(challenge.as_bytes());
         hasher.update(nonce.to_be_bytes());
         let hash = hasher.finalize();
