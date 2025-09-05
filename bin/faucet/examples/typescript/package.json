@@ -8,7 +8,7 @@
   "description": "",
   "dependencies": {
     "typescript": "^5.9.2",
-    "@noble/hashes": "^1.8.0"
+    "@noble/hashes": "^2.0"
   },
   "type": "module"
 }

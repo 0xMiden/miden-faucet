@@ -1,4 +1,4 @@
-import { sha3_256 } from '@noble/hashes/sha3';
+import { sha256 } from '@noble/hashes/sha2';
 import fs from 'fs';
 
 async function sendPowRequest(baseUrl: string, accountId: string): Promise<{ challenge: string, target: bigint }> {
@@ -19,7 +19,7 @@ async function solveChallenge(challenge: string, target: bigint): Promise<number
 
         try {
             // Compute hash using SHA3 with the challenge and nonce
-            let hash = sha3_256.create();
+            let hash = sha256.create();
             hash.update(challenge); // Use the hex-encoded challenge string directly
 
             // Convert nonce to 8-byte big-endian format to match backend
