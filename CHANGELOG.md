@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12 (TBD)
+
+### Changes
+
+- Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
+
 ## 0.11.1 (2025-09-02)
 
 - Added `--network` CLI parameter to specify the type of network to which the faucet connects ([#74](https://github.com/0xMiden/miden-faucet/pull/74)).
