@@ -129,7 +129,7 @@ pub enum Command {
         ///
         /// The difficulty set by the faucet load is multiplied by a scaling factor based on the
         /// requested amount: `amount_scaling = ceil(amount / base_difficulty_amount)`
-        #[arg(long = "pow-base-difficulty-amount", value_name = "U64", env = ENV_POW_BASE_DIFFICULTY_AMOUNT, default_value = "10000")]
+        #[arg(long = "pow-base-difficulty-amount", value_name = "U64", env = ENV_POW_BASE_DIFFICULTY_AMOUNT, default_value = "100000000")]
         pow_base_difficulty_amount: u64,
 
         /// Comma-separated list of API keys.
