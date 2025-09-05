@@ -47,21 +47,11 @@ miden-faucet start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--pow-secret` | Secret to sign PoW challenges | "" | No |
-| `--pow-baseline` | Base PoW difficulty (0-32) | `12` | No |
-| `--pow-challenge-lifetime` | Challenge validity duration | `30s` | No |
-| `--pow-cleanup-interval` | Cache cleanup interval | `2s` | No |
-| `--pow-growth-rate` | Difficulty growth rate | `1` | No |
-
-### Understanding PoW
-
-The Proof of Work system prevents abuse by requiring computational work:
-
-1. **Secret**: A string used to sign challenges. This should NOT be shared
-2. **Baseline Difficulty**: Starting difficulty when no requests are pending
-3. **Challenge Lifetime**: How long challenges remain valid. This affects the rate limiting, since it works by rejecting new submissions while the previous submitted challenge is still valid
-4. **Cleanup Interval**: How often expired challenges are removed
-5. **Growth Rate**: How quickly difficulty increases with load. When set to 1, the difficulty will roughly double when the number of requests doubles.
+| `--pow-secret` | Secret to sign PoW challenges. This should NOT be shared | "" | No |
+| `--pow-baseline` | Base PoW difficulty (0-32). It's the starting difficulty when no requests are pending | `12` | No |
+| `--pow-challenge-lifetime` | Challenge validity duration, i.e. how long challenges remain valid. This affects the rate limiting, since it works by rejecting new submissions while the previous submitted challenge is still valid | `30s` | No |
+| `--pow-cleanup-interval` | Cache cleanup interval, i.e. how often expired challenges are removed | `2s` | No |
+| `--pow-growth-rate` | Difficulty growth rate, i.e. how quickly difficulty increases with load. When set to 1, the difficulty will roughly double when the number of requests doubles. | `1` | No |
 
 ### Advanced Configuration
 
@@ -81,6 +71,7 @@ export MIDEN_FAUCET_ENDPOINT=http://localhost:8080
 export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io
 export MIDEN_FAUCET_ACCOUNT_PATH=./faucet.mac
 export MIDEN_FAUCET_NETWORK=testnet
+export MIDEN_FAUCET_EXPLORER_URL=https://testnet.midenscan.com
 
 # Proof of Work
 export MIDEN_FAUCET_POW_SECRET=your-secret-here
@@ -131,17 +122,6 @@ export MIDEN_FAUCET_API_KEYS=key1,key2,key3
 - **Explorer URL**: Not available
 - **Address Display**: `mcst`
 - **Use Case**: Run your custom network
-
-## Proof of Work Configuration
-
-### Recommended Settings
-
-```bash
---pow-baseline 12 \
---pow-challenge-lifetime 30s \
---pow-growth-rate 1 \
---pow-cleanup-interval 2s
-```
 
 ## API Key Configuration
 
