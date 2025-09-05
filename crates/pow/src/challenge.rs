@@ -9,7 +9,7 @@ use crate::PowError;
 use crate::api_key::ApiKey;
 
 /// The size of the encoded challenge in bytes.
-const CHALLENGE_ENCODED_SIZE: usize = 95;
+const CHALLENGE_ENCODED_SIZE: usize = 103;
 
 /// A challenge for proof-of-work validation.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -20,6 +20,8 @@ pub struct Challenge {
     pub(crate) target: u64,
     /// The timestamp of the challenge creation.
     pub(crate) timestamp: u64,
+    /// The amount of tokens requested (in base units).
+    pub(crate) amount: u64,
     /// The account that requested the challenge.
     pub(crate) account_id: AccountId,
     /// The API key used to request the challenge.
@@ -48,6 +50,7 @@ impl Challenge {
     pub fn new(
         target: u64,
         timestamp: u64,
+        amount: u64,
         account_id: AccountId,
         api_key: ApiKey,
         secret: [u8; 32],
@@ -57,6 +60,7 @@ impl Challenge {
         Self {
             target,
             timestamp,
+            amount,
             account_id,
             api_key,
             signature,
@@ -67,6 +71,7 @@ impl Challenge {
     pub fn from_parts(
         target: u64,
         timestamp: u64,
+        amount: u64,
         account_id: AccountId,
         api_key: ApiKey,
         signature: [u8; 32],
@@ -74,6 +79,7 @@ impl Challenge {
         Self {
             target,
             timestamp,
+            amount,
             account_id,
             api_key,
             signature,
@@ -90,16 +96,17 @@ impl Challenge {
         // SAFETY: Length of the bytes is enforced above.
         let target = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
         let timestamp = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
-        let account_id = AccountId::read_from_bytes(&bytes[16..31]).unwrap();
-        let api_key_bytes: [u8; 32] = bytes[31..63].try_into().unwrap();
+        let amount = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
+        let account_id = AccountId::read_from_bytes(&bytes[24..39]).unwrap();
+        let api_key_bytes: [u8; 32] = bytes[39..71].try_into().unwrap();
         let api_key = ApiKey::new(api_key_bytes);
-        let signature: [u8; 32] = bytes[63..CHALLENGE_ENCODED_SIZE].try_into().unwrap();
+        let signature: [u8; 32] = bytes[71..CHALLENGE_ENCODED_SIZE].try_into().unwrap();
 
         // Verify the signature
         let expected_signature =
             Self::compute_signature(secret, target, timestamp, account_id, &api_key_bytes);
         if signature == expected_signature {
-            Ok(Self::from_parts(target, timestamp, account_id, api_key, signature))
+            Ok(Self::from_parts(target, timestamp, amount, account_id, api_key, signature))
         } else {
             Err(PowError::ServerSignaturesDoNotMatch)
         }
@@ -110,6 +117,7 @@ impl Challenge {
         let mut bytes = Vec::with_capacity(CHALLENGE_ENCODED_SIZE);
         bytes.extend_from_slice(&self.target.to_le_bytes());
         bytes.extend_from_slice(&self.timestamp.to_le_bytes());
+        bytes.extend_from_slice(&self.amount.to_le_bytes());
         bytes.extend_from_slice(&self.account_id.to_bytes());
         bytes.extend_from_slice(&self.api_key.inner());
         bytes.extend_from_slice(&self.signature);
@@ -182,7 +190,9 @@ mod tests {
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();
         let mut rng = ChaCha20Rng::from_seed(rand::random());
         let api_key = ApiKey::generate(&mut rng);
-        let challenge = Challenge::new(2, 1_234_567_890, account_id, api_key, secret);
+        let timestamp = 1_234_567_890;
+        let amount = 1000;
+        let challenge = Challenge::new(2, timestamp, amount, account_id, api_key, secret);
 
         // Test that it serializes to the expected JSON format
         let json = serde_json::to_string(&challenge).unwrap();
@@ -190,7 +200,7 @@ mod tests {
         // Should contain the expected fields
         assert!(json.contains("\"challenge\":"));
         assert!(json.contains("\"target\":"));
-        assert!(json.contains("\"timestamp\":1234567890"));
+        assert!(json.contains(&format!("\"timestamp\":{timestamp}")));
 
         // Parse back to verify structure
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -198,7 +208,7 @@ mod tests {
         assert!(parsed.get("target").is_some());
         assert!(parsed.get("timestamp").is_some());
         assert_eq!(parsed["target"], challenge.target);
-        assert_eq!(parsed["timestamp"], 1_234_567_890);
+        assert_eq!(parsed["timestamp"], timestamp);
     }
 
     #[test]
@@ -209,8 +219,9 @@ mod tests {
         let account_id = [0u8; AccountId::SERIALIZED_SIZE].try_into().unwrap();
         let mut rng = ChaCha20Rng::from_seed(rand::random());
         let api_key = ApiKey::generate(&mut rng);
+        let amount = 1000;
 
-        let challenge = Challenge::new(target, current_time, account_id, api_key, secret);
+        let challenge = Challenge::new(target, current_time, amount, account_id, api_key, secret);
 
         let encoded = challenge.encode();
         let decoded = Challenge::decode(&encoded, secret).unwrap();
@@ -228,12 +239,12 @@ mod tests {
         let challenge_lifetime = Duration::from_secs(30);
 
         // Valid timestamp (current time)
-        let challenge = Challenge::new(12, current_time, account_id, api_key.clone(), secret);
+        let challenge = Challenge::new(12, current_time, 1000, account_id, api_key.clone(), secret);
         assert!(!challenge.is_expired(current_time, challenge_lifetime));
 
         // Expired timestamp (too old)
         let old_timestamp = current_time - challenge_lifetime.as_secs() - 10;
-        let challenge = Challenge::new(12, old_timestamp, account_id, api_key, secret);
+        let challenge = Challenge::new(12, old_timestamp, 1000, account_id, api_key, secret);
         assert!(challenge.is_expired(current_time, challenge_lifetime));
     }
 }
