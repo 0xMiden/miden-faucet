@@ -71,7 +71,7 @@ impl PoW {
     /// Computes the target for a given API key by checking the amount of active challenges in the
     /// cache. This sets the difficulty of the challenge.
     /// Also the requested amount is used to scale the difficulty. The amount is divided by the
-    /// `max_claimable_amount` to get a scaling factor.
+    /// `base_difficulty_amount` to get a scaling factor.
     ///
     /// The target is computed as:
     /// `max_target / difficulty`
@@ -80,7 +80,7 @@ impl PoW {
     /// * `max_target = u64::MAX >> baseline`
     /// * `difficulty = max(load_difficulty * amount_scaling, 1)`
     /// * `load_difficulty = num_active_challenges << growth_rate`
-    /// * `amount_scaling = ceil(amount / max_claimable_amount)`
+    /// * `amount_scaling = ceil(amount / base_difficulty_amount)`
     fn get_challenge_target(&self, api_key: &ApiKey, amount: u64) -> u64 {
         let num_challenges = self
             .challenge_cache
