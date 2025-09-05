@@ -10,7 +10,6 @@ The high-level structure of the project looks like follows:
     <img src="../img/architecture.png"/>
 </p>
 
-
 ## Core Components
 
 ### 1. Web Frontend
@@ -75,6 +74,12 @@ The basic HTTP requests for minting tokens involves `/pow` and `/get_tokens`. Th
 
 - **Response**
    - Transaction ID and Note ID returned
+
+## Why do we need a backend?
+
+Could we not simply use the Miden Web SDK without a backend? The reason is security: if we were to use the Web SDK without a backend, the account's private key would need to be shared with the frontend. This would expose the private key to anyone, allowing them to potentially mint unlimited tokens and bypass all the rate limiting and throttling mechanisms.
+
+The solution is to have a single backend running that receives and validates the minting requests and stores the account's private key needed to mint the tokens.
 
 ## Security Features
 
