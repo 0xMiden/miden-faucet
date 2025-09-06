@@ -100,9 +100,10 @@ pub enum Command {
         #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
         network: FaucetNetwork,
 
-        /// The secret to be used by the server to generate the `PoW` seed.
-        #[arg(long = "pow-secret", value_name = "STRING", env = ENV_POW_SECRET)]
-        pow_secret: Option<String>,
+        /// The secret to be used by the server to sign the `PoW` challenges. This should NOT be
+        /// shared.
+        #[arg(long = "pow-secret", value_name = "STRING", default_value = "", env = ENV_POW_SECRET)]
+        pow_secret: String,
 
         /// The duration during which the `PoW` challenges are valid. Changing this will affect the
         /// rate limiting, since it works by rejecting new submissions while the previous submitted
@@ -262,7 +263,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 faucet.issuance(),
                 max_claimable_amount,
                 tx_mint_requests,
-                pow_secret.unwrap_or_default().as_str(),
+                pow_secret.as_str(),
                 pow_config,
                 &api_keys,
                 store,
@@ -492,7 +493,7 @@ mod test {
                         max_claimable_amount: 1_000_000_000,
                         network: FaucetNetwork::Localhost,
                         api_keys: vec![],
-                        pow_secret: None,
+                        pow_secret: "test".to_string(),
                         pow_challenge_lifetime: Duration::from_secs(30),
                         pow_cleanup_interval: Duration::from_secs(1),
                         pow_growth_rate: NonZeroUsize::new(1).unwrap(),

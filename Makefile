@@ -57,6 +57,10 @@ lint: typos-check format fix clippy toml machete ## Runs all linting tasks at on
 doc: ## Generates & checks documentation
 	$(WARNINGS) cargo doc --all-features --keep-going --release --locked
 
+.PHONY: book
+book: ## Builds the book & serves documentation site
+	mdbook serve --open docs
+
 # --- testing -------------------------------------------------------------------------------------
 
 .PHONY: test
@@ -78,13 +82,17 @@ install-faucet: ## Installs faucet
 .PHONY: check-tools
 check-tools: ## Checks if development tools are installed
 	@echo "Checking development tools..."
+	@command -v mdbook >/dev/null 2>&1 && echo "[OK] mdbook is installed" || echo "[MISSING] mdbook is not installed (run: make install-tools)"
+	@command -v mdbook-linkcheck >/dev/null 2>&1 && echo "[OK] mdbook-linkcheck is installed" || echo "[MISSING] mdbook-linkcheck is not installed (run: make install-tools)"
 	@command -v typos >/dev/null 2>&1 && echo "[OK] typos is installed" || echo "[MISSING] typos is not installed (run: make install-tools)"
-	@command -v nextest >/dev/null 2>&1 && echo "[OK] nextest is installed" || echo "[MISSING] nextest is not installed (run: make install-tools)"
+	@command -v cargo nextest >/dev/null 2>&1 && echo "[OK] cargo-nextest is installed" || echo "[MISSING] cargo-nextest is not installed (run: make install-tools)"
 	@command -v taplo >/dev/null 2>&1 && echo "[OK] taplo is installed" || echo "[MISSING] taplo is not installed (run: make install-tools)"
 
 .PHONY: install-tools
 install-tools: ## Installs development tools required by the Makefile (mdbook, typos, nextest, taplo)
 	@echo "Installing development tools..."
+	cargo install mdbook --locked
+	cargo install mdbook-linkcheck --locked
 	cargo install typos-cli --locked
 	cargo install cargo-nextest --locked
 	cargo install taplo-cli --locked
