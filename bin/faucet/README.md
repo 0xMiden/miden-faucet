@@ -1,6 +1,8 @@
 # Miden faucet
 
-This crate contains a binary for running a Miden testnet faucet.
+This crate contains a binary for running a Miden testnet faucet. 
+
+For comprehensive guides, API reference, and examples, see the [Miden Faucet Documentation](https://0xmiden.github.io/miden-faucet).
 
 ## Running the faucet
 
@@ -38,6 +40,7 @@ The faucet implements several security measures to prevent abuse:
 - **Proof of Work requests**:
   - Users must complete a computational challenge before their request is processed.
   - The challenge difficulty increases with the load. The load is measured by the amount of challenges that were submitted but still haven't expired.
+  - Each challenge is signed with a secret only known by the server. It should NOT be shared.
   - **Rate limiting**: if an account submitted a challenge, it can't submit another one until the previous one is expired. The challenge lifetime duration is fixed and set when running the faucet.
   - **API Keys**: the faucet is initialized with a set of API Keys that can be distributed to developers. The difficulty of the challenges requested using the API Key will increase only with the load of that key, it won't be influenced by the overall load of the faucet.
 
@@ -45,110 +48,6 @@ The faucet implements several security measures to prevent abuse:
   - Maximum batch size: 100 requests
   - Requests are processed in batches to optimize performance
   - Failed requests within a batch are handled individually
-
-## Usage
-
-The faucet can be accessed by the HTTP API interactively through the frontend or programmatically by building the requests manually.
-
-### Programmatic API Usage
-
-The faucet provides a REST API. The typical flow to request tokens involves:
-
-1. **Request a Proof-of-Work challenge** from `/pow`
-
-```typescript
-const baseUrl = 'http://localhost:8080';
-const accountId = 'mlcl1qq8mcy8pdvl0cgqfkjzf8efjjsnlzf7q';
-
-const powUrl = new URL('/pow', baseUrl);
-powUrl.searchParams.set('account_id', accountId);
-const powResp = await fetch(powUrl);
-if (!powResp.ok) throw new Error(`PoW error: ${powResp.status} ${await powResp.text()}`);
-const powJson: any = await powResp.json();
-const challenge: string = powJson.challenge;
-const target: bigint = BigInt(powJson.target);
-```
-
-2. **Solve the computational challenge**
-
-```typescript
-// Dependencies: npm i @noble/hashes
-import { sha3_256 } from '@noble/hashes/sha3';
-
-let nonce = 0;
-while (true) {
-    nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
-
-    try {
-        // Compute hash using SHA3-256 with the challenge and nonce
-        let hash = sha3_256.create();
-        hash.update(challenge); // Use the hex-encoded challenge string directly
-
-        // Convert nonce to 8-byte big-endian format to match backend
-        const nonceBytes = new ArrayBuffer(8);
-        const nonceView = new DataView(nonceBytes);
-        nonceView.setBigUint64(0, BigInt(nonce), false); // false = big-endian
-        const nonceByteArray = new Uint8Array(nonceBytes);
-        hash.update(nonceByteArray);
-
-        // Take the first 8 bytes of the hash and parse them as u64 in big-endian
-        const hashBytes: Uint8Array = hash.digest().slice(0, 8);
-        let digest = BigInt('0x' + Array.from(hashBytes).map(b => b.toString(16).padStart(2, '0')).join(''));
-
-        // Check if the hash is less than the target
-        if (digest < target) {
-            console.log('Found nonce:', nonce);
-            return nonce;
-        }
-    } catch (error: any) {
-        throw new Error('Failed to compute hash: ' + error.message);
-    }
-}
-```
-
-3. **Request tokens** along with your solved challenge to `/get_tokens`
-
-```typescript
-const params = new URLSearchParams({
-    account_id: accountId,
-    is_private_note: 'true',
-    asset_amount: '100',
-    challenge: challenge,
-    nonce: nonce.toString()
-});
-
-const response = await fetch(`${baseUrl}/get_tokens?${params}`);
-if (!response.ok) throw new Error(`Get tokens error: ${response.status} ${await response.text()}`);
-
-const text = await response.text();
-const json = JSON.parse(text);
-const noteId = json.note_id;
-const txId = json.tx_id;
-const explorerUrl = json.explorer_url;
-```
-
-4. **Request note** to download generated notes
-
-You must complete this step to retrieve private notes. For public notes, normal client sync is sufficient.
-
-```typescript
-const response = await fetch(`${baseUrl}/get_note?note_id=${noteId}`);
-if (!response.ok) throw new Error(`Get note error: ${response.status} ${await response.text()}`);
-
-const text = await response.text();
-const json = JSON.parse(text);
-
-// Decode note with base64
-const noteData = Buffer.from(json.data_base64, 'base64');
-
-fs.writeFileSync('note.mno', noteData);
-```
-
-#### Example
-
-Check out the complete working examples below. Make sure the faucet is running at `http://localhost:8080` before using them.
-- Rust: [`examples/rust/request_tokens.rs`](examples/request_tokens.rs)
-- TypeScript: [`examples/typescript/request_tokens.ts`](examples/ts/request_tokens.ts)
 
 #### API Endpoints Reference
 
