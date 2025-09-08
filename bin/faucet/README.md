@@ -73,16 +73,17 @@ const target: bigint = BigInt(powJson.target);
 
 ```typescript
 // Dependencies: npm i @noble/hashes
-import { sha3_256 } from '@noble/hashes/sha3';
+import { sha_256 } from '@noble/hashes/sha2.js';
+import { utf8ToBytes } from '@noble/hashes/utils.js';
 
 let nonce = 0;
 while (true) {
     nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
     try {
-        // Compute hash using SHA3-256 with the challenge and nonce
-        let hash = sha3_256.create();
-        hash.update(challenge); // Use the hex-encoded challenge string directly
+        // Compute hash using SHA-256 with the challenge and nonce
+        let hash = sha_256.create();
+        hash.update(utf8ToBytes(challenge)); // Use the hex-encoded challenge string directly
 
         // Convert nonce to 8-byte big-endian format to match backend
         const nonceBytes = new ArrayBuffer(8);
@@ -159,7 +160,7 @@ Check out the complete working examples below. Make sure the faucet is running a
   - `api_key` (string, optional): API key for authentication
 - **Response**: JSON object containing:
   - `challenge` (string): The encoded challenge string in hexadecimal format
-  - `target` (number): The target value for the proof-of-work challenge. A solution is valid if the hash `H(challenge, nonce)` is less than this target. As the hashing function we use `SHA3-256`
+  - `target` (number): The target value for the proof-of-work challenge. A solution is valid if the hash `H(challenge, nonce)` is less than this target. As the hashing function we use `SHA-256`
   - `timestamp` (number): The timestamp when the challenge was created (seconds since UNIX epoch)
 
 **GET /get_tokens**
