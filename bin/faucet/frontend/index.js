@@ -330,12 +330,6 @@ const Utils = {
     },
 
     findValidNonce: async (challenge, target) => {
-        // Check if Web Crypto API is available
-        if (!window.crypto || !window.crypto.subtle) {
-            console.error("Web Crypto API not available");
-            throw new Error('Web Crypto API not available. Please check your browser.');
-        }
-
         let nonce = 0;
         let targetNum = BigInt(target);
 
@@ -344,7 +338,7 @@ const Utils = {
 
             try {
                 // Convert challenge from hex string to Uint8Array
-                const challengeBytes = new Uint8Array(challenge.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                const challengeBytes = new TextEncoder().encode(challenge);
 
                 // Convert nonce to 8-byte big-endian format to match backend
                 const nonceBytes = new ArrayBuffer(8);
