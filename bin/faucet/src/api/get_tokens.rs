@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, Address};
 use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
-use miden_faucet_pow::{ApiKey, PowError};
+use miden_pow_rate_limiter::{ApiKey, PowError};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;

@@ -13,7 +13,7 @@ use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
-use miden_faucet_pow::{ApiKey, PoW, PoWConfig};
+use miden_pow_rate_limiter::{ApiKey, PoW, PoWConfig};
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;

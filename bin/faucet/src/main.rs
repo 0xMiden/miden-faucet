@@ -21,7 +21,7 @@ use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
 use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetAmount;
-use miden_faucet_pow::{ApiKey, PoWConfig};
+use miden_pow_rate_limiter::{ApiKey, PoWConfig};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;

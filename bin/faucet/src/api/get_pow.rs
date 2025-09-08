@@ -3,7 +3,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
-use miden_faucet_pow::{ApiKey, Challenge, PoW};
+use miden_pow_rate_limiter::{ApiKey, Challenge, PoW};
 use serde::Deserialize;
 
 use crate::api::AccountError;

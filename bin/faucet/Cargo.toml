@@ -15,8 +15,8 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-miden-faucet-lib = { workspace = true }
-miden-faucet-pow = { workspace = true }
+miden-faucet-lib       = { workspace = true }
+miden-pow-rate-limiter = { workspace = true }
 
 # Miden dependencies.
 miden-client = { features = ["sqlite", "tonic"], workspace = true }

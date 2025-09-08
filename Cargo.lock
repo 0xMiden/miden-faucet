@@ -1796,8 +1796,8 @@ dependencies = [
  "humantime",
  "miden-client",
  "miden-faucet-lib",
- "miden-faucet-pow",
  "miden-node-proto",
+ "miden-pow-rate-limiter",
  "miden-testing",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -1832,21 +1832,6 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
-]
-
-[[package]]
-name = "miden-faucet-pow"
-version = "0.11.0"
-dependencies = [
- "base64",
- "miden-client",
- "rand",
- "rand_chacha",
- "serde",
- "serde_json",
- "sha3",
- "thiserror 2.0.12",
- "tokio",
 ]
 
 [[package]]
@@ -2008,6 +1993,21 @@ dependencies = [
  "thiserror 2.0.16",
  "toml 0.8.23",
  "winter-rand-utils",
+]
+
+[[package]]
+name = "miden-pow-rate-limiter"
+version = "0.12.0"
+dependencies = [
+ "base64",
+ "miden-client",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "serde_json",
+ "sha3",
+ "thiserror 2.0.16",
+ "tokio",
 ]
 
 [[package]]
