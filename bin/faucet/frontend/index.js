@@ -9,6 +9,7 @@ class MidenFaucet {
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountOptions = [100, 500, 1000];
+        this.explorer_url = null;
 
         // Check if SHA3 is available right from the start
         if (typeof sha3_256 === 'undefined') {
@@ -69,6 +70,7 @@ class MidenFaucet {
             .then(response => response.json())
             .then(data => {
                 this.faucetAddress.textContent = data.id;
+                this.explorer_url = data.explorer_url;
                 for (const amount of this.tokenAmountOptions) {
                     const option = document.createElement('option');
                     option.value = Utils.tokensToBaseUnits(amount, data.decimals);
@@ -236,9 +238,9 @@ class MidenFaucet {
             completedPublicModal.classList.add('active');
 
             const explorerButton = document.getElementById('explorer-button');
-            if (mintingData.explorer_url) {
+            if (this.explorer_url) {
                 explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(mintingData.explorer_url + '/tx/' + mintingData.tx_id, '_blank');
+                explorerButton.onclick = () => window.open(this.explorer_url + 'tx/' + mintingData.tx_id, '_blank');
             } else {
                 explorerButton.style.display = 'none';
             }
@@ -324,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const Utils = {
     validateAddress: (address) => {
-        return /^(0x[0-9a-fA-F]{30}|[a-z]{1,4}1[a-z0-9]{32})$/i.test(address);
+        return /^(0x[0-9a-fA-F]{30}|[a-z]{1,4}1[a-z0-9]{35})$/i.test(address);
     },
 
     findValidNonce: async (challenge, target) => {
