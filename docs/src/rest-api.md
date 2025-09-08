@@ -34,7 +34,7 @@ For detailed information about the token request flow, see the [Architecture](./
 
 - **Response**: JSON object containing:
   - `challenge` (string): The encoded challenge string in hexadecimal format
-  - `target` (number): The target value for the proof-of-work challenge. A solution is valid if the hash `H(challenge, nonce)` is less than this target. As the hashing function we use `SHA3-256`
+  - `target` (number): The target value for the proof-of-work challenge. A solution is valid if the hash `H(challenge, nonce)` is less than this target. As the hashing function we use `SHA-256`
   - `timestamp` (number): The timestamp when the challenge was created (seconds since UNIX epoch)
 
 ### Get Tokens
@@ -54,7 +54,6 @@ For detailed information about the token request flow, see the [Architecture](./
 - **Response**: JSON object containing:
   - `tx_id` (string): ID of the created transaction
   - `note_id` (string): ID of the created note
-  - `explorer_url` (string): URL to view the transaction in the explorer. Only present if available for the current network.
 
 ### Get Metadata
 
@@ -67,6 +66,7 @@ For detailed information about the token request flow, see the [Architecture](./
   - `issuance` (number): amount of tokens issued by the faucet (in base units)
   - `max_supply` (number): maximum available supply of the faucet (in base units)
   - `decimals` (number): number of decimals of the token minted by the faucet. It is needed to convert base units into token amounts.
+  - `explorer_url` (string): URL to view the transaction in the explorer. Only present if available for the current network.
 
 ### Get Note
 
@@ -97,5 +97,5 @@ The PoW difficulty of the faucet scales with the number of active requests. When
 To request a challenge using an API key:
 
 ```bash
-GET /pow?account_id=mdev1qpfpnrkpk3dg7gqsvrnxlsv7fqc4gcwt&api_key=miden_faucet_wONsvRXLZ9FgQG+nlkaq9f2X53cLswe4HSzEIUjFIkQ=
+GET /pow?account_id=mdev1qz4p2xx66lslqgzg93e87szxddcqqppnskk&api_key=miden_faucet_wONsvRXLZ9FgQG+nlkaq9f2X53cLswe4HSzEIUjFIkQ=
 ```
