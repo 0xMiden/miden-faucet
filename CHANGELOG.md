@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.2 (2025-09-08)
+
+- Refreshed dependencies.
+
 ## 0.11.1 (2025-09-02)
 
 - Added `--network` CLI parameter to specify the type of network to which the faucet connects ([#74](https://github.com/0xMiden/miden-faucet/pull/74)).
