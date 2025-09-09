@@ -96,7 +96,7 @@ pub enum Command {
         remote_tx_prover_url: Option<Url>,
 
         /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
-        /// network. It is used to show the correct addresses and explorer URL in the UI.
+        /// network. It is used to display the correct bech32 addresses in the UI.
         #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
         network: FaucetNetwork,
 
