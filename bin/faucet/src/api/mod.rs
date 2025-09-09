@@ -13,7 +13,7 @@ use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
-use miden_pow_rate_limiter::{ApiKey, PoW, PoWConfig};
+use miden_pow_rate_limiter::{PoW, PoWConfig};
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -28,6 +28,7 @@ use crate::api::get_metadata::{Metadata, get_metadata};
 use crate::api::get_note::get_note;
 use crate::api::get_pow::get_pow;
 use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
+use crate::api_key::ApiKey;
 
 mod frontend;
 mod get_metadata;
@@ -172,14 +173,17 @@ impl Server {
         challenge: &str,
         nonce: u64,
         account_id: AccountId,
-        api_key: &ApiKey,
+        api_key: ApiKey,
     ) -> Result<(), MintRequestError> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("current timestamp should be greater than unix epoch")
             .as_secs();
+        let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = account_id.into();
+        let mut requestor = [0u8; 32];
+        requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
         self.pow
-            .submit_challenge(account_id, api_key, challenge, nonce, timestamp)
+            .submit_challenge(requestor, api_key, challenge, nonce, timestamp)
             .map_err(MintRequestError::PowError)
     }
 }

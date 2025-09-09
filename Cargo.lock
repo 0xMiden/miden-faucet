@@ -1999,10 +1999,7 @@ dependencies = [
 name = "miden-pow-rate-limiter"
 version = "0.12.0"
 dependencies = [
- "base64",
  "miden-client",
- "rand",
- "rand_chacha",
  "serde",
  "serde_json",
  "sha3",

@@ -1,4 +1,5 @@
 mod api;
+mod api_key;
 mod error_report;
 mod logging;
 mod network;
@@ -21,13 +22,14 @@ use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
 use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetAmount;
-use miden_pow_rate_limiter::{ApiKey, PoWConfig};
+use miden_pow_rate_limiter::PoWConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
 use url::Url;
 
 use crate::api::Server;
+use crate::api_key::ApiKey;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
 

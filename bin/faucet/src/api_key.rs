@@ -1,9 +1,8 @@
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use miden_pow_rate_limiter::PowError;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-
-use crate::PowError;
 
 // API KEY
 // ================================================================================================
@@ -35,20 +34,21 @@ impl ApiKey {
         format!("{API_KEY_PREFIX}{}", BASE64_STANDARD.encode(self.0))
     }
 
-    /// Returns the inner bytes of the API key.
-    pub fn inner(&self) -> [u8; 32] {
-        self.0
-    }
-
     /// Decodes the API key from a string.
     pub fn decode(api_key_str: &str) -> Result<Self, PowError> {
         let api_key_str = api_key_str.trim_start_matches(API_KEY_PREFIX).to_string();
         let bytes = BASE64_STANDARD
             .decode(api_key_str.as_bytes())
-            .map_err(|_| PowError::InvalidApiKey(api_key_str.clone()))?;
+            .map_err(|_| PowError::InvalidDomain(api_key_str.clone()))?;
 
-        let api_key = Self(bytes.try_into().map_err(|_| PowError::InvalidApiKey(api_key_str))?);
+        let api_key = Self(bytes.try_into().map_err(|_| PowError::InvalidDomain(api_key_str))?);
         Ok(api_key)
+    }
+}
+
+impl From<ApiKey> for [u8; 32] {
+    fn from(api_key: ApiKey) -> Self {
+        api_key.0
     }
 }
 
@@ -68,7 +68,7 @@ mod tests {
         assert!(encoded_key.starts_with(API_KEY_PREFIX));
 
         let decoded_key = ApiKey::decode(&encoded_key).unwrap();
-        assert_eq!(decoded_key.inner().len(), 32);
-        assert_eq!(decoded_key.inner(), api_key.inner());
+        assert_eq!(decoded_key.0.len(), 32);
+        assert_eq!(decoded_key.0, api_key.0);
     }
 }

@@ -19,13 +19,10 @@ workspace = true
 miden-client = { workspace = true }
 
 # External dependencies.
-base64    = { version = "0.22" }
-rand      = { features = ["thread_rng"], workspace = true }
 serde     = { features = ["derive"], version = "1.0" }
 sha3      = { version = "0.10" }
 thiserror = { workspace = true }
 tokio     = { features = ["fs"], workspace = true }
 
 [dev-dependencies]
-rand_chacha = { version = "0.9" }
-serde_json  = { version = "1.0" }
+serde_json = { version = "1.0" }

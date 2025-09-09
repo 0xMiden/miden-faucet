@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, Address};
 use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
-use miden_pow_rate_limiter::{ApiKey, PowError};
+use miden_pow_rate_limiter::PowError;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
@@ -13,6 +13,7 @@ use tracing::instrument;
 
 use crate::COMPONENT;
 use crate::api::{AccountError, Server};
+use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
 
 // ENDPOINT
@@ -225,7 +226,7 @@ impl RawMintRequest {
         let challenge_str = self.challenge.ok_or(MintRequestError::MissingPowParameters)?;
         let nonce = self.nonce.ok_or(MintRequestError::MissingPowParameters)?;
 
-        server.submit_challenge(&challenge_str, nonce, account_id, &api_key.unwrap_or_default())?;
+        server.submit_challenge(&challenge_str, nonce, account_id, api_key.unwrap_or_default())?;
 
         Ok(MintRequest { account_id, note_type, asset_amount })
     }
