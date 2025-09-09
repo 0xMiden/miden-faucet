@@ -139,9 +139,7 @@ impl PoW {
             .expect("challenge cache lock should not be poisoned");
 
         // Check if account has recently submitted a challenge.
-        if let Some(timestamp) =
-            challenge_cache.has_challenge_for_account(account_id, api_key.clone())
-        {
+        if let Some(timestamp) = challenge_cache.has_challenge(account_id, api_key.clone()) {
             return Err(PowError::RateLimited(
                 timestamp
                     + self.config.challenge_lifetime.as_secs()
@@ -344,7 +342,7 @@ mod tests {
             pow.challenge_cache
                 .lock()
                 .unwrap()
-                .has_challenge_for_account(account_id, api_key.clone())
+                .has_challenge(account_id, api_key.clone())
                 .is_none()
         );
         assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_api_key(&api_key), 0);
@@ -361,7 +359,7 @@ mod tests {
             pow.challenge_cache
                 .lock()
                 .unwrap()
-                .has_challenge_for_account(account_id, api_key.clone())
+                .has_challenge(account_id, api_key.clone())
                 .is_some()
         );
         assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_api_key(&api_key), 1);

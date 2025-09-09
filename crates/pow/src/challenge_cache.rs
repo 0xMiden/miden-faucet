@@ -23,10 +23,8 @@ pub(crate) struct ChallengeCache {
     challenges: BTreeMap<u64, Vec<(AccountId, ApiKey)>>,
     /// Maps API key to the number of submitted challenges.
     challenges_per_key: HashMap<ApiKey, usize>,
-    /// Maps account id to the number of submitted challenges.
-    account_ids: BTreeMap<AccountId, usize>,
     /// Maps account id and api key to the timestamp of the last submitted challenge.
-    challenges_timestamps: BTreeMap<(AccountId, ApiKey), u64>,
+    challenges_timestamps: HashMap<(AccountId, ApiKey), u64>,
 }
 
 impl ChallengeCache {
@@ -52,20 +50,14 @@ impl ChallengeCache {
             .entry(api_key.clone())
             .and_modify(|c| *c = c.saturating_add(1))
             .or_insert(1);
-        self.account_ids
-            .entry(account_id)
-            .and_modify(|c| *c = c.saturating_add(1))
-            .or_insert(1);
         self.challenges_timestamps.insert((account_id, api_key), challenge.timestamp);
         true
     }
 
     /// Checks if a challenge has been submitted for the given account and api key. If so, returns
     /// the timestamp of the last submitted challenge.
-    pub fn has_challenge_for_account(&self, account_id: AccountId, api_key: ApiKey) -> Option<u64> {
-        self.account_ids
-            .contains_key(&account_id)
-            .then(|| self.challenges_timestamps.get(&(account_id, api_key)).copied())?
+    pub fn has_challenge(&self, account_id: AccountId, api_key: ApiKey) -> Option<u64> {
+        self.challenges_timestamps.get(&(account_id, api_key)).copied()
     }
 
     /// Returns the number of challenges submitted for the given API key.
@@ -103,17 +95,9 @@ impl ChallengeCache {
                     self.challenges_per_key.remove(&api_key);
                 }
 
-                let remove_account_id = self
-                    .account_ids
-                    .get_mut(&account_id)
-                    .map(|c| {
-                        *c = c.saturating_sub(1);
-                        *c == 0
-                    })
-                    .expect("challenge should have had an account entry");
-                if remove_account_id {
-                    self.account_ids.remove(&account_id);
-                }
+                self.challenges_timestamps
+                    .remove(&(account_id, api_key))
+                    .expect("challenge should have had a timestamp entry");
             }
         }
     }
