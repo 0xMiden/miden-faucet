@@ -47,7 +47,7 @@ The faucet implements several security measures to prevent abuse:
   - **API Keys**: the faucet is initialized with a set of API Keys that can be distributed to developers. The difficulty of the challenges requested using the API Key will increase only with the load of that key, it won't be influenced by the overall load of the faucet.
 
 - **Requests batching**:
-  - Maximum batch size: 100 requests
+  - Maximum batch size: 256 requests
   - Requests are processed in batches to optimize performance
   - Failed requests within a batch are handled individually
 
