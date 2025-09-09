@@ -170,11 +170,7 @@ impl GetTokenError {
         if let Self::InvalidRequest(MintRequestError::PowError(PowError::RateLimited(timestamp))) =
             self
         {
-            headers.insert(
-                axum::http::header::RETRY_AFTER,
-                // SAFETY: timestamp is always a valid string
-                HeaderValue::from_str(&timestamp.to_string()).unwrap(),
-            );
+            headers.insert(axum::http::header::RETRY_AFTER, HeaderValue::from(*timestamp));
         }
         headers
     }
