@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.11.3 (2025-09-08)
+## 0.11.3 (2025-09-09)
 
 - Fixed display for minted token amount ([#82](https://github.com/0xMiden/miden-faucet/pull/82)).
 
