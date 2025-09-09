@@ -286,6 +286,14 @@ mod tests {
             Err(PowError::RateLimited(timestamp)) => assert_eq!(timestamp, expected_timestamp),
             _ => panic!("Expected RateLimited error"),
         }
+
+        // Try to submit it using a different api key - should succeed
+        let new_api_key = ApiKey::generate(&mut rng);
+        let challenge = pow.build_challenge(account_id, new_api_key.clone());
+        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
+        let result =
+            pow.submit_challenge(account_id, &new_api_key, &challenge.encode(), nonce, second_time);
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
