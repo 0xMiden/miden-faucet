@@ -41,9 +41,9 @@ A challenge solution is valid when:
 The system automatically adjusts challenge difficulty based on usage and the requested amount:
 - **Target calculation**: `max_target / difficulty`
 - **Max target**: `u64::MAX >> baseline`
-- **Difficulty**: `max(load_difficulty * amount_scaling, 1)`
-- **Load difficulty**: `num_active_challenges << growth_rate`
-- **Amount scaling**: `ceil(amount / base_difficulty_amount)`
+- **Difficulty**: `load_difficulty * request_complexity`
+- **Load difficulty**: `max(num_active_challenges << growth_rate, 1)`
+- **Request complexity** is a scaling number set on each new challenge creation
 
 This means as more users solve challenges, the difficulty increases exponentially, providing automatic rate limiting.
 

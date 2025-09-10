@@ -101,8 +101,8 @@ impl PoWRateLimiter {
     ///
     /// Where:
     /// * `max_target = u64::MAX >> baseline`
-    /// * `difficulty = max(load_difficulty * request_complexity, 1)`
-    /// * `load_difficulty = num_active_challenges << growth_rate`
+    /// * `difficulty = load_difficulty * request_complexity`
+    /// * `load_difficulty = max(num_active_challenges << growth_rate, 1)`
     fn get_challenge_target(&self, domain: &Domain, request_complexity: u64) -> u64 {
         let num_challenges = self
             .challenges
