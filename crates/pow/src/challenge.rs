@@ -10,7 +10,7 @@ use crate::{ChallengeError, Domain, Requestor};
 const CHALLENGE_ENCODED_SIZE: usize = 120;
 
 /// A challenge for proof-of-work validation.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Challenge {
     /// The target used to validate the challenge solution. A lower target makes the challenge more
     /// difficult to solve. A solution is valid if the hash `H(challenge, nonce)`, interpreted as a
@@ -18,8 +18,8 @@ pub struct Challenge {
     pub(crate) target: u64,
     /// The timestamp of the challenge creation.
     pub(crate) timestamp: u64,
-    /// The amount of tokens requested (in base units).
-    pub(crate) amount: u64,
+    /// The request complexity, used to scale the difficulty of the challenge.
+    pub(crate) request_complexity: u64,
     /// The requestor of the challenge.
     pub(crate) requestor: Requestor,
     /// The domain used to request the challenge.
@@ -48,7 +48,7 @@ impl Challenge {
     pub fn new(
         target: u64,
         timestamp: u64,
-        amount: u64,
+        request_complexity: u64,
         requestor: Requestor,
         domain: Domain,
         secret: [u8; 32],
@@ -57,7 +57,7 @@ impl Challenge {
         Self {
             target,
             timestamp,
-            amount,
+            request_complexity,
             requestor,
             domain,
             signature,
@@ -68,7 +68,7 @@ impl Challenge {
     pub fn from_parts(
         target: u64,
         timestamp: u64,
-        amount: u64,
+        request_complexity: u64,
         requestor: Requestor,
         domain: Domain,
         signature: [u8; 32],
@@ -76,7 +76,7 @@ impl Challenge {
         Self {
             target,
             timestamp,
-            amount,
+            request_complexity,
             requestor,
             domain,
             signature,
@@ -93,7 +93,7 @@ impl Challenge {
         // SAFETY: Length of the bytes is enforced above.
         let target = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
         let timestamp = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
-        let amount = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
+        let request_complexity = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
         let requestor = bytes[24..56].try_into().unwrap();
         let domain = bytes[56..88].try_into().unwrap();
         let signature = bytes[88..CHALLENGE_ENCODED_SIZE].try_into().unwrap();
@@ -102,7 +102,14 @@ impl Challenge {
         let expected_signature =
             Self::compute_signature(secret, target, timestamp, &requestor, &domain);
         if signature == expected_signature {
-            Ok(Self::from_parts(target, timestamp, amount, requestor, domain, signature))
+            Ok(Self::from_parts(
+                target,
+                timestamp,
+                request_complexity,
+                requestor,
+                domain,
+                signature,
+            ))
         } else {
             Err(ChallengeError::ServerSignaturesDoNotMatch)
         }
@@ -113,7 +120,7 @@ impl Challenge {
         let mut bytes = Vec::with_capacity(CHALLENGE_ENCODED_SIZE);
         bytes.extend_from_slice(&self.target.to_le_bytes());
         bytes.extend_from_slice(&self.timestamp.to_le_bytes());
-        bytes.extend_from_slice(&self.amount.to_le_bytes());
+        bytes.extend_from_slice(&self.request_complexity.to_le_bytes());
         bytes.extend_from_slice(&self.requestor);
         bytes.extend_from_slice(&self.domain);
         bytes.extend_from_slice(&self.signature);
@@ -181,9 +188,9 @@ mod tests {
         let secret = [1u8; 32];
         let requestor = [1u8; 32];
         let domain = [2u8; 32];
-        let amount = 1000;
+        let request_complexity = 100;
         let timestamp = 1_234_567_890;
-        let challenge = Challenge::new(2, timestamp, amount, requestor, domain, secret);
+        let challenge = Challenge::new(2, timestamp, request_complexity, requestor, domain, secret);
 
         // Test that it serializes to the expected JSON format
         let json = serde_json::to_string(&challenge).unwrap();
@@ -209,9 +216,10 @@ mod tests {
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let requestor = [1u8; 32];
         let domain = [2u8; 32];
-        let amount = 1000;
+        let request_complexity = 100;
 
-        let challenge = Challenge::new(target, current_time, amount, requestor, domain, secret);
+        let challenge =
+            Challenge::new(target, current_time, request_complexity, requestor, domain, secret);
 
         let encoded = challenge.encode();
         let decoded = Challenge::decode(&encoded, secret).unwrap();
@@ -228,12 +236,12 @@ mod tests {
         let challenge_lifetime = Duration::from_secs(30);
 
         // Valid timestamp (current time)
-        let challenge = Challenge::new(12, current_time, 1000, requestor, domain, secret);
+        let challenge = Challenge::new(12, current_time, 100, requestor, domain, secret);
         assert!(!challenge.is_expired(current_time, challenge_lifetime));
 
         // Expired timestamp (too old)
         let old_timestamp = current_time - challenge_lifetime.as_secs() - 10;
-        let challenge = Challenge::new(12, old_timestamp, 1000, requestor, domain, secret);
+        let challenge = Challenge::new(12, old_timestamp, 100, requestor, domain, secret);
         assert!(challenge.is_expired(current_time, challenge_lifetime));
     }
 }

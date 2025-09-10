@@ -264,7 +264,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 cleanup_interval: pow_cleanup_interval,
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
-                base_difficulty_amount: pow_base_difficulty_amount,
             };
 
             let server = Server::new(
@@ -273,6 +272,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 max_supply,
                 faucet.issuance(),
                 max_claimable_amount,
+                pow_base_difficulty_amount,
                 tx_mint_requests,
                 pow_secret.as_str(),
                 rate_limiter_config,

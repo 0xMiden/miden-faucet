@@ -3,10 +3,10 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
-use miden_pow_rate_limiter::{Challenge, PoWRateLimiter};
+use miden_pow_rate_limiter::Challenge;
 use serde::Deserialize;
 
-use crate::api::AccountError;
+use crate::api::{AccountError, Server};
 use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
 
@@ -14,14 +14,19 @@ use crate::error_report::ErrorReport;
 // ================================================================================================
 
 pub async fn get_pow(
-    State(rate_limiter): State<PoWRateLimiter>,
+    State(server): State<Server>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
     let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
     let mut requestor = [0u8; 32];
     requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
-    let challenge = rate_limiter.build_challenge(request.amount, requestor, request.api_key);
+
+    let request_complexity = request.amount.div_ceil(server.metadata.pow_base_difficulty_amount);
+    let challenge =
+        server
+            .rate_limiter
+            .build_challenge(request_complexity, requestor, request.api_key);
     Ok(Json(challenge))
 }
 
