@@ -1,9 +1,9 @@
 [package]
 authors.workspace      = true
-description            = "Miden faucet's PoW"
+description            = "Miden Proof-of-Work rate limiter"
 edition.workspace      = true
 homepage.workspace     = true
-keywords               = ["faucet", "miden", "pow"]
+keywords               = ["miden", "pow"]
 license.workspace      = true
 name                   = "miden-pow-rate-limiter"
 readme                 = "README.md"
@@ -15,10 +15,6 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-# Miden dependencies.
-miden-client = { workspace = true }
-
-# External dependencies.
 serde     = { features = ["derive"], version = "1.0" }
 sha3      = { version = "0.10" }
 thiserror = { workspace = true }

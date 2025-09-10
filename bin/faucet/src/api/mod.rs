@@ -13,7 +13,7 @@ use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
-use miden_pow_rate_limiter::{PoW, PoWConfig};
+use miden_pow_rate_limiter::{PoWRateLimiter, PoWRateLimiterConfig};
 use sha3::{Digest, Sha3_256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -44,7 +44,7 @@ mod get_tokens;
 pub struct Server {
     mint_state: GetTokensState,
     metadata: &'static Metadata,
-    pow: PoW,
+    rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
     store: Arc<dyn Store>,
 }
@@ -59,7 +59,7 @@ impl Server {
         max_claimable_amount: AssetAmount,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
-        pow_config: PoWConfig,
+        pow_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
         explorer_url: Option<Url>,
@@ -80,12 +80,12 @@ impl Server {
         hasher.update(pow_secret.as_bytes());
         let secret_bytes: [u8; 32] = hasher.finalize().into();
 
-        let pow = PoW::new(secret_bytes, pow_config);
+        let rate_limiter = PoWRateLimiter::new(secret_bytes, pow_config);
 
         Server {
             mint_state,
             metadata,
-            pow,
+            rate_limiter,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
             store,
         }
@@ -182,7 +182,7 @@ impl Server {
         let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = account_id.into();
         let mut requestor = [0u8; 32];
         requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
-        self.pow
+        self.rate_limiter
             .submit_challenge(requestor, api_key, challenge, nonce, timestamp)
             .map_err(MintRequestError::PowError)
     }
@@ -200,10 +200,10 @@ impl FromRef<Server> for GetTokensState {
     }
 }
 
-impl FromRef<Server> for PoW {
+impl FromRef<Server> for PoWRateLimiter {
     fn from_ref(input: &Server) -> Self {
         // Clone is cheap: only copies a 32-byte array and increments Arc reference counters.
-        input.pow.clone()
+        input.rate_limiter.clone()
     }
 }
 

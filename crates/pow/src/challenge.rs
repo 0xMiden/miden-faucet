@@ -1,10 +1,12 @@
 use std::time::Duration;
 
-use miden_client::utils::{ToHex, hex_to_bytes};
 use serde::{Serialize, Serializer};
 use sha3::{Digest, Sha3_256};
 
-use crate::{Domain, PowError, Requestor};
+use crate::{
+    Domain, PowError, Requestor,
+    utils::{bytes_to_hex, hex_to_bytes},
+};
 
 /// The size of the encoded challenge in bytes.
 const CHALLENGE_ENCODED_SIZE: usize = 112;
@@ -82,7 +84,7 @@ impl Challenge {
     pub fn decode(value: &str, secret: [u8; 32]) -> Result<Self, PowError> {
         // Parse the hex-encoded challenge string
         let bytes: [u8; CHALLENGE_ENCODED_SIZE] =
-            hex_to_bytes(value).map_err(|_| PowError::InvalidChallenge)?;
+            hex_to_bytes(value).ok_or(PowError::InvalidChallenge)?;
 
         // SAFETY: Length of the bytes is enforced above.
         let target = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
@@ -109,7 +111,7 @@ impl Challenge {
         bytes.extend_from_slice(&self.requestor);
         bytes.extend_from_slice(&self.domain);
         bytes.extend_from_slice(&self.signature);
-        bytes.to_hex_with_prefix()
+        bytes_to_hex(&bytes)
     }
 
     /// Checks whether the provided nonce satisfies the target requirement encoded in the

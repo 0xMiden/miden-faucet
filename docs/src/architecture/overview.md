@@ -38,7 +38,7 @@ The high-level structure of the project looks like follows:
   - Notes creation
   - Token issuance tracking
 
-### 4. Pow Rate Limiter
+### 4. PoW Rate Limiter
 - **Technology**: Rust library (`crates/pow`)
 - **Purpose**: Proof of Work rate limiter
 - **Features**:

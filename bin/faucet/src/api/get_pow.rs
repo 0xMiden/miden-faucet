@@ -3,7 +3,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
-use miden_pow_rate_limiter::{Challenge, PoW};
+use miden_pow_rate_limiter::{Challenge, PoWRateLimiter};
 use serde::Deserialize;
 
 use crate::api::AccountError;
@@ -14,7 +14,7 @@ use crate::error_report::ErrorReport;
 // ================================================================================================
 
 pub async fn get_pow(
-    State(pow): State<PoW>,
+    State(pow): State<PoWRateLimiter>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;

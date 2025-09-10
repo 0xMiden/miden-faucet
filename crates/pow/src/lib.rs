@@ -8,23 +8,24 @@ use crate::challenge_cache::ChallengeCache;
 
 mod challenge;
 mod challenge_cache;
+mod utils;
 
 pub use challenge::Challenge;
 
-// POW
+// PoW Rate Limiter
 // ================================================================================================
 
 /// Proof-of-Work implementation.
 ///
 /// This struct is used to generate and validate `PoW` challenges.
 #[derive(Clone)]
-pub struct PoW {
+pub struct PoWRateLimiter {
     /// The server secret used to sign and validate challenges.
     secret: [u8; 32],
     /// The cache used to store submitted challenges.
-    challenge_cache: Arc<Mutex<ChallengeCache>>,
+    challenges: Arc<Mutex<ChallengeCache>>,
     /// The configuration settings.
-    config: PoWConfig,
+    config: PoWRateLimiterConfig,
 }
 
 /// Represents the requestor of a challenge.
@@ -34,9 +35,9 @@ type Requestor = [u8; 32];
 /// requesting a challenge.
 type Domain = [u8; 32];
 
-/// The configuration settings for `PoW`.
+/// The configuration settings for `PoWRateLimiter`.
 #[derive(Clone)]
-pub struct PoWConfig {
+pub struct PoWRateLimiterConfig {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     pub challenge_lifetime: Duration,
     /// Determines how much the difficulty increases with the amount of active challenges. The
@@ -50,9 +51,9 @@ pub struct PoWConfig {
     pub cleanup_interval: Duration,
 }
 
-impl PoW {
+impl PoWRateLimiter {
     /// Creates a new `PoW` instance.
-    pub fn new(secret: [u8; 32], config: PoWConfig) -> Self {
+    pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
         let challenge_cache = Arc::new(Mutex::new(ChallengeCache::default()));
 
         // Start the cleanup task
@@ -66,7 +67,11 @@ impl PoW {
             .await;
         });
 
-        Self { secret, challenge_cache, config }
+        Self {
+            secret,
+            challenges: challenge_cache,
+            config,
+        }
     }
 
     /// Generates a new challenge.
@@ -97,7 +102,7 @@ impl PoW {
     /// * `difficulty = max(num_active_challenges << growth_rate, 1)`
     fn get_challenge_target(&self, domain: &Domain) -> u64 {
         let num_challenges = self
-            .challenge_cache
+            .challenges
             .lock()
             .expect("challenge cache lock should not be poisoned")
             .num_challenges_for_domain(domain);
@@ -145,10 +150,8 @@ impl PoW {
             return Err(PowError::InvalidPoW);
         }
 
-        let mut challenge_cache = self
-            .challenge_cache
-            .lock()
-            .expect("challenge cache lock should not be poisoned");
+        let mut challenge_cache =
+            self.challenges.lock().expect("challenge cache lock should not be poisoned");
 
         // Check if requestor has recently submitted a challenge.
         if challenge_cache.has_challenge_for_requestor(requestor) {
@@ -194,13 +197,13 @@ mod tests {
         (0..max_iterations).find(|&nonce| challenge.validate_pow(nonce))
     }
 
-    fn create_test_pow() -> PoW {
+    fn create_test_pow() -> PoWRateLimiter {
         let mut secret = [0u8; 32];
         secret[..12].copy_from_slice(b"miden-faucet");
 
-        PoW::new(
+        PoWRateLimiter::new(
             secret,
-            PoWConfig {
+            PoWRateLimiterConfig {
                 challenge_lifetime: Duration::from_secs(30),
                 cleanup_interval: Duration::from_millis(500),
                 growth_rate: NonZeroUsize::new(2).unwrap(),
@@ -300,7 +303,7 @@ mod tests {
         pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
             .unwrap();
 
-        assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_domain(&domain), 1);
+        assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
         assert_eq!(pow.get_challenge_target(&domain), (u64::MAX >> pow.config.baseline) / 2);
     }
 
@@ -326,8 +329,8 @@ mod tests {
         tokio::time::sleep(pow.config.cleanup_interval + Duration::from_secs(1)).await;
 
         // check that the challenge is removed from the cache
-        assert!(!pow.challenge_cache.lock().unwrap().has_challenge_for_requestor(requestor));
-        assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_domain(&domain), 0);
+        assert!(!pow.challenges.lock().unwrap().has_challenge_for_requestor(requestor));
+        assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 0);
 
         // submit second challenge - should succeed
         let challenge = pow.build_challenge(requestor, domain);
@@ -337,7 +340,7 @@ mod tests {
         pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
             .unwrap();
 
-        assert!(pow.challenge_cache.lock().unwrap().has_challenge_for_requestor(requestor));
-        assert_eq!(pow.challenge_cache.lock().unwrap().num_challenges_for_domain(&domain), 1);
+        assert!(pow.challenges.lock().unwrap().has_challenge_for_requestor(requestor));
+        assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
     }
 }

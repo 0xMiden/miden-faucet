@@ -22,7 +22,7 @@ use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
 use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetAmount;
-use miden_pow_rate_limiter::PoWConfig;
+use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
@@ -249,7 +249,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
             let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
-            let pow_config = PoWConfig {
+            let pow_config = PoWRateLimiterConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
                 growth_rate: pow_growth_rate,
