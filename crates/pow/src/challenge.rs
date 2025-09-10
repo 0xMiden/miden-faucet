@@ -3,10 +3,8 @@ use std::time::Duration;
 use serde::{Serialize, Serializer};
 use sha3::{Digest, Sha3_256};
 
-use crate::{
-    Domain, PowError, Requestor,
-    utils::{bytes_to_hex, hex_to_bytes},
-};
+use crate::utils::{bytes_to_hex, hex_to_bytes};
+use crate::{Domain, PowError, Requestor};
 
 /// The size of the encoded challenge in bytes.
 const CHALLENGE_ENCODED_SIZE: usize = 112;

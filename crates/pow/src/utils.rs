@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 /// Parses a hex string into an array of bytes of known size.
 pub fn hex_to_bytes<const N: usize>(value: &str) -> Option<[u8; N]> {
     // This code is inspired by miden-crypto::utils::hex_to_bytes
@@ -18,7 +20,7 @@ pub fn hex_to_bytes<const N: usize>(value: &str) -> Option<[u8; N]> {
     });
 
     let mut decoded = [0u8; N];
-    for byte in decoded.iter_mut() {
+    for byte in &mut decoded {
         // These `unwrap` calls are okay because the length was checked above
         let high: u8 = data.next().unwrap().ok()?;
         let low: u8 = data.next().unwrap().ok()?;
@@ -30,10 +32,11 @@ pub fn hex_to_bytes<const N: usize>(value: &str) -> Option<[u8; N]> {
 
 /// Converts a byte array to a hex string with a leading `0x` prefix.
 pub fn bytes_to_hex(bytes: &[u8]) -> String {
-    let mut result = String::new();
-    result.push_str("0x");
-    for byte in bytes.iter() {
-        result.push_str(&format!("{byte:02x}"));
+    let mut result = String::with_capacity(bytes.len() * 2 + 2);
+    // SAFETY: write! cannot fail writing to an allocated String.
+    write!(result, "0x").unwrap();
+    for byte in bytes {
+        write!(result, "{byte:02x}").unwrap();
     }
     result
 }
