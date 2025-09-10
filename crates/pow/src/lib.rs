@@ -40,9 +40,8 @@ type Domain = [u8; 32];
 pub struct PoWRateLimiterConfig {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     pub challenge_lifetime: Duration,
-    /// Determines how much the difficulty increases with the amount of active challenges. The
-    /// difficulty is computed as `num_active_challenges << growth_rate`.
-    pub growth_rate: NonZeroUsize,
+    /// Determines how many challenges are needed to increase the difficulty by 1.
+    pub challenges_per_difficulty: NonZeroUsize,
     /// Sets the `max_target` used for challenges. The initial target (with difficulty = 1) for
     /// challenges will be `u64::MAX >> baseline`.
     pub baseline: u8,
@@ -102,7 +101,7 @@ impl PoWRateLimiter {
     /// Where:
     /// * `max_target = u64::MAX >> baseline`
     /// * `difficulty = load_difficulty * request_complexity`
-    /// * `load_difficulty = max(num_active_challenges << growth_rate, 1)`
+    /// * `load_difficulty = max(num_active_challenges / challenges_per_difficulty, 1)`
     fn get_challenge_target(&self, domain: &Domain, request_complexity: u64) -> u64 {
         let num_challenges = self
             .challenges
@@ -111,7 +110,8 @@ impl PoWRateLimiter {
             .num_challenges_for_domain(domain) as u64;
 
         let max_target = u64::MAX >> self.config.baseline;
-        let load_difficulty = u64::max(num_challenges << self.config.growth_rate.get(), 1);
+        let load_difficulty =
+            u64::max(num_challenges / self.config.challenges_per_difficulty.get() as u64, 1);
         let difficulty = load_difficulty * request_complexity;
         max_target / difficulty
     }
@@ -210,7 +210,7 @@ mod tests {
             PoWRateLimiterConfig {
                 challenge_lifetime: Duration::from_secs(30),
                 cleanup_interval: Duration::from_millis(500),
-                growth_rate: NonZeroUsize::new(2).unwrap(),
+                challenges_per_difficulty: NonZeroUsize::new(1).unwrap(),
                 baseline: 0,
             },
         )
@@ -294,7 +294,7 @@ mod tests {
     #[tokio::test]
     async fn submit_challenge_and_check_difficulty() {
         let mut pow = create_test_pow();
-        pow.config.growth_rate = NonZeroUsize::new(1).unwrap();
+        pow.config.challenges_per_difficulty = NonZeroUsize::new(1).unwrap();
         let domain = [1u8; 32];
         let requestor = [0u8; 32];
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -314,14 +314,14 @@ mod tests {
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
         assert_eq!(
             pow.get_challenge_target(&domain, request_complexity),
-            (u64::MAX >> pow.config.baseline) / 2
+            (u64::MAX >> pow.config.baseline) / 1
         );
     }
 
     #[tokio::test]
     async fn difficulty_increases_with_request_complexity() {
         let mut pow = create_test_pow();
-        pow.config.growth_rate = NonZeroUsize::new(1).unwrap();
+        pow.config.challenges_per_difficulty = NonZeroUsize::new(1).unwrap();
         let domain = [1u8; 32];
 
         // test: 1 request complexity should have difficulty 1
