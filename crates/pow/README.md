@@ -38,7 +38,7 @@ A challenge solution is valid when:
 
 ## Dynamic Difficulty
 
-The system automatically adjusts challenge difficulty based on usage and the requested amount:
+The system automatically adjusts challenges difficulty based on usage and the request complexity:
 - **Target calculation**: `max_target / difficulty`
 - **Max target**: `u64::MAX >> baseline`
 - **Difficulty**: `load_difficulty * request_complexity`
