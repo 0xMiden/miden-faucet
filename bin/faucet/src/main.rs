@@ -112,7 +112,8 @@ pub enum Command {
         #[arg(long = "pow-challenge-lifetime", value_name = "DURATION", env = ENV_POW_CHALLENGE_LIFETIME, default_value = "30s", value_parser = humantime::parse_duration)]
         pow_challenge_lifetime: Duration,
 
-        /// A measure of how quickly the `PoW` difficult grows with the number of requests. Represents how many requests are needed to increase the difficulty by 1.
+        /// A measure of how quickly the `PoW` difficult grows with the number of requests.
+        /// Represents how many requests are needed to increase the difficulty by 1.
         #[arg(long = "pow-challenges-per-difficulty", value_name = "NON_ZERO_USIZE", env = ENV_POW_CHALLENGES_PER_DIFFICULTY, default_value = "10")]
         pow_challenges_per_difficulty: NonZeroUsize,
 
@@ -373,7 +374,11 @@ mod test {
 
     use fantoccini::ClientBuilder;
     use miden_client::account::{
-        AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
+        AccountId,
+        AccountIdAddress,
+        Address,
+        AddressInterface,
+        NetworkId,
     };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;

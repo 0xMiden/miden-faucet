@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
         assert_eq!(
             pow.get_challenge_target(&domain, request_complexity),
-            (u64::MAX >> pow.config.baseline) / 1
+            u64::MAX >> pow.config.baseline
         );
     }
 
