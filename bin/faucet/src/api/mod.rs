@@ -59,7 +59,7 @@ impl Server {
         max_claimable_amount: AssetAmount,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
-        pow_config: PoWRateLimiterConfig,
+        rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
         explorer_url: Option<Url>,
@@ -80,7 +80,7 @@ impl Server {
         hasher.update(pow_secret.as_bytes());
         let secret_bytes: [u8; 32] = hasher.finalize().into();
 
-        let rate_limiter = PoWRateLimiter::new(secret_bytes, pow_config);
+        let rate_limiter = PoWRateLimiter::new(secret_bytes, rate_limiter_config);
 
         Server {
             mint_state,

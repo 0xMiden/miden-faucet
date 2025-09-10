@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, Address};
 use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
-use miden_pow_rate_limiter::PowError;
+use miden_pow_rate_limiter::ChallengeError;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
@@ -107,7 +107,7 @@ pub enum MintRequestError {
     #[error("requested amount {0} is not a valid asset amount")]
     InvalidAssetAmount(AssetAmountError),
     #[error("PoW error")]
-    PowError(#[from] PowError),
+    PowError(#[from] ChallengeError),
     #[error("API key {0} is invalid")]
     InvalidApiKey(String),
     #[error("PoW parameters are missing")]
@@ -125,7 +125,7 @@ pub enum GetTokenError {
 impl GetTokenError {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::InvalidRequest(MintRequestError::PowError(PowError::RateLimited)) => {
+            Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited)) => {
                 StatusCode::TOO_MANY_REQUESTS
             },
             Self::InvalidRequest(_) | Self::MintError(_) => StatusCode::BAD_REQUEST,

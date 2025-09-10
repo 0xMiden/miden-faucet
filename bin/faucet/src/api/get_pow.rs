@@ -14,14 +14,14 @@ use crate::error_report::ErrorReport;
 // ================================================================================================
 
 pub async fn get_pow(
-    State(pow): State<PoWRateLimiter>,
+    State(rate_limiter): State<PoWRateLimiter>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
     let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
     let mut requestor = [0u8; 32];
     requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
-    let challenge = pow.build_challenge(requestor, request.api_key);
+    let challenge = rate_limiter.build_challenge(requestor, request.api_key);
     Ok(Json(challenge))
 }
 

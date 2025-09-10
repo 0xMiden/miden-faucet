@@ -132,14 +132,14 @@ impl PoWRateLimiter {
         challenge: &str,
         nonce: u64,
         current_time: u64,
-    ) -> Result<(), PowError> {
+    ) -> Result<(), ChallengeError> {
         let challenge = Challenge::decode(challenge, self.secret)?;
         let requestor = requestor.into();
         let domain = domain.into();
 
         // Check timestamp validity
         if challenge.is_expired(current_time, self.config.challenge_lifetime) {
-            return Err(PowError::ExpiredServerTimestamp(challenge.timestamp, current_time));
+            return Err(ChallengeError::ExpiredServerTimestamp(challenge.timestamp, current_time));
         }
 
         // Validate the challenge
@@ -147,7 +147,7 @@ impl PoWRateLimiter {
         let valid_domain = domain == challenge.domain;
         let valid_nonce = challenge.validate_pow(nonce);
         if !(valid_nonce && valid_requestor && valid_domain) {
-            return Err(PowError::InvalidPoW);
+            return Err(ChallengeError::InvalidPoW);
         }
 
         let mut challenge_cache =
@@ -155,12 +155,12 @@ impl PoWRateLimiter {
 
         // Check if requestor has recently submitted a challenge.
         if challenge_cache.has_challenge_for_requestor(requestor) {
-            return Err(PowError::RateLimited);
+            return Err(ChallengeError::RateLimited);
         }
 
         // Check if the cache already contains the challenge. If not, it is inserted.
         if !challenge_cache.insert_challenge(&challenge) {
-            return Err(PowError::ChallengeAlreadyUsed);
+            return Err(ChallengeError::ChallengeAlreadyUsed);
         }
 
         Ok(())
@@ -169,10 +169,10 @@ impl PoWRateLimiter {
 
 /// `PoW` challenge related errors.
 #[derive(Debug, thiserror::Error)]
-pub enum PowError {
+pub enum ChallengeError {
     #[error("server timestamp expired, received: {0}, current time: {1}")]
     ExpiredServerTimestamp(u64, u64),
-    #[error("invalid POW solution")]
+    #[error("invalid PoW solution")]
     InvalidPoW,
     #[error("requestor is rate limited")]
     RateLimited,
@@ -180,8 +180,8 @@ pub enum PowError {
     ChallengeAlreadyUsed,
     #[error("server signatures do not match")]
     ServerSignaturesDoNotMatch,
-    #[error("invalid challenge")]
-    InvalidChallenge,
+    #[error("invalid challenge size")]
+    InvalidChallengeSize,
     #[error("domain {0} is invalid")]
     InvalidDomain(String),
 }
@@ -284,7 +284,7 @@ mod tests {
         let result =
             pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
         assert!(result.is_err());
-        assert!(matches!(result.err(), Some(PowError::RateLimited)));
+        assert!(matches!(result.err(), Some(ChallengeError::RateLimited)));
     }
 
     #[tokio::test]

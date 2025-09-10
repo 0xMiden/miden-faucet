@@ -43,7 +43,7 @@ The system automatically adjusts challenge difficulty based on usage:
 - **Max target**: `u64::MAX >> baseline`
 - **Difficulty**: `max(num_active_challenges << growth_rate, 1)`
 
-This means as more users solve challenges, the difficulty increases exponentially, providing automatic rate limiting. Each domain has it's own difficulty based on it's usage.
+This means as more users solve challenges, the difficulty increases exponentially, providing automatic rate limiting.
 
 ## License
 

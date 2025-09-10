@@ -1,6 +1,6 @@
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use miden_pow_rate_limiter::PowError;
+use miden_pow_rate_limiter::ChallengeError;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -35,13 +35,14 @@ impl ApiKey {
     }
 
     /// Decodes the API key from a string.
-    pub fn decode(api_key_str: &str) -> Result<Self, PowError> {
+    pub fn decode(api_key_str: &str) -> Result<Self, ChallengeError> {
         let api_key_str = api_key_str.trim_start_matches(API_KEY_PREFIX).to_string();
         let bytes = BASE64_STANDARD
             .decode(api_key_str.as_bytes())
-            .map_err(|_| PowError::InvalidDomain(api_key_str.clone()))?;
+            .map_err(|_| ChallengeError::InvalidDomain(api_key_str.clone()))?;
 
-        let api_key = Self(bytes.try_into().map_err(|_| PowError::InvalidDomain(api_key_str))?);
+        let api_key =
+            Self(bytes.try_into().map_err(|_| ChallengeError::InvalidDomain(api_key_str))?);
         Ok(api_key)
     }
 }

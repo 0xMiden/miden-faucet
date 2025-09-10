@@ -4,7 +4,7 @@ use serde::{Serialize, Serializer};
 use sha3::{Digest, Sha3_256};
 
 use crate::utils::{bytes_to_hex, hex_to_bytes};
-use crate::{Domain, PowError, Requestor};
+use crate::{ChallengeError, Domain, Requestor};
 
 /// The size of the encoded challenge in bytes.
 const CHALLENGE_ENCODED_SIZE: usize = 112;
@@ -79,10 +79,10 @@ impl Challenge {
 
     /// Decodes the challenge and verifies that the signature part of the challenge is valid
     /// in the context of the specified secret.
-    pub fn decode(value: &str, secret: [u8; 32]) -> Result<Self, PowError> {
+    pub fn decode(value: &str, secret: [u8; 32]) -> Result<Self, ChallengeError> {
         // Parse the hex-encoded challenge string
         let bytes: [u8; CHALLENGE_ENCODED_SIZE] =
-            hex_to_bytes(value).ok_or(PowError::InvalidChallenge)?;
+            hex_to_bytes(value).ok_or(ChallengeError::InvalidChallengeSize)?;
 
         // SAFETY: Length of the bytes is enforced above.
         let target = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
@@ -97,7 +97,7 @@ impl Challenge {
         if signature == expected_signature {
             Ok(Self::from_parts(target, timestamp, requestor, domain, signature))
         } else {
-            Err(PowError::ServerSignaturesDoNotMatch)
+            Err(ChallengeError::ServerSignaturesDoNotMatch)
         }
     }
 

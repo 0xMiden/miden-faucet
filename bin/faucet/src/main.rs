@@ -249,7 +249,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
             let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
-            let pow_config = PoWRateLimiterConfig {
+            let rate_limiter_config = PoWRateLimiterConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
                 growth_rate: pow_growth_rate,
@@ -264,7 +264,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 max_claimable_amount,
                 tx_mint_requests,
                 pow_secret.as_str(),
-                pow_config,
+                rate_limiter_config,
                 &api_keys,
                 store,
                 explorer_url,
@@ -363,11 +363,7 @@ mod test {
 
     use fantoccini::ClientBuilder;
     use miden_client::account::{
-        AccountId,
-        AccountIdAddress,
-        Address,
-        AddressInterface,
-        NetworkId,
+        AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
     };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
