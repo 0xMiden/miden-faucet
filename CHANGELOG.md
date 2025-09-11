@@ -25,7 +25,7 @@
 - Replace amount options validation for maximum claimable amount ([#52](https://github.com/0xMiden/miden-faucet/pull/52)).
 - Added `mdbook` documentation ([#61](https://github.com/0xMiden/miden-faucet/pull/61)).
 - Added `--explorer-url` CLI parameter to optionally set the explorer url ([#63](https://github.com/0xMiden/miden-faucet/pull/63)).
-- Introduced `miden-faucet-pow` crate ([#67](https://github.com/0xMiden/miden-faucet/pull/67))
+- Introduced `miden-pow-rate-limiter` crate ([#67](https://github.com/0xMiden/miden-faucet/pull/67))
 
 ## 0.10.0 (2025-07-10)
 

@@ -15,16 +15,16 @@ pub use challenge::Challenge;
 // PoW Rate Limiter
 // ================================================================================================
 
-/// Proof-of-Work implementation.
+/// Proof-of-Work Rate Limiter implementation.
 ///
-/// This struct is used to generate and validate `PoW` challenges.
+/// This struct is used to enforce rate limiting based on PoW challenges.
 #[derive(Clone)]
 pub struct PoWRateLimiter {
     /// The server secret used to sign and validate challenges.
     secret: [u8; 32],
     /// The cache used to store submitted challenges.
     challenges: Arc<Mutex<ChallengeCache>>,
-    /// The configuration settings.
+    /// The settings of the rate limiter.
     config: PoWRateLimiterConfig,
 }
 
@@ -35,7 +35,7 @@ type Requestor = [u8; 32];
 /// requesting a challenge.
 type Domain = [u8; 32];
 
-/// The configuration settings for `PoWRateLimiter`.
+/// The settings of `PoWRateLimiter`.
 #[derive(Clone)]
 pub struct PoWRateLimiterConfig {
     /// The lifetime for challenges. After this time, challenges are considered expired.
