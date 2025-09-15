@@ -1,11 +1,10 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{
-    AccountFile,
+    Account,
     AccountId,
     AccountIdAddress,
     Address,
@@ -13,6 +12,7 @@ use miden_client::account::{
     NetworkId,
 };
 use miden_client::asset::FungibleAsset;
+use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
@@ -30,7 +30,7 @@ use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
-use tracing::{error, info, instrument, warn};
+use tracing::{error, instrument, warn};
 use url::Url;
 
 pub mod requests;
@@ -39,6 +39,7 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
+const KEYSTORE_PATH: &str = "keystore";
 const BATCH_SIZE: usize = 64;
 const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 
@@ -49,7 +50,7 @@ const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scr
 ///
 /// Used as a type safety mechanism to avoid confusion with user account IDs, and allows us to
 /// implement traits.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct FaucetId {
     pub account_id: AccountId,
     pub network_id: NetworkId,
@@ -62,7 +63,7 @@ impl FaucetId {
 
     pub fn to_bech32(&self) -> String {
         let address = AccountIdAddress::new(self.account_id, AddressInterface::Unspecified);
-        Address::from(address).to_bech32(self.network_id)
+        Address::from(address).to_bech32(self.network_id.clone())
     }
 }
 
@@ -76,90 +77,114 @@ pub struct Faucet {
     script: TransactionScript,
 }
 
+/// Configuration for initializing and loading a faucet.
+pub struct FaucetConfig {
+    /// The path to the client store file.
+    pub store_path: String,
+    /// The endpoint of the node to connect to.
+    pub node_endpoint: Endpoint,
+    /// The network ID of the node to connect to.
+    pub network_id: NetworkId,
+    /// The timeout for the node connection.
+    pub timeout: Duration,
+    /// The remote prover url to use for proving transactions. If set to none, a local transaction
+    /// prover is used.
+    pub remote_tx_prover_url: Option<Url>,
+}
+
 impl Faucet {
-    /// Loads the faucet.
-    ///
-    /// A client is instantiated with the provided store path, node url and timeout. The account is
-    /// loaded from the provided account file. If the account is already tracked by the current
-    /// store, it is loaded. Otherwise, the account is added from the file state.
-    ///
-    /// If a remote transaction prover url is provided, it is used to prove transactions. Otherwise,
-    /// a local transaction prover is used.
-    #[instrument(name = "faucet.load", fields(id), skip_all)]
-    pub async fn load(
-        store_path: PathBuf,
-        network_id: NetworkId,
-        account_file: AccountFile,
-        node_url: &Url,
-        timeout: Duration,
-        remote_tx_prover_url: Option<Url>,
-    ) -> anyhow::Result<Self> {
-        let account = account_file.account;
-        tracing::Span::current().record("id", account.id().to_string());
-
-        let keystore = FilesystemKeyStore::<StdRng>::new(PathBuf::from("keystore"))
+    /// Initializes a new faucet client, creating the keystore and the database with the given
+    /// account. If set to deploy, an empty transaction is created and submitted to the node.
+    #[instrument(name = "faucet.init", skip_all)]
+    pub async fn init(
+        config: &FaucetConfig,
+        account: Account,
+        account_seed: Word,
+        secret_key: &AuthSecretKey,
+        deploy: bool,
+    ) -> anyhow::Result<()> {
+        let keystore = FilesystemKeyStore::<StdRng>::new(KEYSTORE_PATH.into())
             .context("failed to create keystore")?;
-        for key in account_file.auth_secret_keys {
-            keystore.add_key(&key)?;
-        }
-        let url: &str = node_url.as_str().trim_end_matches('/');
-        let endpoint = Endpoint::try_from(url)
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("failed to parse node url: {node_url}"))?;
+        keystore.add_key(secret_key)?;
 
-        let mut client = ClientBuilder::new()
-            .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
+        let mut client = ClientBuilder::<FilesystemKeyStore<StdRng>>::new()
+            .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
-            .sqlite_store(store_path.to_str().context("invalid store path")?)
+            .sqlite_store(&config.store_path)
+            .build()
+            .await?;
+        client.add_account(&account, Some(account_seed), false).await?;
+        client.set_default_account_id(account.id()).await?;
+
+        if deploy {
+            client.ensure_genesis_in_place().await?;
+            let tx_request = TransactionRequestBuilder::new().build()?;
+            let tx_result = Box::pin(client.new_transaction(account.id(), tx_request)).await?;
+            let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
+                Some(url) => Arc::new(RemoteTransactionProver::new(url)),
+                None => Arc::new(LocalTransactionProver::default()),
+            };
+            let prover_failed =
+                Box::pin(client.submit_transaction_with_prover(tx_result.clone(), tx_prover))
+                    .await
+                    .is_err();
+            if prover_failed {
+                warn!(
+                    "Failed to prove transaction with remote prover, falling back to local prover"
+                );
+                Box::pin(client.submit_transaction(tx_result)).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Adds an account to the faucet database.
+    #[instrument(name = "faucet.import_account", skip_all)]
+    pub async fn import_account(
+        config: &FaucetConfig,
+        account: Account,
+        account_seed: Word,
+    ) -> Result<(), ClientError> {
+        let mut client: Client<FilesystemKeyStore<StdRng>> = ClientBuilder::new()
+            .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
+            .sqlite_store(&config.store_path)
             .build()
             .await?;
 
-        info!("Fetching faucet state from node");
+        client.add_account(&account, Some(account_seed), false).await
+    }
 
-        let issuance = match client.import_account_by_id(account.id()).await {
-            Ok(()) => {
-                // SAFETY: if import was successful, the account is tracked by the client
-                let record = client.get_account(account.id()).await?.unwrap();
-                info!(
-                    commitment = %record.account().commitment(),
-                    nonce = %record.account().nonce(),
-                    "Received faucet account state from the node",
-                );
-                record.account().get_token_issuance()?
-            },
-            Err(_) => match client.add_account(&account, account_file.account_seed, false).await {
-                Ok(()) => {
-                    info!(
-                        commitment = %account.commitment(),
-                        nonce = %account.nonce(),
-                        "Loaded state from account file"
-                    );
-                    account.get_token_issuance()?
-                },
-                Err(ClientError::AccountAlreadyTracked(_)) => {
-                    // SAFETY: account is tracked, so its present in the db
-                    let record = client.get_account(account.id()).await?.unwrap();
-                    info!(
-                        commitment = %record.account().commitment(),
-                        nonce = %record.account().nonce(),
-                        "Loaded state from existing local client db"
-                    );
-                    record.account().get_token_issuance()?
-                },
-                Err(err) => anyhow::bail!("failed to add account from file: {err}"),
-            },
-        };
+    /// Loads the faucet.
+    ///
+    /// The account is loaded from the local store. If it is not tracked, it is fetched from the
+    /// node and added to the local store.
+    #[instrument(name = "faucet.load", skip_all)]
+    pub async fn load(config: FaucetConfig) -> anyhow::Result<Self> {
+        let mut client = ClientBuilder::new()
+            .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
+            .filesystem_keystore(KEYSTORE_PATH)
+            .sqlite_store(&config.store_path)
+            .build()
+            .await
+            .context("failed to build client")?;
+
+        let account_id =
+            client.get_default_account_id().await?.context("no default account id found")?;
+        let record = client.get_account(account_id).await?.context("no account found")?;
+        let account = record.account();
 
         client.ensure_genesis_in_place().await?;
 
-        let faucet = BasicFungibleFaucet::try_from(&account)?;
-        let tx_prover: Arc<dyn TransactionProver> = match remote_tx_prover_url {
+        let faucet = BasicFungibleFaucet::try_from(account)?;
+        let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
         };
-        let id = FaucetId::new(account.id(), network_id);
+        let id = FaucetId::new(account.id(), config.network_id);
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
-        let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
+        let issuance =
+            Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
@@ -227,7 +252,7 @@ impl Faucet {
                 let rng_seed = Word::from(auth_seed.map(Felt::new));
                 RpoRandomCoin::new(rng_seed)
             };
-            let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
+            let notes = build_p2id_notes(&self.id, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
             let tx_id = Box::pin(self.create_transaction(notes))
                 .await
@@ -292,9 +317,20 @@ impl Faucet {
         Ok(tx_id)
     }
 
+    /// Returns the faucet account.
+    pub async fn faucet_account(&self) -> Result<Account, ClientError> {
+        Ok(self
+            .client
+            .get_account(self.id.account_id)
+            .await?
+            .ok_or(ClientError::AccountDataNotFound(self.id.account_id))?
+            .account()
+            .clone())
+    }
+
     /// Returns the id of the faucet account.
     pub fn faucet_id(&self) -> FaucetId {
-        self.id
+        self.id.clone()
     }
 
     /// Returns the available supply of the faucet.
@@ -317,7 +353,7 @@ impl Faucet {
 ///
 /// Returns an error if creating any p2id note fails.
 fn build_p2id_notes(
-    source: FaucetId,
+    source: &FaucetId,
     requests: &[MintRequest],
     rng: &mut RpoRandomCoin,
 ) -> Result<Vec<Note>, NoteError> {

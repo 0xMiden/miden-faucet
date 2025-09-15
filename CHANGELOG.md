@@ -5,6 +5,7 @@
 ### Changes
 
 - Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
+- Refactored CLI commands into `new` and `start` ([#84](https://github.com/0xMiden/miden-faucet/pull/84)).
 
 ## 0.11.5 (2025-09-18)
 

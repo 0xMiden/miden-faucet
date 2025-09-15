@@ -14,14 +14,17 @@ use std::time::Duration;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
-use miden_client::account::{AccountBuilder, AccountFile, AccountStorageMode, AccountType};
+use miden_client::account::{
+    Account, AccountBuilder, AccountFile, AccountStorageMode, AccountType,
+};
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
 use miden_client::crypto::{RpoRandomCoin, SecretKey};
+use miden_client::rpc::Endpoint;
 use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
-use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetAmount;
+use miden_faucet_lib::{Faucet, FaucetConfig};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -40,9 +43,9 @@ pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
 
 const ENV_ENDPOINT: &str = "MIDEN_FAUCET_ENDPOINT";
+const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";
 const ENV_TIMEOUT: &str = "MIDEN_FAUCET_TIMEOUT";
-const ENV_ACCOUNT_PATH: &str = "MIDEN_FAUCET_ACCOUNT_PATH";
 const ENV_MAX_CLAIMABLE_AMOUNT: &str = "MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT";
 const ENV_REMOTE_TX_PROVER_URL: &str = "MIDEN_FAUCET_REMOTE_TX_PROVER_URL";
 const ENV_POW_SECRET: &str = "MIDEN_FAUCET_POW_SECRET";
@@ -54,7 +57,6 @@ const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
-const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 
 // COMMANDS
 // ================================================================================================
@@ -69,36 +71,54 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum Command {
+    /// Create a new faucet account and initialize the client.
+    New {
+        #[clap(flatten)]
+        config: ClientConfig,
+
+        /// Symbol of the new token.
+        #[arg(short, long, value_name = "STRING")]
+        token_symbol: String,
+
+        /// Decimals of the new token.
+        #[arg(short, long, value_name = "U8")]
+        decimals: u8,
+
+        /// Max supply of the new token (in base units).
+        #[arg(short, long, value_name = "U64")]
+        max_supply: u64,
+
+        /// Set an existing faucet account file to use, instead of creating a new account.
+        #[arg(long = "import", value_name = "FILE")]
+        import_account_path: Option<PathBuf>,
+
+        /// Whether to deploy the faucet account to the node.
+        #[arg(short, long, value_name = "BOOL", default_value_t = false)]
+        deploy: bool,
+    },
+
+    /// Generate API keys that can be used by the faucet.
+    ///
+    /// Prints out the specified number of API keys to stdout as a comma-separated list.
+    /// This list can be supplied to the faucet via the `--api-keys` flag or `MIDEN_FAUCET_API_KEYS`
+    /// env var of the start command.
+    CreateApiKeys {
+        #[arg()]
+        count: u8,
+    },
+
     /// Start the faucet server
     Start {
+        #[clap(flatten)]
+        config: ClientConfig,
+
         /// Endpoint of the faucet in the format `<ip>:<port>`.
         #[arg(long = "endpoint", value_name = "URL", env = ENV_ENDPOINT)]
         endpoint: Url,
 
-        /// Node RPC gRPC endpoint in the format `http://<host>[:<port>]`.
-        #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
-        node_url: Url,
-
-        /// Timeout for RPC requests.
-        #[arg(long = "timeout", value_name = "DURATION", default_value = "5s", env = ENV_TIMEOUT, value_parser = humantime::parse_duration)]
-        timeout: Duration,
-
-        /// Path to the faucet account file.
-        #[arg(long = "account", value_name = "FILE", env = ENV_ACCOUNT_PATH)]
-        faucet_account_path: PathBuf,
-
         /// The maximum amount of assets base units that can be dispersed on each request.
         #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
         max_claimable_amount: u64,
-
-        /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
-        #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
-        remote_tx_prover_url: Option<Url>,
-
-        /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
-        /// network. It is used to display the correct bech32 addresses in the UI.
-        #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
-        network: FaucetNetwork,
 
         /// The secret to be used by the server to sign the `PoW` challenges. This should NOT be
         /// shared.
@@ -138,36 +158,36 @@ pub enum Command {
         #[arg(long = "enable-otel", value_name = "BOOL", default_value_t = false, env = ENV_ENABLE_OTEL)]
         open_telemetry: bool,
 
-        /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
-        store_path: PathBuf,
-
         /// Explorer URL.
         #[arg(long = "explorer-url", value_name = "URL", env = ENV_EXPLORER_URL)]
         explorer_url: Option<Url>,
     },
+}
 
-    /// Create a new public faucet account and save to the specified file.
-    CreateFaucetAccount {
-        #[arg(short, long, value_name = "FILE")]
-        output_path: PathBuf,
-        #[arg(short, long, value_name = "STRING")]
-        token_symbol: String,
-        #[arg(short, long, value_name = "U8")]
-        decimals: u8,
-        #[arg(short, long, value_name = "U64")]
-        max_supply: u64,
-    },
+/// Configuration for the faucet client.
+#[derive(Parser, Debug, Clone)]
+pub struct ClientConfig {
+    /// Path to the `SQLite` store.
+    #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
+    store_path: PathBuf,
 
-    /// Generate API keys that can be used by the faucet.
-    ///
-    /// Prints out the specified number of API keys to stdout as a comma-separated list.
-    /// This list can be supplied to the faucet via the `--api-keys` flag or `MIDEN_FAUCET_API_KEYS`
-    /// env var of the start command.
-    CreateApiKeys {
-        #[arg()]
-        count: u8,
-    },
+    /// Timeout for attempting to connect to the node.
+    #[arg(long = "timeout", value_name = "DURATION", default_value = "5s", env = ENV_TIMEOUT, value_parser = humantime::parse_duration)]
+    timeout: Duration,
+
+    /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
+    /// network. It is used to display the correct bech32 addresses in the UI.
+    #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
+    network: FaucetNetwork,
+
+    /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
+    #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
+    remote_tx_prover_url: Option<Url>,
+
+    /// Node RPC gRPC endpoint in the format `http://<host>[:<port>]`. If not set, the url is derived
+    /// from the specified network.
+    #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
+    node_url: Option<Url>,
 }
 
 impl Command {
@@ -198,15 +218,73 @@ async fn main() -> anyhow::Result<()> {
 
 #[allow(clippy::too_many_lines)]
 async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
+    // Note: open-telemetry is handled in main.
     match cli.command {
-        // Note: open-telemetry is handled in main.
+        Command::New {
+            config:
+                ClientConfig {
+                    node_url,
+                    timeout,
+                    remote_tx_prover_url,
+                    network,
+                    store_path,
+                },
+            token_symbol,
+            decimals,
+            max_supply,
+            import_account_path,
+            deploy,
+        } => {
+            println!("Generating new faucet account. This may take a few minutes...");
+
+            let (account, account_seed, secret) = if let Some(account_path) = import_account_path {
+                // Import existing faucet account
+                let account_data = AccountFile::read(account_path)
+                    .context("failed to read account data from file")?;
+                let seed = account_data.account_seed.context("account seed is required")?;
+                let secret = account_data
+                    .auth_secret_keys
+                    .first()
+                    .context("auth secret key is required")?
+                    .clone();
+                (account_data.account, seed, secret)
+            } else {
+                create_faucet_account(token_symbol.as_str(), max_supply, decimals)?
+            };
+            let node_endpoint = parse_node_endpoint(node_url, &network)?;
+            let faucet_config = FaucetConfig {
+                store_path: store_path.to_str().context("invalid store path")?.to_string(),
+                node_endpoint,
+                network_id: network.to_network_id()?,
+                timeout,
+                remote_tx_prover_url,
+            };
+            Box::pin(Faucet::init(&faucet_config, account, account_seed, &secret, deploy))
+                .await
+                .context("failed to initialize faucet")?;
+
+            println!("Faucet account successfully created");
+        },
+
+        Command::CreateApiKeys { count: key_count } => {
+            let mut rng = ChaCha20Rng::from_seed(rand::random());
+            let keys = (0..key_count)
+                .map(|_| ApiKey::generate(&mut rng).encode())
+                .collect::<Vec<_>>()
+                .join(",");
+            println!("{keys}");
+        },
+
         Command::Start {
+            config:
+                ClientConfig {
+                    node_url,
+                    timeout,
+                    remote_tx_prover_url,
+                    network,
+                    store_path,
+                },
             endpoint,
-            node_url,
-            timeout,
-            faucet_account_path,
-            remote_tx_prover_url,
-            network,
             max_claimable_amount,
             pow_secret,
             pow_challenge_lifetime,
@@ -215,27 +293,17 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             pow_baseline,
             api_keys,
             open_telemetry: _,
-            store_path,
             explorer_url,
         } => {
-            let account_file = AccountFile::read(&faucet_account_path).context(format!(
-                "failed to load faucet account from file ({})",
-                faucet_account_path.display()
-            ))?;
-            let faucet_component = BasicFungibleFaucet::try_from(&account_file.account)?;
-            let max_supply = AssetAmount::new(faucet_component.max_supply().as_int())?;
-            let decimals = faucet_component.decimals();
-
-            let faucet = Faucet::load(
-                store_path.clone(),
-                network.to_network_id()?,
-                account_file,
-                &node_url,
+            let node_endpoint = parse_node_endpoint(node_url, &network)?;
+            let config = FaucetConfig {
+                store_path: store_path.to_str().context("invalid store path")?.to_string(),
+                node_endpoint,
+                network_id: network.to_network_id()?,
                 timeout,
                 remote_tx_prover_url,
-            )
-            .await
-            .context("failed to load faucet")?;
+            };
+            let faucet = Faucet::load(config).await.context("failed to load faucet")?;
 
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
@@ -255,6 +323,11 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
             };
+
+            let faucet_account = faucet.faucet_account().await?;
+            let faucet_component = BasicFungibleFaucet::try_from(&faucet_account)?;
+            let max_supply = AssetAmount::new(faucet_component.max_supply().as_int())?;
+            let decimals = faucet_component.decimals();
 
             let server = Server::new(
                 faucet.faucet_id(),
@@ -293,64 +366,56 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 },
             }?;
         },
-
-        Command::CreateFaucetAccount {
-            output_path,
-            token_symbol,
-            decimals,
-            max_supply,
-        } => {
-            println!("Generating new faucet account. This may take a few minutes...");
-
-            let current_dir =
-                std::env::current_dir().context("failed to open current directory")?;
-
-            let mut rng = ChaCha20Rng::from_seed(rand::random());
-            let secret = {
-                let auth_seed: [u64; 4] = rng.random();
-                let rng_seed = Word::from(auth_seed.map(Felt::new));
-                SecretKey::with_rng(&mut RpoRandomCoin::new(rng_seed))
-            };
-
-            let symbol = TokenSymbol::try_from(token_symbol.as_str())
-                .context("failed to parse token symbol")?;
-            let max_supply = Felt::try_from(max_supply)
-                .map_err(anyhow::Error::msg)
-                .context("max supply value is greater than or equal to the field modulus")?;
-
-            let (account, account_seed) = AccountBuilder::new(rng.random())
-                .account_type(AccountType::FungibleFaucet)
-                .storage_mode(AccountStorageMode::Public)
-                .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
-                .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
-                .build()
-                .context("failed to create basic fungible faucet account")?;
-
-            let account_data = AccountFile::new(
-                account,
-                Some(account_seed),
-                vec![AuthSecretKey::RpoFalcon512(secret)],
-            );
-
-            let output_path = current_dir.join(output_path);
-            account_data.write(&output_path).with_context(|| {
-                format!("failed to write account data to file: {}", output_path.display())
-            })?;
-
-            println!("Faucet account file successfully created at: {}", output_path.display());
-        },
-
-        Command::CreateApiKeys { count: key_count } => {
-            let mut rng = ChaCha20Rng::from_seed(rand::random());
-            let keys = (0..key_count)
-                .map(|_| ApiKey::generate(&mut rng).encode())
-                .collect::<Vec<_>>()
-                .join(",");
-            println!("{keys}");
-        },
     }
 
     Ok(())
+}
+
+// UTILITIES
+// =================================================================================================
+
+/// Parses the node endpoint from the cli arguments. If an explicit url is provided, it is used.
+/// Otherwise, it is derived from the specified network.
+fn parse_node_endpoint(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow::Result<Endpoint> {
+    let url = if let Some(node_url) = node_url {
+        node_url.as_str().trim_end_matches('/').to_string()
+    } else {
+        network
+            .to_rpc_endpoint()
+            .context("no node url provided for the custom network")?
+    };
+
+    Endpoint::try_from(url.as_str())
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("failed to parse node url: {url}"))
+}
+
+/// Creates a new faucet account from the given parameters.
+fn create_faucet_account(
+    token_symbol: &str,
+    max_supply: u64,
+    decimals: u8,
+) -> anyhow::Result<(Account, Word, AuthSecretKey)> {
+    let mut rng = ChaCha20Rng::from_seed(rand::random());
+    let secret = {
+        let auth_seed: [u64; 4] = rng.random();
+        let rng_seed = Word::from(auth_seed.map(Felt::new));
+        SecretKey::with_rng(&mut RpoRandomCoin::new(rng_seed))
+    };
+
+    let symbol = TokenSymbol::try_from(token_symbol).context("failed to parse token symbol")?;
+    let max_supply = Felt::try_from(max_supply)
+        .map_err(anyhow::Error::msg)
+        .context("max supply value is greater than or equal to the field modulus")?;
+
+    let (account, account_seed) = AccountBuilder::new(rng.random())
+        .account_type(AccountType::FungibleFaucet)
+        .storage_mode(AccountStorageMode::Public)
+        .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
+        .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
+        .build()
+        .context("failed to create basic fungible faucet account")?;
+    Ok((account, account_seed, AuthSecretKey::RpoFalcon512(secret)))
 }
 
 #[cfg(test)]
@@ -363,11 +428,7 @@ mod test {
 
     use fantoccini::ClientBuilder;
     use miden_client::account::{
-        AccountId,
-        AccountIdAddress,
-        Address,
-        AddressInterface,
-        NetworkId,
+        AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
     };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
@@ -376,7 +437,7 @@ mod test {
 
     use crate::network::FaucetNetwork;
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, run_faucet_command};
+    use crate::{Cli, ClientConfig, run_faucet_command};
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
     /// to test the faucet website. It then loads the website and checks that all the requests
@@ -452,22 +513,26 @@ mod test {
 
     async fn start_test_faucet() -> Url {
         let stub_node_url = Url::from_str("http://localhost:50051").unwrap();
+        let config = ClientConfig {
+            node_url: Some(stub_node_url.clone()),
+            timeout: Duration::from_millis(5000),
+            network: FaucetNetwork::Localhost,
+            store_path: temp_dir().join("test_store.sqlite3"),
+            remote_tx_prover_url: None,
+        };
 
         // Start the stub node
-        tokio::spawn({
-            let stub_node_url = stub_node_url.clone();
-            async move { serve_stub(&stub_node_url).await.unwrap() }
-        });
-
-        let faucet_account_path = temp_dir().join("faucet.mac");
+        tokio::spawn(async move { serve_stub(&stub_node_url).await.unwrap() });
 
         // Create faucet account
         Box::pin(run_faucet_command(Cli {
-            command: crate::Command::CreateFaucetAccount {
-                output_path: faucet_account_path.clone(),
+            command: crate::Command::New {
+                config: config.clone(),
                 token_symbol: "TEST".to_string(),
                 decimals: 6,
                 max_supply: 1_000_000_000_000,
+                import_account_path: None,
+                deploy: false,
             },
         }))
         .await
@@ -487,21 +552,16 @@ mod test {
             rt.block_on(async {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
+                        config,
                         endpoint: endpoint_clone,
-                        node_url: stub_node_url,
-                        timeout: Duration::from_millis(5000),
                         max_claimable_amount: 1_000_000_000,
-                        network: FaucetNetwork::Localhost,
                         api_keys: vec![],
                         pow_secret: "test".to_string(),
                         pow_challenge_lifetime: Duration::from_secs(30),
                         pow_cleanup_interval: Duration::from_secs(1),
                         pow_growth_rate: NonZeroUsize::new(1).unwrap(),
                         pow_baseline: 12,
-                        faucet_account_path: faucet_account_path.clone(),
-                        remote_tx_prover_url: None,
                         open_telemetry: false,
-                        store_path: temp_dir().join("test_store.sqlite3"),
                         explorer_url: None,
                     },
                 }))
