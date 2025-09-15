@@ -15,7 +15,8 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-miden-faucet-lib = { workspace = true }
+miden-faucet-lib       = { workspace = true }
+miden-pow-rate-limiter = { workspace = true }
 
 # Miden dependencies.
 miden-client = { features = ["sqlite", "tonic"], workspace = true }
@@ -34,9 +35,9 @@ opentelemetry-otlp    = { workspace = true }
 opentelemetry_sdk     = { workspace = true }
 rand                  = { features = ["thread_rng"], workspace = true }
 rand_chacha           = { version = "0.9" }
-serde                 = { features = ["derive"], version = "1.0" }
-serde_json            = { version = "1.0" }
-sha2                  = { version = "0.10" }
+serde                 = { features = ["derive"], workspace = true }
+serde_json            = { workspace = true }
+sha2                  = { workspace = true }
 thiserror             = { workspace = true }
 tokio                 = { features = ["fs"], workspace = true }
 tokio-stream          = { features = ["net"], workspace = true }
@@ -53,7 +54,7 @@ fantoccini       = { version = "0.22" }
 miden-node-proto = { version = "0.11" }
 miden-testing    = { version = "0.11" }
 reqwest          = { default-features = false, features = ["json"], version = "0.12" }
-serde_json       = { version = "1.0" }
+serde_json       = { workspace = true }
 tokio            = { features = ["macros", "process"], workspace = true }
 tonic-web        = { version = "0.13" }
 

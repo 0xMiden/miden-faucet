@@ -1,8 +1,8 @@
 mod api;
+mod api_key;
 mod error_report;
 mod logging;
 mod network;
-mod pow;
 #[cfg(test)]
 mod testing;
 
@@ -22,16 +22,16 @@ use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
 use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetAmount;
+use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
 use url::Url;
 
 use crate::api::Server;
+use crate::api_key::ApiKey;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
-use crate::pow::PoWConfig;
-use crate::pow::api_key::ApiKey;
 
 // CONSTANTS
 // =================================================================================================
@@ -249,7 +249,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
             let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
-            let pow_config = PoWConfig {
+            let rate_limiter_config = PoWRateLimiterConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
                 growth_rate: pow_growth_rate,
@@ -264,7 +264,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 max_claimable_amount,
                 tx_mint_requests,
                 pow_secret.as_str(),
-                pow_config,
+                rate_limiter_config,
                 &api_keys,
                 store,
                 explorer_url,

@@ -19,9 +19,10 @@ version      = "0.12.0"
 opt-level = 2
 
 [workspace.dependencies]
-miden-faucet-lib = { path = "crates/faucet", version = "0.12" }
+miden-faucet-lib       = { path = "crates/faucet", version = "0.12" }
+miden-pow-rate-limiter = { path = "crates/pow", version = "0.12" }
 
-# miden-client dependencies.
+# Miden dependencies.
 miden-client = { version = "0.11" }
 
 # External dependencies
@@ -32,6 +33,9 @@ opentelemetry         = { version = "0.30" }
 opentelemetry-otlp    = { default-features = false, features = ["grpc-tonic", "tls-roots", "trace"], version = "0.30" }
 opentelemetry_sdk     = { features = ["rt-tokio", "testing"], version = "0.30" }
 rand                  = { version = "0.9" }
+serde                 = { features = ["derive"], version = "1.0" }
+serde_json            = { version = "1.0" }
+sha2                  = { version = "0.10" }
 thiserror             = { default-features = false, version = "2.0" }
 tokio                 = { features = ["rt-multi-thread"], version = "1.46" }
 tokio-stream          = { version = "0.1" }
