@@ -22,4 +22,4 @@ tokio     = { features = ["time"], workspace = true }
 
 [dev-dependencies]
 serde_json = { version = "1.0" }
-tokio     = { features = ["time", "rt", "macros"], workspace = true }
+tokio      = { features = ["macros", "rt", "time"], workspace = true }
