@@ -2,19 +2,19 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use miden_client::account::{AccountId, AccountIdError};
+use miden_client::account::{AccountId, Address};
 use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
-use miden_faucet_pow::{ApiKey, PowError};
+use miden_pow_rate_limiter::ChallengeError;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
 use tracing::instrument;
 
 use crate::COMPONENT;
-use crate::api::Server;
+use crate::api::{AccountError, Server};
+use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
-use crate::network::ExplorerUrl;
 
 // ENDPOINT
 // ================================================================================================
@@ -58,7 +58,6 @@ pub async fn get_tokens(
     Ok(Json(GetTokensResponse {
         tx_id: mint_response.tx_id.to_string(),
         note_id: mint_response.note_id.to_string(),
-        explorer_url: ExplorerUrl::from_network_id(server.metadata.id.network_id),
     }))
 }
 
@@ -66,7 +65,6 @@ pub async fn get_tokens(
 pub struct GetTokensResponse {
     tx_id: String,
     note_id: String,
-    explorer_url: Option<ExplorerUrl>,
 }
 
 // STATE
@@ -102,14 +100,14 @@ pub struct RawMintRequest {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MintRequestError {
-    #[error("account ID failed to parse")]
-    AccountId(#[source] AccountIdError),
+    #[error("account error")]
+    AccountError(#[source] AccountError),
     #[error("requested amount {0} exceeds the maximum claimable amount of {1}")]
     AssetAmountTooBig(AssetAmount, AssetAmount),
     #[error("requested amount {0} is not a valid asset amount")]
     InvalidAssetAmount(AssetAmountError),
     #[error("PoW error")]
-    PowError(#[from] PowError),
+    PowError(#[from] ChallengeError),
     #[error("API key {0} is invalid")]
     InvalidApiKey(String),
     #[error("PoW parameters are missing")]
@@ -127,7 +125,7 @@ pub enum GetTokenError {
 impl GetTokenError {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::InvalidRequest(MintRequestError::PowError(PowError::RateLimited(_))) => {
+            Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited(_))) => {
                 StatusCode::TOO_MANY_REQUESTS
             },
             Self::InvalidRequest(_) | Self::MintError(_) => StatusCode::BAD_REQUEST,
@@ -167,8 +165,9 @@ impl GetTokenError {
 
     fn headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        if let Self::InvalidRequest(MintRequestError::PowError(PowError::RateLimited(timestamp))) =
-            self
+        if let Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited(
+            timestamp,
+        ))) = self
         {
             headers.insert(axum::http::header::RETRY_AFTER, HeaderValue::from(*timestamp));
         }
@@ -206,11 +205,16 @@ impl RawMintRequest {
         };
 
         let account_id = if self.account_id.starts_with("0x") {
-            AccountId::from_hex(&self.account_id)
+            AccountId::from_hex(&self.account_id).map_err(AccountError::ParseId)
         } else {
-            AccountId::from_bech32(&self.account_id).map(|(_, account_id)| account_id)
+            Address::from_bech32(&self.account_id)
+                .map_err(AccountError::ParseAddress)
+                .and_then(|(_, address)| match address {
+                    Address::AccountId(account_id_address) => Ok(account_id_address.id()),
+                    _ => Err(AccountError::AddressNotIdBased),
+                })
         }
-        .map_err(MintRequestError::AccountId)?;
+        .map_err(MintRequestError::AccountError)?;
 
         let asset_amount =
             AssetAmount::new(self.asset_amount).map_err(MintRequestError::InvalidAssetAmount)?;
@@ -233,7 +237,7 @@ impl RawMintRequest {
         let challenge_str = self.challenge.ok_or(MintRequestError::MissingPowParameters)?;
         let nonce = self.nonce.ok_or(MintRequestError::MissingPowParameters)?;
 
-        server.submit_challenge(&challenge_str, nonce, account_id, &api_key.unwrap_or_default())?;
+        server.submit_challenge(&challenge_str, nonce, account_id, api_key.unwrap_or_default())?;
 
         Ok(MintRequest { account_id, note_type, asset_amount })
     }

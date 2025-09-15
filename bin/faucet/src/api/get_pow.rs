@@ -2,21 +2,26 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
-use miden_client::account::{AccountId, AccountIdError};
-use miden_faucet_pow::{ApiKey, Challenge, PoW};
+use miden_client::account::{AccountId, Address};
+use miden_pow_rate_limiter::{Challenge, PoWRateLimiter};
 use serde::Deserialize;
 
+use crate::api::AccountError;
+use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
 
 // ENDPOINT
 // ================================================================================================
 
 pub async fn get_pow(
-    State(pow): State<PoW>,
+    State(rate_limiter): State<PoWRateLimiter>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
-    let challenge = pow.build_challenge(request.account_id, request.api_key);
+    let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
+    let mut requestor = [0u8; 32];
+    requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
+    let challenge = rate_limiter.build_challenge(requestor, request.api_key);
     Ok(Json(challenge))
 }
 
@@ -39,11 +44,16 @@ pub struct RawPowRequest {
 impl RawPowRequest {
     pub fn validate(self) -> Result<PowRequest, PowRequestError> {
         let account_id = if self.account_id.starts_with("0x") {
-            AccountId::from_hex(&self.account_id)
+            AccountId::from_hex(&self.account_id).map_err(AccountError::ParseId)
         } else {
-            AccountId::from_bech32(&self.account_id).map(|(_, account_id)| account_id)
+            Address::from_bech32(&self.account_id)
+                .map_err(AccountError::ParseAddress)
+                .and_then(|(_, address)| match address {
+                    Address::AccountId(account_id_address) => Ok(account_id_address.id()),
+                    _ => Err(AccountError::AddressNotIdBased),
+                })
         }
-        .map_err(PowRequestError::InvalidAccount)?;
+        .map_err(PowRequestError::AccountError)?;
 
         let api_key = self
             .api_key
@@ -59,8 +69,8 @@ impl RawPowRequest {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PowRequestError {
-    #[error("account address failed to parse")]
-    InvalidAccount(#[source] AccountIdError),
+    #[error("account error")]
+    AccountError(#[source] AccountError),
     #[error("API key failed to parse")]
     InvalidApiKey(String),
 }
@@ -69,7 +79,7 @@ impl PowRequestError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::InvalidAccount(error) => error.as_report(),
+            Self::AccountError(error) => error.as_report(),
             Self::InvalidApiKey(_) => "Invalid API key".to_owned(),
         }
     }

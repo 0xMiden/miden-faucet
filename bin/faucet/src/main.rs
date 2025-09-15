@@ -1,4 +1,5 @@
 mod api;
+mod api_key;
 mod error_report;
 mod logging;
 mod network;
@@ -21,13 +22,14 @@ use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
 use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetAmount;
-use miden_faucet_pow::{ApiKey, PoWConfig};
+use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
 use url::Url;
 
 use crate::api::Server;
+use crate::api_key::ApiKey;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
 
@@ -50,8 +52,9 @@ const ENV_POW_GROWTH_RATE: &str = "MIDEN_FAUCET_POW_GROWTH_RATE";
 const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
 const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
-const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
+const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
+const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 
 // COMMANDS
 // ================================================================================================
@@ -71,11 +74,6 @@ pub enum Command {
         /// Endpoint of the faucet in the format `<ip>:<port>`.
         #[arg(long = "endpoint", value_name = "URL", env = ENV_ENDPOINT)]
         endpoint: Url,
-
-        /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
-        /// network. It is used to show the correct addresses and explorer URL in the UI.
-        #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
-        network: FaucetNetwork,
 
         /// Node RPC gRPC endpoint in the format `http://<host>[:<port>]`.
         #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
@@ -97,9 +95,15 @@ pub enum Command {
         #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
         remote_tx_prover_url: Option<Url>,
 
-        /// The secret to be used by the server to generate the `PoW` seed.
-        #[arg(long = "pow-secret", value_name = "STRING", env = ENV_POW_SECRET)]
-        pow_secret: Option<String>,
+        /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
+        /// network. It is used to display the correct bech32 addresses in the UI.
+        #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
+        network: FaucetNetwork,
+
+        /// The secret to be used by the server to sign the `PoW` challenges. This should NOT be
+        /// shared.
+        #[arg(long = "pow-secret", value_name = "STRING", default_value = "", env = ENV_POW_SECRET)]
+        pow_secret: String,
 
         /// The duration during which the `PoW` challenges are valid. Changing this will affect the
         /// rate limiting, since it works by rejecting new submissions while the previous submitted
@@ -137,6 +141,10 @@ pub enum Command {
         /// Path to the `SQLite` store.
         #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
         store_path: PathBuf,
+
+        /// Explorer URL.
+        #[arg(long = "explorer-url", value_name = "URL", env = ENV_EXPLORER_URL)]
+        explorer_url: Option<Url>,
     },
 
     /// Create a new public faucet account and save to the specified file.
@@ -194,11 +202,11 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         // Note: open-telemetry is handled in main.
         Command::Start {
             endpoint,
-            network,
             node_url,
             timeout,
             faucet_account_path,
             remote_tx_prover_url,
+            network,
             max_claimable_amount,
             pow_secret,
             pow_challenge_lifetime,
@@ -208,6 +216,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             api_keys,
             open_telemetry: _,
             store_path,
+            explorer_url,
         } => {
             let account_file = AccountFile::read(&faucet_account_path).context(format!(
                 "failed to load faucet account from file ({})",
@@ -240,12 +249,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
             let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
-            let pow_config = PoWConfig {
+            let rate_limiter_config = PoWRateLimiterConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
             };
+
             let server = Server::new(
                 faucet.faucet_id(),
                 decimals,
@@ -253,10 +263,11 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 faucet.issuance(),
                 max_claimable_amount,
                 tx_mint_requests,
-                pow_secret.unwrap_or_default().as_str(),
-                pow_config,
+                pow_secret.as_str(),
+                rate_limiter_config,
                 &api_keys,
                 store,
+                explorer_url,
             );
 
             // Use select to concurrently:
@@ -351,13 +362,21 @@ mod test {
     use std::time::{Duration, Instant};
 
     use fantoccini::ClientBuilder;
+    use miden_client::account::{
+        AccountId,
+        AccountIdAddress,
+        Address,
+        AddressInterface,
+        NetworkId,
+    };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::time::sleep;
     use url::Url;
 
+    use crate::network::FaucetNetwork;
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, FaucetNetwork, run_faucet_command};
+    use crate::{Cli, run_faucet_command};
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
     /// to test the faucet website. It then loads the website and checks that all the requests
@@ -373,12 +392,18 @@ mod test {
         let title = client.title().await.unwrap();
         assert_eq!(title, "Miden Faucet");
 
+        let network_id = NetworkId::Testnet;
+        let account_id = AccountId::try_from(0).unwrap();
+        let address =
+            Address::from(AccountIdAddress::new(account_id, AddressInterface::BasicWallet));
+        let address_bech32 = address.to_bech32(network_id);
+
         // Fill in the account address
         client
             .find(fantoccini::Locator::Css("#recipient-address"))
             .await
             .unwrap()
-            .send_keys("mtst1qrvhealccdyj7gqqqrlxl4n4f53uxwaw")
+            .send_keys(&address_bech32)
             .await
             .unwrap();
 
@@ -463,12 +488,12 @@ mod test {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
                         endpoint: endpoint_clone,
-                        network: FaucetNetwork::Testnet,
                         node_url: stub_node_url,
                         timeout: Duration::from_millis(5000),
                         max_claimable_amount: 1_000_000_000,
+                        network: FaucetNetwork::Localhost,
                         api_keys: vec![],
-                        pow_secret: None,
+                        pow_secret: "test".to_string(),
                         pow_challenge_lifetime: Duration::from_secs(30),
                         pow_cleanup_interval: Duration::from_secs(1),
                         pow_growth_rate: NonZeroUsize::new(1).unwrap(),
@@ -477,6 +502,7 @@ mod test {
                         remote_tx_prover_url: None,
                         open_telemetry: false,
                         store_path: temp_dir().join("test_store.sqlite3"),
+                        explorer_url: None,
                     },
                 }))
                 .await

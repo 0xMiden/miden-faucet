@@ -1,11 +1,11 @@
 [package]
 authors.workspace      = true
-description            = "Miden faucet's PoW"
+description            = "Miden Proof-of-Work rate limiter"
 edition.workspace      = true
 homepage.workspace     = true
-keywords               = ["faucet", "miden", "pow"]
+keywords               = ["miden", "pow"]
 license.workspace      = true
-name                   = "miden-faucet-pow"
+name                   = "miden-pow-rate-limiter"
 readme                 = "README.md"
 repository.workspace   = true
 rust-version.workspace = true
@@ -15,17 +15,10 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-# Miden dependencies.
-miden-client = { workspace = true }
-
-# External dependencies.
-base64    = { version = "0.22" }
-rand      = { features = ["thread_rng"], workspace = true }
 serde     = { features = ["derive"], version = "1.0" }
 sha3      = { version = "0.10" }
 thiserror = { workspace = true }
 tokio     = { features = ["fs"], workspace = true }
 
 [dev-dependencies]
-rand_chacha = { version = "0.9" }
-serde_json  = { version = "1.0" }
+serde_json = { version = "1.0" }
