@@ -1,8 +1,6 @@
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use tokio::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::challenge_cache::ChallengeCache;
 
@@ -155,11 +153,11 @@ impl PoWRateLimiter {
 
         // Check if requestor has recently submitted a challenge.
         if let Some(timestamp) = challenge_cache.has_challenge(requestor, domain) {
-            return Err(ChallengeError::RateLimited(
-                timestamp
-                    + self.config.challenge_lifetime.as_secs()
-                    + self.config.cleanup_interval.as_secs(),
-            ));
+            let remaining_time = (timestamp
+                + self.config.challenge_lifetime.as_secs()
+                + self.config.cleanup_interval.as_secs())
+            .saturating_sub(current_time);
+            return Err(ChallengeError::RateLimited(remaining_time));
         }
 
         // Check if the cache already contains the challenge. If not, it is inserted.
@@ -178,7 +176,7 @@ pub enum ChallengeError {
     ExpiredServerTimestamp(u64, u64),
     #[error("invalid PoW solution")]
     InvalidPoW,
-    #[error("requestor is rate limited")]
+    #[error("requestor is rate limited for {0} more seconds")]
     RateLimited(u64),
     #[error("challenge already used")]
     ChallengeAlreadyUsed,
@@ -274,9 +272,8 @@ mod tests {
         let challenge = pow.build_challenge(requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
+        let time_1 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let result = pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, time_1);
         assert!(result.is_ok());
 
         // Try to submit second challenge - should fail because of rate limiting
@@ -284,16 +281,16 @@ mod tests {
         let challenge = pow.build_challenge(requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
-        let second_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
+        let time_2 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let result = pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, time_2);
         assert!(result.is_err());
-        let expected_timestamp = current_time
+        let remaining_time = time_1
             + pow.config.challenge_lifetime.as_secs()
-            + pow.config.cleanup_interval.as_secs();
+            + pow.config.cleanup_interval.as_secs()
+            - time_2;
         match result {
             Err(ChallengeError::RateLimited(timestamp)) => {
-                assert_eq!(timestamp, expected_timestamp);
+                assert_eq!(timestamp, remaining_time);
             },
             _ => panic!("Expected RateLimited error"),
         }
@@ -302,8 +299,7 @@ mod tests {
         let domain = [2u8; 32];
         let challenge = pow.build_challenge(requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, second_time);
+        let result = pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, time_2);
         assert!(result.is_ok());
     }
 

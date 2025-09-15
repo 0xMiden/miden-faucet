@@ -18,7 +18,8 @@ workspace = true
 serde     = { features = ["derive"], version = "1.0" }
 sha3      = { version = "0.10" }
 thiserror = { workspace = true }
-tokio     = { features = ["fs"], workspace = true }
+tokio     = { features = ["time"], workspace = true }
 
 [dev-dependencies]
 serde_json = { version = "1.0" }
+tokio     = { features = ["time", "rt", "macros"], workspace = true }
