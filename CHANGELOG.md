@@ -2,7 +2,7 @@
 
 ## 0.11.4 (2025-09-16)
 
-- Fixed minting error by reducing faucet batch size ([#87](https://github.com/0xMiden/miden-faucet/pull/87)).
+- Reduce faucet batch size to 8 ([#87](https://github.com/0xMiden/miden-faucet/pull/87)).
 
 ## 0.11.3 (2025-09-09)
 
