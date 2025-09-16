@@ -220,7 +220,6 @@ impl Faucet {
                 // Ignore errors if the request was dropped.
                 let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
             }
-            dbg!("syncing state...");
             self.client.sync_state().await?;
         }
 
@@ -325,7 +324,7 @@ mod tests {
     use std::{env::temp_dir, str::FromStr};
 
     #[tokio::test]
-    async fn test_run() {
+    async fn test_batch() {
         let faucet_account_path = temp_dir().join("faucet.mac");
 
         // Create faucet account
@@ -365,9 +364,8 @@ mod tests {
 
             // Run the faucet on this thread's runtime
             rt.block_on(async {
-                dbg!("loading faucet...");
                 let faucet = Faucet::load(
-                    temp_dir().join("test_store.sqlite3"),
+                    PathBuf::from("test.sqlite3"),
                     NetworkId::Testnet,
                     AccountFile::read(&faucet_account_path).unwrap(),
                     &Url::from_str("http://localhost:57291").unwrap(),
@@ -376,8 +374,6 @@ mod tests {
                 )
                 .await
                 .unwrap();
-
-                dbg!("faucet loaded, running...");
 
                 faucet.run(rx_mint_requests).await.unwrap();
             });
