@@ -39,6 +39,9 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
+// TODO: batching 10 or more requests fails, see https://github.com/0xMiden/miden-faucet/issues/85
+const BATCH_SIZE: usize = 8;
+
 // FAUCET CLIENT
 // ================================================================================================
 
@@ -181,9 +184,8 @@ impl Faucet {
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
     ) -> anyhow::Result<()> {
         let mut buffer = Vec::new();
-        let limit = 256; // also limited by the queue size `REQUESTS_QUEUE_SIZE`
 
-        while requests.recv_many(&mut buffer, limit).await > 0 {
+        while requests.recv_many(&mut buffer, BATCH_SIZE).await > 0 {
             // Check if there are enough tokens available and update the supply counter for each
             // request.
             let mut valid_requests = vec![];
