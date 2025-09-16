@@ -60,6 +60,7 @@ miden-faucet start \
 | `--remote-tx-prover-url` | Remote transaction prover | - | No |
 | `--api-keys` | Comma-separated API keys | - | No |
 | `--enable-otel` | Enable OpenTelemetry | `false` | No |
+| `--batch-size` | Maximum amount of requests to process in each batch. It sets how many p2id notes to create in each transaction | `false` | No |
 
 ## Environment Variables
 
@@ -84,6 +85,7 @@ export MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT=1000
 export MIDEN_FAUCET_TIMEOUT=10s
 export MIDEN_FAUCET_ENABLE_OTEL=true
 export MIDEN_FAUCET_API_KEYS=key1,key2,key3
+export MIDEN_FAUCET_BATCH_SIZE=8
 ```
 
 ## Network Configurations
