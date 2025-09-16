@@ -1826,6 +1826,7 @@ dependencies = [
  "anyhow",
  "miden-client",
  "rand",
+ "rand_chacha",
  "thiserror 2.0.16",
  "tokio",
  "tracing",

@@ -5,12 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{
-    AccountFile,
-    AccountId,
-    AccountIdAddress,
-    Address,
-    AddressInterface,
-    NetworkId,
+    AccountFile, AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
@@ -19,11 +14,7 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    OutputNote,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, OutputNote, TransactionId, TransactionProver, TransactionRequestBuilder,
 };
 use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -184,6 +175,7 @@ impl Faucet {
         let limit = 256; // also limited by the queue size `REQUESTS_QUEUE_SIZE`
 
         while requests.recv_many(&mut buffer, limit).await > 0 {
+            // assert!(buffer.len() > 1, "buffer should have at least 2 requests");
             // Check if there are enough tokens available and update the supply counter for each
             // request.
             let mut valid_requests = vec![];
@@ -228,6 +220,7 @@ impl Faucet {
                 // Ignore errors if the request was dropped.
                 let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
             }
+            dbg!("syncing state...");
             self.client.sync_state().await?;
         }
 
@@ -312,4 +305,128 @@ fn build_p2id_notes(
         notes.push(OutputNote::Full(note));
     }
     Ok(notes)
+}
+
+#[cfg(test)]
+mod tests {
+    use miden_client::{
+        account::{AccountBuilder, AccountStorageMode, AccountType, component::AuthRpoFalcon512},
+        asset::TokenSymbol,
+        auth::AuthSecretKey,
+        crypto::SecretKey,
+    };
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+    use tokio::sync::{mpsc, oneshot};
+
+    use crate::types::NoteType;
+
+    use super::*;
+    use std::{env::temp_dir, str::FromStr};
+
+    #[tokio::test]
+    async fn test_run() {
+        let faucet_account_path = temp_dir().join("faucet.mac");
+
+        // Create faucet account
+        create_faucet_account(
+            faucet_account_path.clone(),
+            "TEST".to_string(),
+            6,
+            1_000_000_000_000,
+        )
+        .unwrap();
+
+        let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1000);
+        let mut receivers = vec![];
+        for _ in 0..15 {
+            let (sender, receiver) = oneshot::channel();
+            tx_mint_requests
+                .send((
+                    MintRequest {
+                        account_id: AccountId::try_from(0).unwrap(),
+                        note_type: NoteType::Public,
+                        asset_amount: AssetAmount::new(100_000_000).unwrap(),
+                    },
+                    sender,
+                ))
+                .await
+                .unwrap();
+            receivers.push(receiver);
+        }
+
+        std::thread::spawn(move || {
+            // Create a new runtime for this thread
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .enable_io()
+                .build()
+                .expect("Failed to build runtime");
+
+            // Run the faucet on this thread's runtime
+            rt.block_on(async {
+                dbg!("loading faucet...");
+                let faucet = Faucet::load(
+                    temp_dir().join("test_store.sqlite3"),
+                    NetworkId::Testnet,
+                    AccountFile::read(&faucet_account_path).unwrap(),
+                    &Url::from_str("http://localhost:57291").unwrap(),
+                    Duration::from_secs(10),
+                    None,
+                )
+                .await
+                .unwrap();
+
+                dbg!("faucet loaded, running...");
+
+                faucet.run(rx_mint_requests).await.unwrap();
+            });
+        });
+
+        for receiver in receivers {
+            receiver.await.unwrap().unwrap();
+        }
+    }
+
+    fn create_faucet_account(
+        output_path: PathBuf,
+        token_symbol: String,
+        decimals: u8,
+        max_supply: u64,
+    ) -> anyhow::Result<()> {
+        let current_dir = std::env::current_dir().context("failed to open current directory")?;
+
+        let mut rng = ChaCha20Rng::from_seed(rand::random());
+        let secret = {
+            let auth_seed: [u64; 4] = rng.random();
+            let rng_seed = Word::from(auth_seed.map(Felt::new));
+            SecretKey::with_rng(&mut RpoRandomCoin::new(rng_seed))
+        };
+
+        let symbol =
+            TokenSymbol::try_from(token_symbol.as_str()).context("failed to parse token symbol")?;
+        let max_supply = Felt::try_from(max_supply)
+            .map_err(anyhow::Error::msg)
+            .context("max supply value is greater than or equal to the field modulus")?;
+
+        let (account, account_seed) = AccountBuilder::new(rng.random())
+            .account_type(AccountType::FungibleFaucet)
+            .storage_mode(AccountStorageMode::Public)
+            .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
+            .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
+            .build()
+            .context("failed to create basic fungible faucet account")?;
+
+        let account_data = AccountFile::new(
+            account,
+            Some(account_seed),
+            vec![AuthSecretKey::RpoFalcon512(secret)],
+        );
+
+        let output_path = current_dir.join(output_path);
+        account_data.write(&output_path).with_context(|| {
+            format!("failed to write account data to file: {}", output_path.display())
+        })?;
+        Ok(())
+    }
 }
