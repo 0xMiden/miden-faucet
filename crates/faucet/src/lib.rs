@@ -176,6 +176,7 @@ impl Faucet {
     ///
     /// Once the available supply is exceeded, any requests that exceed the supply will return an
     /// error. The request stream is closed and the minter shuts down.
+    #[instrument(name = "faucet.run", skip_all, err)]
     pub async fn run(
         mut self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
@@ -222,13 +223,15 @@ impl Faucet {
             };
             let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
-            let tx_id = Box::pin(self.create_transaction(notes)).await?;
+            let tx_id = Box::pin(self.create_transaction(notes))
+                .await
+                .context("faucet failed to create transaction")?;
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
                 let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
             }
-            self.client.sync_state().await?;
+            self.client.sync_state().await.context("faucet failed to sync state")?;
         }
 
         tracing::info!("Request stream closed, shutting down minter");
