@@ -97,5 +97,5 @@ The PoW difficulty of the faucet scales with the number of active requests. When
 To request a challenge using an API key:
 
 ```bash
-GET /pow?account_id=mdev1qz4p2xx66lslqgzg93e87szxddcqqppnskk&api_key=miden_faucet_wONsvRXLZ9FgQG+nlkaq9f2X53cLswe4HSzEIUjFIkQ=
+GET /pow?account_id=0xca8203e8e58cf72049b061afca78ce&api_key=miden_faucet_wONsvRXLZ9FgQG+nlkaq9f2X53cLswe4HSzEIUjFIkQ=
 ```

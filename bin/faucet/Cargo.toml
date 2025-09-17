@@ -35,7 +35,7 @@ opentelemetry-otlp    = { workspace = true }
 opentelemetry_sdk     = { workspace = true }
 rand                  = { features = ["thread_rng"], workspace = true }
 rand_chacha           = { version = "0.9" }
-serde                 = { features = ["derive"], workspace = true }
+serde                 = { workspace = true }
 serde_json            = { workspace = true }
 sha2                  = { workspace = true }
 thiserror             = { workspace = true }
