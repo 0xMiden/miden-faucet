@@ -14,7 +14,6 @@ repository   = "https://github.com/0xMiden/miden-faucet"
 rust-version = "1.89"
 version      = "0.12.0"
 
-
 # Optimize the cryptography for faster tests involving account creation.
 [profile.test.package.miden-crypto]
 opt-level = 2

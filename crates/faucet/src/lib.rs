@@ -229,7 +229,7 @@ impl Faucet {
                 RpoRandomCoin::new(rng_seed)
             };
             let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
-            let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
+            let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
             let tx_id = Box::pin(self.create_transaction(notes))
                 .await
                 .context("faucet failed to create transaction")?;
