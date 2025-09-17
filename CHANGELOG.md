@@ -5,6 +5,15 @@
 ### Changes
 
 - Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
+
+## 0.11.4 (2025-09-16)
+
+- Reduce faucet batch size to 8 ([#87](https://github.com/0xMiden/miden-faucet/pull/87)).
+
+## 0.11.3 (2025-09-09)
+
+- Fixed display for minted token amount ([#82](https://github.com/0xMiden/miden-faucet/pull/82)).
+
 ## 0.11.2 (2025-09-08)
 
 - Refreshed dependencies.

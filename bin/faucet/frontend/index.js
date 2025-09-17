@@ -25,7 +25,7 @@ class MidenFaucet {
     async handleSendTokens(isPrivateNote) {
         const recipient = this.recipientInput.value.trim();
         const amount = this.tokenSelect.value;
-        const amountAsTokens = this.tokenSelect.textContent[this.tokenSelect.selectedIndex];
+        const amountAsTokens = this.tokenSelect[this.tokenSelect.selectedIndex].textContent;
 
         if (!recipient) {
             this.showError('Recipient address is required.');
