@@ -39,6 +39,8 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
+// TODO: batching 10 or more requests fails, see https://github.com/0xMiden/miden-faucet/issues/85
+const BATCH_SIZE: usize = 8;
 const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 
 // FAUCET CLIENT
@@ -182,14 +184,14 @@ impl Faucet {
     ///
     /// Once the available supply is exceeded, any requests that exceed the supply will return an
     /// error. The request stream is closed and the minter shuts down.
+    #[instrument(name = "faucet.run", skip_all, err)]
     pub async fn run(
         mut self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
     ) -> anyhow::Result<()> {
         let mut buffer = Vec::new();
-        let limit = 256; // also limited by the queue size `REQUESTS_QUEUE_SIZE`
 
-        while requests.recv_many(&mut buffer, limit).await > 0 {
+        while requests.recv_many(&mut buffer, BATCH_SIZE).await > 0 {
             // Check if there are enough tokens available and update the supply counter for each
             // request.
             let mut valid_requests = vec![];
@@ -227,14 +229,16 @@ impl Faucet {
                 RpoRandomCoin::new(rng_seed)
             };
             let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
-            let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
-            let tx_id = Box::pin(self.create_transaction(notes)).await?;
+            let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
+            let tx_id = Box::pin(self.create_transaction(notes))
+                .await
+                .context("faucet failed to create transaction")?;
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
                 let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
             }
-            self.client.sync_state().await?;
+            self.client.sync_state().await.context("faucet failed to sync state")?;
         }
 
         tracing::info!("Request stream closed, shutting down minter");
