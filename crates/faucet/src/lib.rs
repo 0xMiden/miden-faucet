@@ -14,18 +14,18 @@ use miden_client::account::{
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
-use miden_client::crypto::RpoRandomCoin;
+use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
-use miden_client::note::{NoteError, create_p2id_note};
+use miden_client::note::{Note, NoteError, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
     LocalTransactionProver,
-    OutputNote,
     TransactionId,
     TransactionProver,
     TransactionRequestBuilder,
+    TransactionScript,
 };
-use miden_client::utils::RwLock;
+use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
@@ -39,7 +39,7 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
-const BATCH_SIZE: usize = 64;
+const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -72,6 +72,7 @@ pub struct Faucet {
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<RwLock<AssetAmount>>,
     max_supply: AssetAmount,
+    script: TransactionScript,
 }
 
 impl Faucet {
@@ -159,12 +160,15 @@ impl Faucet {
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
 
+        let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
+
         Ok(Self {
             id,
             client,
             tx_prover,
             issuance,
             max_supply,
+            script,
         })
     }
 
@@ -182,10 +186,11 @@ impl Faucet {
     pub async fn run(
         mut self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
+        batch_size: usize,
     ) -> anyhow::Result<()> {
         let mut buffer = Vec::new();
 
-        while requests.recv_many(&mut buffer, BATCH_SIZE).await > 0 {
+        while requests.recv_many(&mut buffer, batch_size).await > 0 {
             // Check if there are enough tokens available and update the supply counter for each
             // request.
             let mut valid_requests = vec![];
@@ -223,7 +228,7 @@ impl Faucet {
                 RpoRandomCoin::new(rng_seed)
             };
             let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
-            let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
+            let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
             let tx_id = Box::pin(self.create_transaction(notes))
                 .await
                 .context("faucet failed to create transaction")?;
@@ -243,15 +248,33 @@ impl Faucet {
     /// Creates a transaction with the given notes, executes it, proves it, and submits using the
     /// local miden-client. This results in submitting the transaction to the node and updating the
     /// local db to track the created notes.
-    async fn create_transaction(
-        &mut self,
-        notes: Vec<OutputNote>,
-    ) -> Result<TransactionId, ClientError> {
+    async fn create_transaction(&mut self, notes: Vec<Note>) -> Result<TransactionId, ClientError> {
         // Build the transaction
-        let tx = TransactionRequestBuilder::new().own_output_notes(notes).build()?;
+        let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
+        let n = notes.len() as u64;
+        let mut note_data = vec![Felt::new(n)];
+        for note in notes {
+            // SAFETY: these are p2id notes with only one fungible asset
+            let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
+
+            note_data.extend(note.recipient().digest().iter());
+            note_data.push(Felt::from(note.metadata().note_type()));
+            note_data.push(Felt::from(note.metadata().tag()));
+            note_data.push(Felt::new(amount));
+        }
+        let note_data_commitment = Rpo256::hash_elements(&note_data);
+        let advice_map = [(note_data_commitment, note_data)];
+
+        let tx_request = TransactionRequestBuilder::new()
+            .custom_script(self.script.clone())
+            .extend_advice_map(advice_map)
+            .expected_output_recipients(expected_output_recipients)
+            .script_arg(note_data_commitment)
+            .build()?;
 
         // Execute the transaction
-        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx)).await?;
+        let tx_result =
+            Box::pin(self.client.new_transaction(self.id.account_id, tx_request)).await?;
         let tx_id = tx_result.executed_transaction().id();
 
         // Prove and submit the transaction
@@ -297,7 +320,7 @@ fn build_p2id_notes(
     source: FaucetId,
     requests: &[MintRequest],
     rng: &mut RpoRandomCoin,
-) -> Result<Vec<OutputNote>, NoteError> {
+) -> Result<Vec<Note>, NoteError> {
     // If building a note fails, we discard the whole batch. Should never happen, since account
     // ids are validated on the request level.
     let mut notes = Vec::new();
@@ -313,7 +336,7 @@ fn build_p2id_notes(
                 Felt::default(),
                 rng,
             ).inspect_err(|err| tracing::error!(request.account_id=%request.account_id, ?err, "failed to build note"))?;
-        notes.push(OutputNote::Full(note));
+        notes.push(note);
     }
     Ok(notes)
 }

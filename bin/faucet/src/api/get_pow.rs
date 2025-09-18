@@ -3,34 +3,42 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
+use miden_pow_rate_limiter::{Challenge, PoWRateLimiter};
 use serde::Deserialize;
 
 use crate::api::AccountError;
+use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
-use crate::pow::api_key::ApiKey;
-use crate::pow::challenge::Challenge;
-use crate::pow::{PoW, PowRequest};
 
 // ENDPOINT
 // ================================================================================================
 
 pub async fn get_pow(
-    State(pow): State<PoW>,
+    State(rate_limiter): State<PoWRateLimiter>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
-    let challenge = pow.build_challenge(request);
+    let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
+    let mut requestor = [0u8; 32];
+    requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
+    let challenge = rate_limiter.build_challenge(requestor, request.api_key);
     Ok(Json(challenge))
 }
 
 // REQUEST VALIDATION
 // ================================================================================================
 
+/// Validated and parsed request for the `PoW` challenge.
+pub struct PowRequest {
+    pub account_id: AccountId,
+    pub api_key: ApiKey,
+}
+
 /// Used to receive the initial `get_pow` request from the user.
 #[derive(Deserialize)]
 pub struct RawPowRequest {
-    pub account_id: String,
-    pub api_key: Option<String>,
+    account_id: String,
+    api_key: Option<String>,
 }
 
 impl RawPowRequest {

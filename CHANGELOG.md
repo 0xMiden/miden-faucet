@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12 (TBD)
+
+### Changes
+
+- Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
+
 ## 0.11.5 (2025-09-18)
 
 - Patched miden-client to 0.11.6 ([#90](https://github.com/0xMiden/miden-faucet/pull/90)).
@@ -25,6 +31,12 @@
 
 ### Changes
 
+- [BREAKING] Incremented MSRV to 1.89.
+
+## 0.11.0 (2025-09-01)
+
+### Changes
+
 - Introduced `miden-faucet-lib` crate ([#10](https://github.com/0xMiden/miden-faucet/pull/10)).
 - Integrated miden-client ([#11](https://github.com/0xMiden/miden-faucet/pull/11)).
 - Added `/get_note` endpoint ([#19](https://github.com/0xMiden/miden-faucet/pull/19)).
@@ -36,6 +48,7 @@
 - Replace amount options validation for maximum claimable amount ([#52](https://github.com/0xMiden/miden-faucet/pull/52)).
 - Added `mdbook` documentation ([#61](https://github.com/0xMiden/miden-faucet/pull/61)).
 - Added `--explorer-url` CLI parameter to optionally set the explorer url ([#63](https://github.com/0xMiden/miden-faucet/pull/63)).
+- Introduced `miden-pow-rate-limiter` crate ([#67](https://github.com/0xMiden/miden-faucet/pull/67))
 
 ## 0.10.0 (2025-07-10)
 

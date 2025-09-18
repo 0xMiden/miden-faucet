@@ -27,8 +27,6 @@ The high-level structure of the project looks like follows:
 - **Purpose**: HTTP API endpoints for programmatic access
 - **Features**:
    - Input parsing and validation
-   - PoW challenges validation
-   - Rate limiting
    - Handle account metadata
 
 ### 3. Faucet lib
@@ -40,7 +38,14 @@ The high-level structure of the project looks like follows:
   - Notes creation
   - Token issuance tracking
 
-### 4. Miden Client
+### 4. PoW Rate Limiter
+- **Technology**: Rust library (`crates/pow`)
+- **Purpose**: Proof of Work rate limiter
+- **Features**:
+   - PoW challenges issuing, tracking and validation
+   - Rate limiting
+
+### 5. Miden Client
 - **Purpose**: Connection with the Miden Node
 - **Features**:
   - Transaction creation, execution, and submission

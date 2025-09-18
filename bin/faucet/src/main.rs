@@ -1,8 +1,8 @@
 mod api;
+mod api_key;
 mod error_report;
 mod logging;
 mod network;
-mod pow;
 #[cfg(test)]
 mod testing;
 
@@ -22,16 +22,16 @@ use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
 use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetAmount;
+use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
 use url::Url;
 
 use crate::api::Server;
+use crate::api_key::ApiKey;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
-use crate::pow::PoWConfig;
-use crate::pow::api_key::ApiKey;
 
 // CONSTANTS
 // =================================================================================================
@@ -55,6 +55,7 @@ const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
+const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
 
 // COMMANDS
 // ================================================================================================
@@ -96,7 +97,7 @@ pub enum Command {
         remote_tx_prover_url: Option<Url>,
 
         /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
-        /// network. It is used to show the correct addresses and explorer URL in the UI.
+        /// network. It is used to display the correct bech32 addresses in the UI.
         #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
         network: FaucetNetwork,
 
@@ -145,6 +146,11 @@ pub enum Command {
         /// Explorer URL.
         #[arg(long = "explorer-url", value_name = "URL", env = ENV_EXPLORER_URL)]
         explorer_url: Option<Url>,
+
+        /// The maximum number of requests to process in each batch. Each batch is processed in a
+        /// single transaction.
+        #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
+        batch_size: usize,
     },
 
     /// Create a new public faucet account and save to the specified file.
@@ -217,6 +223,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             open_telemetry: _,
             store_path,
             explorer_url,
+            batch_size,
         } => {
             let account_file = AccountFile::read(&faucet_account_path).context(format!(
                 "failed to load faucet account from file ({})",
@@ -249,7 +256,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .collect::<Result<Vec<_>, _>>()
                 .context("failed to decode API keys")?;
             let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
-            let pow_config = PoWConfig {
+            let rate_limiter_config = PoWRateLimiterConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
                 growth_rate: pow_growth_rate,
@@ -264,7 +271,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 max_claimable_amount,
                 tx_mint_requests,
                 pow_secret.as_str(),
-                pow_config,
+                rate_limiter_config,
                 &api_keys,
                 store,
                 explorer_url,
@@ -273,7 +280,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             // Use select to concurrently:
             // - Run and wait for the faucet (on current thread)
             // - Run and wait for server (in a spawned task)
-            let faucet_future = faucet.run(rx_mint_requests);
+            let faucet_future = faucet.run(rx_mint_requests, batch_size);
             let server_future = async {
                 let server_handle =
                     tokio::spawn(
@@ -503,6 +510,7 @@ mod test {
                         open_telemetry: false,
                         store_path: temp_dir().join("test_store.sqlite3"),
                         explorer_url: None,
+                        batch_size: 8,
                     },
                 }))
                 .await
