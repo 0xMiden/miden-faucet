@@ -6,7 +6,9 @@ use miden_client::account::{AccountId, Address};
 use miden_client::utils::ToHex;
 use miden_pow_rate_limiter::PoWRateLimiter;
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
+use crate::COMPONENT;
 use crate::api::AccountError;
 use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
@@ -14,6 +16,10 @@ use crate::error_report::ErrorReport;
 // ENDPOINT
 // ================================================================================================
 
+#[instrument(
+    parent = None, target = COMPONENT, name = "faucet.server.get_pow", skip_all,
+    fields(account_id = %params.account_id)
+)]
 pub async fn get_pow(
     State(rate_limiter): State<PoWRateLimiter>,
     Query(params): Query<RawPowRequest>,

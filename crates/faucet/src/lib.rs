@@ -40,6 +40,7 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
+const COMPONENT: &str = "miden-faucet-client";
 const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 
 // FAUCET CLIENT
@@ -85,7 +86,7 @@ impl Faucet {
     ///
     /// If a remote transaction prover url is provided, it is used to prove transactions. Otherwise,
     /// a local transaction prover is used.
-    #[instrument(name = "faucet.load", fields(id), skip_all)]
+    #[instrument(target = COMPONENT, name = "faucet.load", fields(id), skip_all)]
     pub async fn load(
         store_path: PathBuf,
         network_id: NetworkId,
@@ -185,7 +186,7 @@ impl Faucet {
     ///
     /// Once the available supply is exceeded, any requests that exceed the supply will return an
     /// error. The request stream is closed and the minter shuts down.
-    #[instrument(name = "faucet.run", skip_all, err)]
+    #[instrument(target = COMPONENT, name = "faucet.run", skip_all, err)]
     pub async fn run(
         mut self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
@@ -225,22 +226,59 @@ impl Faucet {
                 continue;
             }
 
-            let mut rng = {
-                let auth_seed: [u64; 4] = rng().random();
-                let rng_seed = Word::from(auth_seed.map(Felt::new));
-                RpoRandomCoin::new(rng_seed)
+            // Root span for this mint attempt (batch)
+            let total_requested: u64 =
+                valid_requests.iter().map(|r| r.asset_amount.base_units()).sum();
+            let num_private = valid_requests
+                .iter()
+                .filter(|r| matches!(r.note_type, crate::types::NoteType::Private))
+                .count() as u64;
+            let num_public = valid_requests.len() as u64 - num_private;
+            let mint_span = tracing::info_span!(
+                target: COMPONENT,
+                "faucet.mint",
+                faucet_id = %self.id.account_id,
+                num_requests = valid_requests.len() as u64,
+                total_requested = total_requested,
+                num_private = num_private,
+                num_public = num_public,
+                tx_id = tracing::field::Empty,
+            );
+            let _mint_enter = mint_span.enter();
+
+            // Build notes
+            let build_span = tracing::info_span!(
+                target: COMPONENT,
+                "faucet.mint.build_notes",
+                num_requests = valid_requests.len() as u64
+            );
+            let notes = {
+                let _enter = build_span.enter();
+                let mut rng = {
+                    let auth_seed: [u64; 4] = rng().random();
+                    let rng_seed = Word::from(auth_seed.map(Felt::new));
+                    RpoRandomCoin::new(rng_seed)
+                };
+                build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?
             };
-            let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
             let tx_id = Box::pin(self.create_transaction(notes))
                 .await
                 .context("faucet failed to create transaction")?;
+            tracing::Span::current().record("tx_id", tx_id.to_string());
 
+            let send_resp_span =
+                tracing::info_span!(target: COMPONENT, "faucet.mint.send_responses");
+            let _enter = send_resp_span.enter();
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
                 let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
             }
-            self.client.sync_state().await.context("faucet failed to sync state")?;
+            let sync_span = tracing::info_span!(target: COMPONENT, "faucet.mint.state_sync");
+            {
+                let _enter = sync_span.enter();
+                self.client.sync_state().await.context("faucet failed to sync state")?;
+            }
         }
 
         tracing::info!("Request stream closed, shutting down minter");
@@ -251,7 +289,10 @@ impl Faucet {
     /// Creates a transaction with the given notes, executes it, proves it, and submits using the
     /// local miden-client. This results in submitting the transaction to the node and updating the
     /// local db to track the created notes.
+    #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err, fields(num_notes, tx_id))]
     async fn create_transaction(&mut self, notes: Vec<Note>) -> Result<TransactionId, ClientError> {
+        let span = tracing::Span::current();
+        span.record("num_notes", notes.len() as u64);
         // Build the transaction
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
         let n = notes.len() as u64;
@@ -276,20 +317,33 @@ impl Faucet {
             .build()?;
 
         // Execute the transaction
-        let tx_result =
-            Box::pin(self.client.new_transaction(self.id.account_id, tx_request)).await?;
+        let exec_span = tracing::info_span!(target: COMPONENT, "faucet.mint.execute");
+        let tx_result = {
+            let _enter = exec_span.enter();
+            Box::pin(self.client.new_transaction(self.id.account_id, tx_request)).await?
+        };
         let tx_id = tx_result.executed_transaction().id();
+        tracing::Span::current().record("tx_id", tx_id.to_string());
 
         // Prove and submit the transaction
-        let prover_failed = Box::pin(
-            self.client
-                .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
-        )
-        .await
-        .is_err();
+        let prove_remote_span = tracing::info_span!(target: COMPONENT, "faucet.mint.prove_remote");
+        let prover_failed = {
+            let _enter = prove_remote_span.enter();
+            Box::pin(
+                self.client
+                    .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
+            )
+            .await
+            .is_err()
+        };
         if prover_failed {
             warn!("Failed to prove transaction with remote prover, falling back to local prover");
-            Box::pin(self.client.submit_transaction(tx_result)).await?;
+            let submit_local_span =
+                tracing::info_span!(target: COMPONENT, "faucet.mint.prove_local_and_submit");
+            {
+                let _enter = submit_local_span.enter();
+                Box::pin(self.client.submit_transaction(tx_result)).await?;
+            }
         }
 
         Ok(tx_id)

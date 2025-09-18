@@ -11,9 +11,7 @@ fn main() {
         .status()
         .expect("Failed to execute npm install");
 
-    if !npm_install.success() {
-        panic!("npm install failed");
-    }
+    assert!(npm_install.success(), "npm install failed");
 
     let npm_build = Command::new("npm")
         .arg("run")
@@ -22,7 +20,5 @@ fn main() {
         .status()
         .expect("Failed to execute npm run build");
 
-    if !npm_build.success() {
-        panic!("npm run build failed");
-    }
+    assert!(npm_build.success(), "npm run build failed");
 }

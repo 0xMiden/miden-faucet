@@ -41,19 +41,29 @@ pub async fn get_tokens(
     span.record("amount", requested_amount);
     span.record("note_type", validated_request.note_type.to_string());
 
-    server
-        .mint_state
-        .request_sender
-        .try_send((validated_request, mint_response_sender))
-        .map_err(|err| match err {
-            TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
-            TrySendError::Closed(_) => GetTokenError::FaucetClosed,
-        })?;
+    {
+        let enqueue_span =
+            tracing::info_span!(target: COMPONENT, "faucet.server.get_tokens.enqueue");
+        let _enter = enqueue_span.enter();
+        server
+            .mint_state
+            .request_sender
+            .try_send((validated_request, mint_response_sender))
+            .map_err(|err| match err {
+                TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
+                TrySendError::Closed(_) => GetTokenError::FaucetClosed,
+            })?;
+    }
 
-    let mint_response = mint_response_receiver
-        .await
-        .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
-        .map_err(GetTokenError::MintError)?;
+    let mint_response = {
+        let await_span =
+            tracing::info_span!(target: COMPONENT, "faucet.server.get_tokens.await_mint");
+        let _enter = await_span.enter();
+        mint_response_receiver
+            .await
+            .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
+            .map_err(GetTokenError::MintError)?
+    };
 
     Ok(Json(GetTokensResponse {
         tx_id: mint_response.tx_id.to_string(),
