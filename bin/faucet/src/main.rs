@@ -15,7 +15,11 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
 use miden_client::account::{
-    Account, AccountBuilder, AccountFile, AccountStorageMode, AccountType,
+    Account,
+    AccountBuilder,
+    AccountFile,
+    AccountStorageMode,
+    AccountType,
 };
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
@@ -428,7 +432,11 @@ mod test {
 
     use fantoccini::ClientBuilder;
     use miden_client::account::{
-        AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
+        AccountId,
+        AccountIdAddress,
+        Address,
+        AddressInterface,
+        NetworkId,
     };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
