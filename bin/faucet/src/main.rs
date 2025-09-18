@@ -81,19 +81,19 @@ pub enum Command {
         config: ClientConfig,
 
         /// Symbol of the new token.
-        #[arg(short, long, value_name = "STRING")]
-        token_symbol: String,
+        #[arg(short, long, value_name = "STRING", requires_all = ["decimals", "max_supply"])]
+        token_symbol: Option<String>,
 
         /// Decimals of the new token.
-        #[arg(short, long, value_name = "U8")]
-        decimals: u8,
+        #[arg(short, long, value_name = "U8", requires_all = ["token_symbol", "max_supply"])]
+        decimals: Option<u8>,
 
         /// Max supply of the new token (in base units).
-        #[arg(short, long, value_name = "U64")]
-        max_supply: u64,
+        #[arg(short, long, value_name = "U64", requires_all = ["token_symbol", "decimals"])]
+        max_supply: Option<u64>,
 
         /// Set an existing faucet account file to use, instead of creating a new account.
-        #[arg(long = "import", value_name = "FILE")]
+        #[arg(long = "import", value_name = "FILE", conflicts_with_all = ["token_symbol", "decimals", "max_supply"])]
         import_account_path: Option<PathBuf>,
 
         /// Whether to deploy the faucet account to the node.
@@ -239,8 +239,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             import_account_path,
             deploy,
         } => {
-            println!("Generating new faucet account. This may take a few minutes...");
-
             let (account, account_seed, secret) = if let Some(account_path) = import_account_path {
                 // Import existing faucet account
                 let account_data = AccountFile::read(account_path)
@@ -253,6 +251,12 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     .clone();
                 (account_data.account, seed, secret)
             } else {
+                println!("Generating new faucet account. This may take a few minutes...");
+                let token_symbol =
+                    token_symbol.expect("token_symbol should be present when not importing");
+                let decimals = decimals.expect("decimals should be present when not importing");
+                let max_supply =
+                    max_supply.expect("max_supply should be present when not importing");
                 create_faucet_account(token_symbol.as_str(), max_supply, decimals)?
             };
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
@@ -267,7 +271,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .await
                 .context("failed to initialize faucet")?;
 
-            println!("Faucet account successfully created");
+            println!("Faucet account successfully initialized");
         },
 
         Command::CreateApiKeys { count: key_count } => {
@@ -307,7 +311,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 timeout,
                 remote_tx_prover_url,
             };
-            let faucet = Faucet::load(config).await.context("failed to load faucet")?;
+            let faucet = Faucet::load(&config).await.context("failed to load faucet")?;
 
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
@@ -536,9 +540,9 @@ mod test {
         Box::pin(run_faucet_command(Cli {
             command: crate::Command::New {
                 config: config.clone(),
-                token_symbol: "TEST".to_string(),
-                decimals: 6,
-                max_supply: 1_000_000_000_000,
+                token_symbol: Some("TEST".to_string()),
+                decimals: Some(6),
+                max_supply: Some(1_000_000_000_000),
                 import_account_path: None,
                 deploy: false,
             },

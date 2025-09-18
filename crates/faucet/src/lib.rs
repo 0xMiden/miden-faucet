@@ -22,7 +22,9 @@ use miden_client::transaction::{
     LocalTransactionProver,
     TransactionId,
     TransactionProver,
+    TransactionRequest,
     TransactionRequestBuilder,
+    TransactionRequestError,
     TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
@@ -117,23 +119,9 @@ impl Faucet {
         client.set_default_account_id(account.id()).await?;
 
         if deploy {
-            client.ensure_genesis_in_place().await?;
-            let tx_request = TransactionRequestBuilder::new().build()?;
-            let tx_result = Box::pin(client.new_transaction(account.id(), tx_request)).await?;
-            let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
-                Some(url) => Arc::new(RemoteTransactionProver::new(url)),
-                None => Arc::new(LocalTransactionProver::default()),
-            };
-            let prover_failed =
-                Box::pin(client.submit_transaction_with_prover(tx_result.clone(), tx_prover))
-                    .await
-                    .is_err();
-            if prover_failed {
-                warn!(
-                    "Failed to prove transaction with remote prover, falling back to local prover"
-                );
-                Box::pin(client.submit_transaction(tx_result)).await?;
-            }
+            let mut faucet = Self::load(config).await?;
+            let empty_tx_request = TransactionRequestBuilder::new().build()?;
+            faucet.submit_transaction(empty_tx_request).await?;
         }
 
         Ok(())
@@ -160,7 +148,7 @@ impl Faucet {
     /// The account is loaded from the local store. If it is not tracked, it is fetched from the
     /// node and added to the local store.
     #[instrument(name = "faucet.load", skip_all)]
-    pub async fn load(config: FaucetConfig) -> anyhow::Result<Self> {
+    pub async fn load(config: &FaucetConfig) -> anyhow::Result<Self> {
         let mut client = ClientBuilder::new()
             .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .filesystem_keystore(KEYSTORE_PATH)
@@ -177,11 +165,11 @@ impl Faucet {
         client.ensure_genesis_in_place().await?;
 
         let faucet = BasicFungibleFaucet::try_from(account)?;
-        let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url {
+        let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
         };
-        let id = FaucetId::new(account.id(), config.network_id);
+        let id = FaucetId::new(account.id(), config.network_id.clone());
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance =
             Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
@@ -254,9 +242,12 @@ impl Faucet {
             };
             let notes = build_p2id_notes(&self.id, &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
-            let tx_id = Box::pin(self.create_transaction(notes))
+            let tx_request =
+                self.create_transaction(notes).context("faucet failed to create transaction")?;
+            let tx_id = self
+                .submit_transaction(tx_request)
                 .await
-                .context("faucet failed to create transaction")?;
+                .context("faucet failed to submit transaction")?;
 
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
@@ -270,11 +261,11 @@ impl Faucet {
         Ok(())
     }
 
-    /// Creates a transaction with the given notes, executes it, proves it, and submits using the
-    /// local miden-client. This results in submitting the transaction to the node and updating the
-    /// local db to track the created notes.
-    async fn create_transaction(&mut self, notes: Vec<Note>) -> Result<TransactionId, ClientError> {
-        // Build the transaction
+    /// Creates a transaction that generates the given p2id notes.
+    fn create_transaction(
+        &mut self,
+        notes: Vec<Note>,
+    ) -> Result<TransactionRequest, TransactionRequestError> {
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
         let n = notes.len() as u64;
         let mut note_data = vec![Felt::new(n)];
@@ -290,13 +281,21 @@ impl Faucet {
         let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
 
-        let tx_request = TransactionRequestBuilder::new()
+        TransactionRequestBuilder::new()
             .custom_script(self.script.clone())
             .extend_advice_map(advice_map)
             .expected_output_recipients(expected_output_recipients)
             .script_arg(note_data_commitment)
-            .build()?;
+            .build()
+    }
 
+    /// Executes, proves, and then submits a transaction using the local miden-client.
+    /// This results in submitting the transaction to the node and updating the local db to track
+    /// the created notes.
+    async fn submit_transaction(
+        &mut self,
+        tx_request: TransactionRequest,
+    ) -> Result<TransactionId, ClientError> {
         // Execute the transaction
         let tx_result =
             Box::pin(self.client.new_transaction(self.id.account_id, tx_request)).await?;
