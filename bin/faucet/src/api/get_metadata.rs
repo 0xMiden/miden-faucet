@@ -7,6 +7,8 @@ use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::types::AssetAmount;
 use serde::{Serialize, Serializer};
 use url::Url;
+use tracing::instrument;
+use crate::COMPONENT;
 
 /// Describes the faucet metadata needed to show on the frontend.
 pub struct Metadata {
@@ -36,6 +38,7 @@ impl Serialize for Metadata {
 // ENDPOINT
 // ================================================================================================
 
+#[instrument(parent = None, target = COMPONENT, name = "faucet.server.get_metadata", skip_all)]
 pub async fn get_metadata(State(metadata): State<&'static Metadata>) -> Json<&'static Metadata> {
     Json(metadata)
 }

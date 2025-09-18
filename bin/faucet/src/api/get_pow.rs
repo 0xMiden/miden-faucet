@@ -2,17 +2,23 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
+use tracing::instrument;
 use miden_client::account::{AccountId, Address};
 use miden_pow_rate_limiter::{Challenge, PoWRateLimiter};
 use serde::Deserialize;
 
 use crate::api::AccountError;
+use crate::COMPONENT;
 use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
 
 // ENDPOINT
 // ================================================================================================
 
+#[instrument(
+    parent = None, target = COMPONENT, name = "faucet.server.get_pow", skip_all,
+    fields(account_id = %params.account_id)
+)]
 pub async fn get_pow(
     State(rate_limiter): State<PoWRateLimiter>,
     Query(params): Query<RawPowRequest>,
