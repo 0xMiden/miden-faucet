@@ -11,10 +11,10 @@ class MidenFaucet {
         this.tokenAmountOptions = [100, 500, 1000];
         this.explorer_url = null;
 
-        // Check if SHA3 is available right from the start
-        if (typeof sha3_256 === 'undefined') {
-            console.error("SHA3 library not loaded initially");
-            this.showError('Cryptographic library not loaded. Please refresh the page.');
+        // Check if Web Crypto API is available
+        if (!window.crypto || !window.crypto.subtle) {
+            console.error("Web Crypto API not available");
+            this.showError('Web Crypto API not available. Please use a modern browser.');
         }
 
         this.fetchMetadata();
@@ -25,7 +25,7 @@ class MidenFaucet {
     async handleSendTokens(isPrivateNote) {
         const recipient = this.recipientInput.value.trim();
         const amount = this.tokenSelect.value;
-        const amountAsTokens = this.tokenSelect.textContent[this.tokenSelect.selectedIndex];
+        const amountAsTokens = this.tokenSelect[this.tokenSelect.selectedIndex].textContent;
 
         if (!recipient) {
             this.showError('Recipient address is required.');
@@ -330,12 +330,6 @@ const Utils = {
     },
 
     findValidNonce: async (challenge, target) => {
-        // Check again if SHA3 is available
-        if (typeof sha3_256 === 'undefined') {
-            console.error("SHA3 library not properly loaded. SHA3 object:", sha3_256);
-            throw new Error('SHA3 library not properly loaded. Please refresh the page.');
-        }
-
         let nonce = 0;
         let targetNum = BigInt(target);
 
@@ -343,19 +337,28 @@ const Utils = {
             nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
             try {
-                // Compute hash using SHA3 with the challenge and nonce
-                let hash = sha3_256.create();
-                hash.update(challenge); // Use the hex-encoded challenge string directly
+                // Convert challenge from hex string to Uint8Array
+                const challengeBytes = new TextEncoder().encode(challenge);
 
                 // Convert nonce to 8-byte big-endian format to match backend
                 const nonceBytes = new ArrayBuffer(8);
                 const nonceView = new DataView(nonceBytes);
                 nonceView.setBigUint64(0, BigInt(nonce), false); // false = big-endian
                 const nonceByteArray = new Uint8Array(nonceBytes);
-                hash.update(nonceByteArray);
+
+                // Combine challenge and nonce
+                const combined = new Uint8Array(challengeBytes.length + nonceByteArray.length);
+                combined.set(challengeBytes);
+                combined.set(nonceByteArray, challengeBytes.length);
+
+                // Compute SHA-256 hash using Web Crypto API
+                const hashBuffer = await window.crypto.subtle.digest('SHA-256', combined);
+                const hashArray = new Uint8Array(hashBuffer);
 
                 // Take the first 8 bytes of the hash and parse them as u64 in big-endian
-                let digest = BigInt("0x" + hash.hex().slice(0, 16));
+                const first8Bytes = hashArray.slice(0, 8);
+                const dataView = new DataView(first8Bytes.buffer);
+                const digest = dataView.getBigUint64(0, false); // false = big-endian
 
                 // Check if the hash is less than the target
                 if (digest < targetNum) {
