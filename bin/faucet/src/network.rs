@@ -2,6 +2,7 @@ use std::convert::Infallible;
 use std::str::FromStr;
 
 use miden_client::account::{NetworkId, NetworkIdError};
+use miden_client::rpc::Endpoint;
 use serde::{Deserialize, Serialize};
 
 // NETWORK
@@ -39,5 +40,15 @@ impl FaucetNetwork {
             FaucetNetwork::Localhost => NetworkId::new("mlcl")?,
             FaucetNetwork::Custom(s) => NetworkId::new(s)?,
         })
+    }
+
+    /// Converts the Network variant to its corresponding RPC endpoint string, if it exists.
+    pub fn to_rpc_endpoint(&self) -> Option<String> {
+        match self {
+            FaucetNetwork::Custom(_) => None,
+            FaucetNetwork::Devnet => Some(Endpoint::devnet().to_string()),
+            FaucetNetwork::Localhost => Some(Endpoint::localhost().to_string()),
+            FaucetNetwork::Testnet => Some(Endpoint::testnet().to_string()),
+        }
     }
 }
