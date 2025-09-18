@@ -190,7 +190,6 @@ impl Faucet {
     ) -> anyhow::Result<()> {
         let mut buffer = Vec::new();
 
-        // TODO: batching 10 or more requests fails, see https://github.com/0xMiden/miden-faucet/issues/85
         while requests.recv_many(&mut buffer, batch_size).await > 0 {
             // Check if there are enough tokens available and update the supply counter for each
             // request.

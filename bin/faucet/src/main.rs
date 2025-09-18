@@ -149,7 +149,7 @@ pub enum Command {
 
         /// The maximum number of requests to process in each batch. Each batch is processed in a
         /// single transaction.
-        #[arg(long = "batch-size", value_name = "USIZE", default_value = "8", env = ENV_BATCH_SIZE)]
+        #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
         batch_size: usize,
     },
 
