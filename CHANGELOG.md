@@ -18,6 +18,9 @@
 ## 0.11.3 (2025-09-09)
 
 - Fixed display for minted token amount ([#82](https://github.com/0xMiden/miden-faucet/pull/82)).
+## 0.12.0 (TBD)
+
+- Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
 
 ## 0.11.2 (2025-09-08)
 
@@ -26,12 +29,6 @@
 ## 0.11.1 (2025-09-02)
 
 - Added `--network` CLI parameter to specify the type of network to which the faucet connects ([#74](https://github.com/0xMiden/miden-faucet/pull/74)).
-
-## 0.11.0 (2025-09-01)
-
-### Changes
-
-- [BREAKING] Incremented MSRV to 1.89.
 
 ## 0.11.0 (2025-09-01)
 
@@ -49,7 +46,7 @@
 - Added `mdbook` documentation ([#61](https://github.com/0xMiden/miden-faucet/pull/61)).
 - Added `--explorer-url` CLI parameter to optionally set the explorer url ([#63](https://github.com/0xMiden/miden-faucet/pull/63)).
 - Introduced `miden-pow-rate-limiter` crate ([#67](https://github.com/0xMiden/miden-faucet/pull/67))
-- Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
+- [BREAKING] Incremented MSRV to 1.89.
 
 ## 0.10.0 (2025-07-10)
 

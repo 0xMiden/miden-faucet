@@ -7,6 +7,9 @@ use tokio::time::interval;
 use crate::challenge::Challenge;
 use crate::{Domain, Requestor};
 
+/// Represents the issuer of a challenge, i.e. a requestor and a domain.
+type Issuer = (Requestor, Domain);
+
 // CHALLENGE CACHE
 // ================================================================================================
 
@@ -18,12 +21,12 @@ use crate::{Domain, Requestor};
 /// The cache is cleaned up periodically, removing expired challenges.
 #[derive(Clone, Default)]
 pub(crate) struct ChallengeCache {
-    /// Maps challenge timestamp to a tuple of `Requestor` and `Domain`.
-    challenges: BTreeMap<u64, Vec<(Requestor, Domain)>>,
+    /// Maps challenge timestamp to issuers.
+    challenges: BTreeMap<u64, Vec<Issuer>>,
     /// Maps domain to the number of submitted challenges.
     challenges_per_domain: HashMap<Domain, usize>,
-    /// Maps requestor and domain to the timestamp of the last submitted challenge.
-    challenges_timestamps: HashMap<(Requestor, Domain), u64>,
+    /// Maps issuer to the timestamp of the last submitted challenge.
+    challenges_timestamps: HashMap<Issuer, u64>,
 }
 
 impl ChallengeCache {
@@ -53,9 +56,9 @@ impl ChallengeCache {
         true
     }
 
-    /// Checks if a challenge has been submitted for the given requestor and domain. If so, returns
-    /// the timestamp of the last submitted challenge.
-    pub fn has_challenge(&self, requestor: Requestor, domain: Domain) -> Option<u64> {
+    /// Returns the timestamp of the most recent challenge submitted by the given requestor and
+    /// domain, provided it is still valid and present in the cache.
+    pub fn last_challenge_timestamp(&self, requestor: Requestor, domain: Domain) -> Option<u64> {
         self.challenges_timestamps.get(&(requestor, domain)).copied()
     }
 

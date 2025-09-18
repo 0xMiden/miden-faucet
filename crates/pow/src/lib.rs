@@ -151,8 +151,8 @@ impl PoWRateLimiter {
         let mut challenge_cache =
             self.challenges.lock().expect("challenge cache lock should not be poisoned");
 
-        // Check if requestor has recently submitted a challenge.
-        if let Some(timestamp) = challenge_cache.has_challenge(requestor, domain) {
+        // Check if issuer has submitted a challenge that is still valid
+        if let Some(timestamp) = challenge_cache.last_challenge_timestamp(requestor, domain) {
             let remaining_time = (timestamp
                 + self.config.challenge_lifetime.as_secs()
                 + self.config.cleanup_interval.as_secs())
@@ -345,7 +345,13 @@ mod tests {
         tokio::time::sleep(pow.config.cleanup_interval + Duration::from_secs(1)).await;
 
         // check that the challenge is removed from the cache
-        assert!(pow.challenges.lock().unwrap().has_challenge(requestor, domain).is_none());
+        assert!(
+            pow.challenges
+                .lock()
+                .unwrap()
+                .last_challenge_timestamp(requestor, domain)
+                .is_none()
+        );
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 0);
 
         // submit second challenge - should succeed
@@ -356,7 +362,13 @@ mod tests {
         pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
             .unwrap();
 
-        assert!(pow.challenges.lock().unwrap().has_challenge(requestor, domain).is_some());
+        assert!(
+            pow.challenges
+                .lock()
+                .unwrap()
+                .last_challenge_timestamp(requestor, domain)
+                .is_some()
+        );
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
     }
 }

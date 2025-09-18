@@ -163,6 +163,8 @@ impl GetTokenError {
         }
     }
 
+    /// Returns headers for the error response. In case of a rate limited error, the Retry-After
+    /// header is set. Otherwise, just returns an empty header map.
     fn headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
         if let Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited(
