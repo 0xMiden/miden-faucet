@@ -6,6 +6,11 @@
 
 - Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
 
+## 0.11.5 (2025-09-18)
+
+- Patched miden-client to 0.11.6 ([#90](https://github.com/0xMiden/miden-faucet/pull/90)).
+- Set batch size to 64 ([#90](https://github.com/0xMiden/miden-faucet/pull/90)).
+
 ## 0.11.4 (2025-09-16)
 
 - Reduce faucet batch size to 8 ([#87](https://github.com/0xMiden/miden-faucet/pull/87)).
