@@ -39,8 +39,7 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
-// TODO: batching 10 or more requests fails, see https://github.com/0xMiden/miden-faucet/issues/85
-const BATCH_SIZE: usize = 8;
+const BATCH_SIZE: usize = 64;
 
 // FAUCET CLIENT
 // ================================================================================================
