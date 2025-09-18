@@ -8,7 +8,7 @@ use crate::challenge::Challenge;
 use crate::{Domain, Requestor};
 
 /// Represents the issuer of a challenge, i.e. a requestor and a domain.
-type Issuer = (Requestor, Domain);
+pub(crate) type Issuer = (Requestor, Domain);
 
 // CHALLENGE CACHE
 // ================================================================================================
@@ -38,28 +38,27 @@ impl ChallengeCache {
     /// * If the cache already contained this challenge, `false` is returned, and the cache is not
     ///   modified.
     pub fn insert_challenge(&mut self, challenge: &Challenge) -> bool {
-        let requestor = challenge.requestor;
-        let domain = challenge.domain;
+        let issuer = (challenge.requestor, challenge.domain);
 
         // check if (timestamp, requestor, domain) is already in the cache
         let issuers = self.challenges.entry(challenge.timestamp).or_default();
-        if issuers.iter().any(|(r, d)| r == &requestor && *d == domain) {
+        if issuers.contains(&issuer) {
             return false;
         }
 
-        issuers.push((requestor, domain));
+        issuers.push(issuer);
         self.challenges_per_domain
-            .entry(domain)
+            .entry(challenge.domain)
             .and_modify(|c| *c = c.saturating_add(1))
             .or_insert(1);
-        self.challenges_timestamps.insert((requestor, domain), challenge.timestamp);
+        self.challenges_timestamps.insert(issuer, challenge.timestamp);
         true
     }
 
     /// Returns the timestamp of the most recent challenge submitted by the given requestor and
     /// domain, provided it is still valid and present in the cache.
-    pub fn last_challenge_timestamp(&self, requestor: Requestor, domain: Domain) -> Option<u64> {
-        self.challenges_timestamps.get(&(requestor, domain)).copied()
+    pub fn last_challenge_timestamp(&self, issuer: &Issuer) -> Option<u64> {
+        self.challenges_timestamps.get(issuer).copied()
     }
 
     /// Returns the number of challenges submitted for the given domain.

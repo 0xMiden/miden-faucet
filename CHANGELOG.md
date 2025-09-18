@@ -1,10 +1,11 @@
 # Changelog
 
-## 0.12 (TBD)
+## 0.12.0 (TBD)
 
 ### Changes
 
 - Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
+- Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
 
 ## 0.11.5 (2025-09-18)
 
@@ -18,9 +19,6 @@
 ## 0.11.3 (2025-09-09)
 
 - Fixed display for minted token amount ([#82](https://github.com/0xMiden/miden-faucet/pull/82)).
-## 0.12.0 (TBD)
-
-- Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
 
 ## 0.11.2 (2025-09-08)
 

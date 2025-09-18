@@ -152,7 +152,7 @@ impl PoWRateLimiter {
             self.challenges.lock().expect("challenge cache lock should not be poisoned");
 
         // Check if issuer has submitted a challenge that is still valid
-        if let Some(timestamp) = challenge_cache.last_challenge_timestamp(requestor, domain) {
+        if let Some(timestamp) = challenge_cache.last_challenge_timestamp(&(requestor, domain)) {
             let remaining_time = (timestamp
                 + self.config.challenge_lifetime.as_secs()
                 + self.config.cleanup_interval.as_secs())
@@ -349,7 +349,7 @@ mod tests {
             pow.challenges
                 .lock()
                 .unwrap()
-                .last_challenge_timestamp(requestor, domain)
+                .last_challenge_timestamp(&(requestor, domain))
                 .is_none()
         );
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 0);
@@ -366,7 +366,7 @@ mod tests {
             pow.challenges
                 .lock()
                 .unwrap()
-                .last_challenge_timestamp(requestor, domain)
+                .last_challenge_timestamp(&(requestor, domain))
                 .is_some()
         );
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
