@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use serde::{Serialize, Serializer};
-use sha3::{Digest, Sha3_256};
+use sha2::{Digest, Sha256};
 
 use crate::utils::{bytes_to_hex, hex_to_bytes};
 use crate::{ChallengeError, Domain, Requestor};
@@ -118,7 +118,7 @@ impl Challenge {
     /// The solution is valid if the hash `H(challenge, nonce)`, interpreted as a
     /// big-endian u64 from the first 8 bytes, is lower than the target value.
     pub fn validate_pow(&self, nonce: u64) -> bool {
-        let mut hasher = Sha3_256::new();
+        let mut hasher = Sha256::new();
         hasher.update(self.encode());
         hasher.update(nonce.to_be_bytes());
         let hash = hasher.finalize();
@@ -146,7 +146,7 @@ impl Challenge {
         requestor: &Requestor,
         domain: &Domain,
     ) -> [u8; 32] {
-        let mut hasher = Sha3_256::new();
+        let mut hasher = Sha256::new();
         hasher.update(secret);
         hasher.update(target.to_le_bytes());
         hasher.update(timestamp.to_le_bytes());
