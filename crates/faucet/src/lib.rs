@@ -39,7 +39,6 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
-const BATCH_SIZE: usize = 64;
 const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 
 // FAUCET CLIENT
@@ -187,10 +186,11 @@ impl Faucet {
     pub async fn run(
         mut self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
+        batch_size: usize,
     ) -> anyhow::Result<()> {
         let mut buffer = Vec::new();
 
-        while requests.recv_many(&mut buffer, BATCH_SIZE).await > 0 {
+        while requests.recv_many(&mut buffer, batch_size).await > 0 {
             // Check if there are enough tokens available and update the supply counter for each
             // request.
             let mut valid_requests = vec![];
