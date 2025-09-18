@@ -25,16 +25,17 @@ const target: bigint = BigInt(powJson.target);
 
 ```typescript
 // Dependencies: npm i @noble/hashes
-import { sha3_256 } from '@noble/hashes/sha3';
+import { sha_256 } from '@noble/hashes/sha2.js';
+import { utf8ToBytes } from '@noble/hashes/utils.js';
 
 let nonce = 0;
 while (true) {
     nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
     try {
-        // Compute hash using SHA3-256 with the challenge and nonce
-        let hash = sha3_256.create();
-        hash.update(challenge); // Use the hex-encoded challenge string directly
+        // Compute hash using SHA-256 with the challenge and nonce
+        let hash = sha_256.create();
+        hash.update(utf8ToBytes(challenge)); // Use the hex-encoded challenge string directly
 
         // Convert nonce to 8-byte big-endian format to match backend
         const nonceBytes = new ArrayBuffer(8);

@@ -1,4 +1,5 @@
-import { sha3_256 } from '@noble/hashes/sha3';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { utf8ToBytes } from '@noble/hashes/utils.js';
 import fs from 'fs';
 
 async function sendPowRequest(baseUrl: string, accountId: string): Promise<{ challenge: string, target: bigint }> {
@@ -18,9 +19,9 @@ async function solveChallenge(challenge: string, target: bigint): Promise<number
         nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
         try {
-            // Compute hash using SHA3 with the challenge and nonce
-            let hash = sha3_256.create();
-            hash.update(challenge); // Use the hex-encoded challenge string directly
+            // Compute hash using SHA-256 with the challenge and nonce
+            let hash = sha256.create();
+            hash.update(utf8ToBytes(challenge)); // Use the hex-encoded challenge string directly
 
             // Convert nonce to 8-byte big-endian format to match backend
             const nonceBytes = new ArrayBuffer(8);
@@ -45,7 +46,7 @@ async function solveChallenge(challenge: string, target: bigint): Promise<number
 }
 
 
-async function getTokens(baseUrl: string, account_id: string, nonce: number, challenge: string): Promise<{ noteId: string, txId: string, explorerUrl: string }> {
+async function getTokens(baseUrl: string, account_id: string, nonce: number, challenge: string): Promise<{ noteId: string, txId: string }> {
     const params = new URLSearchParams({
         account_id: account_id,
         is_private_note: 'true',
@@ -61,8 +62,7 @@ async function getTokens(baseUrl: string, account_id: string, nonce: number, cha
     const json = JSON.parse(text);
     const noteId = json.note_id;
     const txId = json.tx_id;
-    const explorerUrl = json.explorer_url;
-    return { noteId, txId, explorerUrl };
+    return { noteId, txId };
 }
 
 async function downloadNote(baseUrl: string, noteId: string): Promise<void> {
@@ -81,14 +81,13 @@ async function downloadNote(baseUrl: string, noteId: string): Promise<void> {
 
 async function main(): Promise<void> {
     const baseUrl = 'http://localhost:8080';
-    const accountId = 'mlcl1qq8mcy8pdvl0cgqfkjzf8efjjsnlzf7q';
+    const accountId = '0xca8203e8e58cf72049b061afca78ce';
 
     let { challenge, target } = await sendPowRequest(baseUrl, accountId);
     let nonce = await solveChallenge(challenge, target);
-    let { noteId, txId, explorerUrl } = await getTokens(baseUrl, accountId, nonce, challenge);
+    let { noteId, txId } = await getTokens(baseUrl, accountId, nonce, challenge);
     console.log('Note ID:', noteId);
     console.log('Tx ID:', txId);
-    console.log('Explorer URL:', explorerUrl);
     await downloadNote(baseUrl, noteId);
 }
 

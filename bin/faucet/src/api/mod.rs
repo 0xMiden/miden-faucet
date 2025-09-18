@@ -14,7 +14,7 @@ use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{PoWRateLimiter, PoWRateLimiterConfig};
-use sha3::{Digest, Sha3_256};
+use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
@@ -76,7 +76,7 @@ impl Server {
         let metadata = Box::leak(Box::new(metadata));
 
         // Hash the string secret to [u8; 32] for PoW
-        let mut hasher = Sha3_256::new();
+        let mut hasher = Sha256::new();
         hasher.update(pow_secret.as_bytes());
         let secret_bytes: [u8; 32] = hasher.finalize().into();
 

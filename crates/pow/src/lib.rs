@@ -17,7 +17,7 @@ pub use challenge::Challenge;
 
 /// Proof-of-Work Rate Limiter implementation.
 ///
-/// This struct is used to enforce rate limiting based on PoW challenges.
+/// This struct is used to enforce rate limiting based on `PoW` challenges.
 #[derive(Clone)]
 pub struct PoWRateLimiter {
     /// The server secret used to sign and validate challenges.
