@@ -1,11 +1,14 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use tokio::time::{Duration, interval};
+use tokio::time::interval;
 
 use crate::challenge::Challenge;
 use crate::{Domain, Requestor};
+
+/// Represents the issuer of a challenge, i.e. a requestor and a domain.
+pub(crate) type Issuer = (Requestor, Domain);
 
 // CHALLENGE CACHE
 // ================================================================================================
@@ -18,12 +21,12 @@ use crate::{Domain, Requestor};
 /// The cache is cleaned up periodically, removing expired challenges.
 #[derive(Clone, Default)]
 pub(crate) struct ChallengeCache {
-    /// Maps challenge timestamp to a tuple of `Requestor` and `Domain`.
-    challenges: BTreeMap<u64, Vec<(Requestor, Domain)>>,
+    /// Maps challenge timestamp to issuers.
+    challenges: BTreeMap<u64, Vec<Issuer>>,
     /// Maps domain to the number of submitted challenges.
     challenges_per_domain: HashMap<Domain, usize>,
-    /// Maps requestor to the number of submitted challenges.
-    requestors: BTreeMap<Requestor, usize>,
+    /// Maps issuer to the timestamp of the last submitted challenge.
+    challenges_timestamps: HashMap<Issuer, u64>,
 }
 
 impl ChallengeCache {
@@ -35,30 +38,27 @@ impl ChallengeCache {
     /// * If the cache already contained this challenge, `false` is returned, and the cache is not
     ///   modified.
     pub fn insert_challenge(&mut self, challenge: &Challenge) -> bool {
-        let requestor = challenge.requestor;
-        let domain = challenge.domain;
+        let issuer = (challenge.requestor, challenge.domain);
 
         // check if (timestamp, requestor, domain) is already in the cache
         let issuers = self.challenges.entry(challenge.timestamp).or_default();
-        if issuers.iter().any(|(r, d)| r == &requestor && *d == domain) {
+        if issuers.contains(&issuer) {
             return false;
         }
 
-        issuers.push((requestor, domain));
+        issuers.push(issuer);
         self.challenges_per_domain
-            .entry(domain)
+            .entry(challenge.domain)
             .and_modify(|c| *c = c.saturating_add(1))
             .or_insert(1);
-        self.requestors
-            .entry(requestor)
-            .and_modify(|c| *c = c.saturating_add(1))
-            .or_insert(1);
+        self.challenges_timestamps.insert(issuer, challenge.timestamp);
         true
     }
 
-    /// Checks if a challenge has been submitted for the given requestor
-    pub fn has_challenge_for_requestor(&self, requestor: Requestor) -> bool {
-        self.requestors.contains_key(&requestor)
+    /// Returns the timestamp of the most recent challenge submitted by the given requestor and
+    /// domain, provided it is still valid and present in the cache.
+    pub fn last_challenge_timestamp(&self, issuer: &Issuer) -> Option<u64> {
+        self.challenges_timestamps.get(issuer).copied()
     }
 
     /// Returns the number of challenges submitted for the given domain.
@@ -97,17 +97,9 @@ impl ChallengeCache {
                     self.challenges_per_domain.remove(&domain);
                 }
 
-                let remove_requestor = self
-                    .requestors
-                    .get_mut(&requestor)
-                    .map(|c| {
-                        *c = c.saturating_sub(1);
-                        *c == 0
-                    })
-                    .expect("challenge should have had an requestor entry");
-                if remove_requestor {
-                    self.requestors.remove(&requestor);
-                }
+                self.challenges_timestamps
+                    .remove(&(requestor, domain))
+                    .expect("challenge should have had a timestamp entry");
             }
         }
     }
