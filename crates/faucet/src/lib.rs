@@ -117,6 +117,7 @@ impl Faucet {
             .await?;
         client.add_account(&account, Some(account_seed), false).await?;
         client.set_default_account_id(account.id()).await?;
+        client.ensure_genesis_in_place().await?;
 
         if deploy {
             let mut faucet = Self::load(config).await?;
@@ -127,13 +128,12 @@ impl Faucet {
         Ok(())
     }
 
-    /// Loads the faucet.
+    /// Loads the faucet with the given config.
     ///
-    /// The account is loaded from the local store. If it is not tracked, it is fetched from the
-    /// node and added to the local store.
+    /// The account used is the default account set in the store, that is set on `Faucet::init`.
     #[instrument(name = "faucet.load", skip_all)]
     pub async fn load(config: &FaucetConfig) -> anyhow::Result<Self> {
-        let mut client = ClientBuilder::new()
+        let client = ClientBuilder::new()
             .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .filesystem_keystore(KEYSTORE_PATH)
             .sqlite_store(&config.store_path)
@@ -145,8 +145,6 @@ impl Faucet {
             client.get_default_account_id().await?.context("no default account id found")?;
         let record = client.get_account(account_id).await?.context("no account found")?;
         let account = record.account();
-
-        client.ensure_genesis_in_place().await?;
 
         let faucet = BasicFungibleFaucet::try_from(account)?;
         let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
