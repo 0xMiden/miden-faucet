@@ -127,22 +127,6 @@ impl Faucet {
         Ok(())
     }
 
-    /// Adds an account to the faucet database.
-    #[instrument(name = "faucet.import_account", skip_all)]
-    pub async fn import_account(
-        config: &FaucetConfig,
-        account: Account,
-        account_seed: Word,
-    ) -> Result<(), ClientError> {
-        let mut client: Client<FilesystemKeyStore<StdRng>> = ClientBuilder::new()
-            .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
-            .sqlite_store(&config.store_path)
-            .build()
-            .await?;
-
-        client.add_account(&account, Some(account_seed), false).await
-    }
-
     /// Loads the faucet.
     ///
     /// The account is loaded from the local store. If it is not tracked, it is fetched from the
