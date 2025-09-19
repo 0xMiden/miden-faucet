@@ -10,6 +10,7 @@ class MidenFaucet {
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountOptions = [100, 500, 1000];
         this.explorer_url = null;
+        this.metadataInitialized = false;
 
         // Check if Web Crypto API is available
         if (!window.crypto || !window.crypto.subtle) {
@@ -17,7 +18,7 @@ class MidenFaucet {
             this.showError('Web Crypto API not available. Please use a modern browser.');
         }
 
-        this.fetchMetadata();
+        this.startMetadataPolling();
         this.privateButton.addEventListener('click', () => this.handleSendTokens(true));
         this.publicButton.addEventListener('click', () => this.handleSendTokens(false));
     }
@@ -65,17 +66,31 @@ class MidenFaucet {
         }
     }
 
+    startMetadataPolling() {
+        this.fetchMetadata();
+
+        // Poll every 1 second
+        this.metadataInterval = setInterval(() => {
+            this.fetchMetadata();
+        }, 1000);
+    }
+
     async fetchMetadata() {
         fetch(window.location.origin + '/get_metadata')
             .then(response => response.json())
             .then(data => {
-                this.faucetAddress.textContent = data.id;
-                this.explorer_url = data.explorer_url;
-                for (const amount of this.tokenAmountOptions) {
-                    const option = document.createElement('option');
-                    option.value = Utils.tokensToBaseUnits(amount, data.decimals);
-                    option.textContent = amount;
-                    this.tokenSelect.appendChild(option);
+                if (!this.metadataInitialized) {
+                    this.faucetAddress.textContent = data.id;
+                    this.explorer_url = data.explorer_url;
+
+                    this.tokenSelect.innerHTML = '';
+                    for (const amount of this.tokenAmountOptions) {
+                        const option = document.createElement('option');
+                        option.value = Utils.tokensToBaseUnits(amount, data.decimals);
+                        option.textContent = amount;
+                        this.tokenSelect.appendChild(option);
+                    }
+                    this.metadataInitialized = true;
                 }
 
                 this.issuance.textContent = Utils.baseUnitsToTokens(data.issuance, data.decimals);
