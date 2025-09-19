@@ -5,6 +5,7 @@
 ### Changes
 
 - Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
+- Added requested `amount` to PoW Challenge ([#68](https://github.com/0xMiden/miden-faucet/pull/68)).
 
 ## 0.11.5 (2025-09-18)
 
