@@ -325,7 +325,7 @@ mod tests {
         pow.config.challenges_per_difficulty = NonZeroUsize::new(1).unwrap();
         let domain = [1u8; 32];
 
-        // test: 1 request complexity should have difficulty 1
+        // test: request complexity 1 should have difficulty 1
         let request_complexity = 1;
 
         let difficulty = 1;
@@ -334,7 +334,7 @@ mod tests {
             (u64::MAX >> pow.config.baseline) / difficulty
         );
 
-        // test: 3 request complexity should have difficulty 3
+        // test: request complexity 3 should have difficulty 3
         let request_complexity = 3;
 
         let difficulty = 3;
