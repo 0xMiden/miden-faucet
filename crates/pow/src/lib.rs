@@ -15,16 +15,16 @@ pub use challenge::Challenge;
 // PoW Rate Limiter
 // ================================================================================================
 
-/// Proof-of-Work implementation.
+/// Proof-of-Work Rate Limiter implementation.
 ///
-/// This struct is used to generate and validate `PoW` challenges.
+/// This struct is used to enforce rate limiting based on `PoW` challenges.
 #[derive(Clone)]
 pub struct PoWRateLimiter {
     /// The server secret used to sign and validate challenges.
     secret: [u8; 32],
     /// The cache used to store submitted challenges.
     challenges: Arc<Mutex<ChallengeCache>>,
-    /// The configuration settings.
+    /// The settings of the rate limiter.
     config: PoWRateLimiterConfig,
 }
 
@@ -35,16 +35,17 @@ type Requestor = [u8; 32];
 /// requesting a challenge.
 type Domain = [u8; 32];
 
-/// The configuration settings for `PoWRateLimiter`.
+/// The settings of `PoWRateLimiter`.
 #[derive(Clone)]
 pub struct PoWRateLimiterConfig {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     pub challenge_lifetime: Duration,
-    /// Determines how many challenges are needed to increase the difficulty by 1.
-    pub challenges_per_difficulty: NonZeroUsize,
     /// Sets the `max_target` used for challenges. The initial target (with difficulty = 1) for
     /// challenges will be `u64::MAX >> baseline`.
     pub baseline: u8,
+    /// Sets how many challenges are needed to increase the difficulty by 1. Lower values mean more
+    /// aggressive rate limiting.
+    pub challenges_per_difficulty: NonZeroUsize,
     /// The interval at which the challenge cache is cleaned up. Only expired challenges are
     /// removed during cleanup.
     pub cleanup_interval: Duration,
@@ -76,9 +77,9 @@ impl PoWRateLimiter {
     /// Generates a new challenge.
     pub fn build_challenge(
         &self,
-        request_complexity: u64,
         requestor: impl Into<Requestor>,
         domain: impl Into<Domain>,
+        request_complexity: u64,
     ) -> Challenge {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -223,7 +224,7 @@ mod tests {
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         let requestor = [0u8; 32];
-        let challenge = pow.build_challenge(1, requestor, domain);
+        let challenge = pow.build_challenge(requestor, domain, 1);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         // Submit challenge with correct nonce - should succeed
@@ -245,7 +246,7 @@ mod tests {
         let requestor = [0u8; 32];
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
-        let challenge = pow.build_challenge(1, requestor, domain);
+        let challenge = pow.build_challenge(requestor, domain, 1);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         // Submit challenge with expired timestamp - should fail
@@ -271,7 +272,7 @@ mod tests {
         let requestor = [0u8; 32];
 
         // Solve first challenge
-        let challenge = pow.build_challenge(1, requestor, domain);
+        let challenge = pow.build_challenge(requestor, domain, 1);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -281,7 +282,7 @@ mod tests {
 
         // Try to submit second challenge - should fail because of rate limiting
         tokio::time::sleep(pow.config.cleanup_interval).await;
-        let challenge = pow.build_challenge(1, requestor, domain);
+        let challenge = pow.build_challenge(requestor, domain, 1);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -305,7 +306,7 @@ mod tests {
             u64::MAX >> pow.config.baseline
         );
 
-        let challenge = pow.build_challenge(request_complexity, requestor, domain);
+        let challenge = pow.build_challenge(requestor, domain, request_complexity);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
@@ -370,7 +371,7 @@ mod tests {
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 0);
 
         // submit second challenge - should succeed
-        let challenge = pow.build_challenge(1, requestor, domain);
+        let challenge = pow.build_challenge(requestor, domain, 1);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();

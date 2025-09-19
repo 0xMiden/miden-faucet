@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.12 (TBD)
+
+### Changes
+
+- Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
+
+## 0.11.5 (2025-09-18)
+
+- Patched miden-client to 0.11.6 ([#90](https://github.com/0xMiden/miden-faucet/pull/90)).
+- Set batch size to 64 ([#90](https://github.com/0xMiden/miden-faucet/pull/90)).
+
+## 0.11.4 (2025-09-16)
+
+- Reduce faucet batch size to 8 ([#87](https://github.com/0xMiden/miden-faucet/pull/87)).
+
+## 0.11.3 (2025-09-09)
+
+- Fixed display for minted token amount ([#82](https://github.com/0xMiden/miden-faucet/pull/82)).
+
+## 0.11.2 (2025-09-08)
+
+- Refreshed dependencies.
+
 ## 0.11.1 (2025-09-02)
 
 - Added `--network` CLI parameter to specify the type of network to which the faucet connects ([#74](https://github.com/0xMiden/miden-faucet/pull/74)).
@@ -27,6 +50,7 @@
 - Added `--explorer-url` CLI parameter to optionally set the explorer url ([#63](https://github.com/0xMiden/miden-faucet/pull/63)).
 - Introduced `miden-faucet-pow` crate ([#67](https://github.com/0xMiden/miden-faucet/pull/67))
 - Added requested `amount` to PoW Challenge ([#68](https://github.com/0xMiden/miden-faucet/pull/68)).
+- Introduced `miden-pow-rate-limiter` crate ([#67](https://github.com/0xMiden/miden-faucet/pull/67))
 
 ## 0.10.0 (2025-07-10)
 

@@ -50,12 +50,13 @@ const ENV_POW_CHALLENGE_LIFETIME: &str = "MIDEN_FAUCET_POW_CHALLENGE_LIFETIME";
 const ENV_POW_CLEANUP_INTERVAL: &str = "MIDEN_FAUCET_POW_CLEANUP_INTERVAL";
 const ENV_POW_CHALLENGES_PER_DIFFICULTY: &str = "MIDEN_FAUCET_CHALLENGES_PER_DIFFICULTY";
 const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
+const ENV_POW_BASE_DIFFICULTY_AMOUNT: &str = "MIDEN_FAUCET_POW_BASE_DIFFICULTY_AMOUNT";
 const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
-const ENV_POW_BASE_DIFFICULTY_AMOUNT: &str = "MIDEN_FAUCET_POW_BASE_DIFFICULTY_AMOUNT";
+const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
 
 // COMMANDS
 // ================================================================================================
@@ -154,6 +155,11 @@ pub enum Command {
         /// Explorer URL.
         #[arg(long = "explorer-url", value_name = "URL", env = ENV_EXPLORER_URL)]
         explorer_url: Option<Url>,
+
+        /// The maximum number of requests to process in each batch. Each batch is processed in a
+        /// single transaction.
+        #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
+        batch_size: usize,
     },
 
     /// Create a new public faucet account and save to the specified file.
@@ -227,6 +233,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             open_telemetry: _,
             store_path,
             explorer_url,
+            batch_size,
         } => {
             let account_file = AccountFile::read(&faucet_account_path).context(format!(
                 "failed to load faucet account from file ({})",
@@ -284,7 +291,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             // Use select to concurrently:
             // - Run and wait for the faucet (on current thread)
             // - Run and wait for server (in a spawned task)
-            let faucet_future = faucet.run(rx_mint_requests);
+            let faucet_future = faucet.run(rx_mint_requests, batch_size);
             let server_future = async {
                 let server_handle =
                     tokio::spawn(
@@ -374,11 +381,7 @@ mod test {
 
     use fantoccini::ClientBuilder;
     use miden_client::account::{
-        AccountId,
-        AccountIdAddress,
-        Address,
-        AddressInterface,
-        NetworkId,
+        AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
     };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
@@ -515,6 +518,7 @@ mod test {
                         open_telemetry: false,
                         store_path: temp_dir().join("test_store.sqlite3"),
                         explorer_url: None,
+                        batch_size: 8,
                     },
                 }))
                 .await

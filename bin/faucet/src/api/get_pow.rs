@@ -3,10 +3,10 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
-use miden_pow_rate_limiter::Challenge;
+use miden_pow_rate_limiter::{Challenge, PoWRateLimiter};
 use serde::Deserialize;
 
-use crate::api::{AccountError, Server};
+use crate::api::AccountError;
 use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
 

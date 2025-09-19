@@ -1,8 +1,8 @@
-# Miden Faucet
+# Miden Faucet lib
 
-This crate implements a faucet to be used by the website. The faucet uses `miden-client` to create, execute, prove transactions, and then submits them to the node.
+The Miden faucet library is a Rust library that can be integrated into projects, allowing developers to run the core faucet functionality.
 
-The faucet is supposed to be run in a single thread, and receives minting requests via channels.
+The library provides a `Faucet` struct that can be run in a thread and receive minting requests through a channel. It uses `miden-client` as dependency to create, execute, prove transactions, and then submit them to the node.
 
 ## License
 
