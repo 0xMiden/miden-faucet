@@ -195,9 +195,10 @@ impl Faucet {
             // request.
             let mut valid_requests = vec![];
             let mut response_senders = vec![];
+            let mut issuance = self.get_issuance().await?;
             for (request, response_sender) in buffer.drain(..) {
-                let available_amount = self.available_supply().unwrap_or_default();
                 let requested_amount = request.asset_amount;
+                let available_amount = self.available_supply(issuance).unwrap_or_default();
                 if available_amount < requested_amount {
                     error!(
                         requested_amount = requested_amount.base_units(),
@@ -210,12 +211,12 @@ impl Faucet {
                 }
                 valid_requests.push(request);
                 response_senders.push(response_sender);
-                let mut issuance = self.issuance.write();
-                *issuance = issuance
+                issuance = issuance
                     .checked_add(requested_amount)
-                    .expect("issuance should never be an invalid amount");
+                    // SAFETY: creating an asset amount with the max is always valid
+                    .unwrap_or(AssetAmount::new(AssetAmount::MAX).unwrap());
             }
-            if self.available_supply().is_none() {
+            if self.available_supply(issuance).is_none() {
                 error!("Faucet has run out of tokens");
             }
             if valid_requests.is_empty() {
@@ -236,6 +237,12 @@ impl Faucet {
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
                 let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
+            }
+
+            let new_issuance = self.get_issuance().await?;
+            {
+                let mut issuance = self.issuance.write();
+                *issuance = new_issuance;
             }
             self.client.sync_state().await.context("faucet failed to sync state")?;
         }
@@ -298,11 +305,26 @@ impl Faucet {
     }
 
     /// Returns the available supply of the faucet.
-    pub fn available_supply(&self) -> Option<AssetAmount> {
-        self.max_supply.checked_sub(*self.issuance.read())
+    pub fn available_supply(&self, issuance: AssetAmount) -> Option<AssetAmount> {
+        self.max_supply.checked_sub(issuance)
     }
 
-    /// Returns the amount of tokens issued by the faucet.
+    /// Get the current issuance of the faucet by querying the client's store.
+    pub async fn get_issuance(&self) -> anyhow::Result<AssetAmount> {
+        let issuance = self
+            .client
+            .get_account(self.id.account_id)
+            .await?
+            .context("faucet account not found")?
+            .account()
+            .get_token_issuance()
+            .context("faucet account is not a valid fungible faucet account")?;
+
+        Ok(AssetAmount::new(issuance.as_int())?)
+    }
+
+    /// Returns a reference to a tracker of the faucet's issuance. It's value is updated after each
+    /// minting transaction.
     pub fn issuance(&self) -> Arc<RwLock<AssetAmount>> {
         self.issuance.clone()
     }
