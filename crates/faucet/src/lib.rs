@@ -213,6 +213,7 @@ impl Faucet {
                 response_senders.push(response_sender);
                 issuance = issuance
                     .checked_add(requested_amount)
+                    // SAFETY: creating an asset amount with the max is always valid
                     .unwrap_or(AssetAmount::new(AssetAmount::MAX).unwrap());
             }
             if self.available_supply(issuance).is_none() {
@@ -322,7 +323,8 @@ impl Faucet {
         Ok(AssetAmount::new(issuance.as_int())?)
     }
 
-    /// Returns a reference to a tracker of the faucet's issuance.
+    /// Returns a reference to a tracker of the faucet's issuance. It's value is updated after each
+    /// minting transaction.
     pub fn issuance(&self) -> Arc<RwLock<AssetAmount>> {
         self.issuance.clone()
     }
