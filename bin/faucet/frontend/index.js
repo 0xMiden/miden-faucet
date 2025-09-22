@@ -69,10 +69,10 @@ class MidenFaucet {
     startMetadataPolling() {
         this.fetchMetadata();
 
-        // Poll every 1 second
+        // Poll every 2 seconds
         this.metadataInterval = setInterval(() => {
             this.fetchMetadata();
-        }, 1000);
+        }, 2000);
     }
 
     async fetchMetadata() {
