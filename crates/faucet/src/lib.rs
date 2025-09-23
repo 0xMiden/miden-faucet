@@ -340,3 +340,112 @@ fn build_p2id_notes(
     }
     Ok(notes)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::env::temp_dir;
+
+    use miden_client::ExecutionOptions;
+    use miden_client::account::component::AuthRpoFalcon512;
+    use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
+    use miden_client::asset::TokenSymbol;
+    use miden_client::auth::AuthSecretKey;
+    use miden_client::crypto::SecretKey;
+    use miden_client::store::sqlite_store::SqliteStore;
+    use miden_client::testing::MockChain;
+    use miden_client::testing::mock::{MockClient, MockRpcApi};
+    use tokio::sync::{mpsc, oneshot};
+
+    use super::*;
+    use crate::types::NoteType;
+
+    #[tokio::test]
+    async fn batch_requests() {
+        let batch_size = 32;
+
+        let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1000);
+        let mut receivers = vec![];
+        for i in 0..batch_size {
+            let (sender, receiver) = oneshot::channel();
+            let mint_request = MintRequest {
+                account_id: AccountId::try_from(1).unwrap(),
+                note_type: if i % 2 == 0 {
+                    NoteType::Public
+                } else {
+                    NoteType::Private
+                },
+                asset_amount: AssetAmount::new(100_000_000).unwrap(),
+            };
+            tx_mint_requests.send((mint_request, sender)).await.unwrap();
+            receivers.push(receiver);
+        }
+
+        run_faucet(rx_mint_requests, batch_size);
+
+        for receiver in receivers {
+            receiver.await.unwrap().unwrap();
+        }
+    }
+
+    // TESTING HELPERS
+    // ---------------------------------------------------------------------------------------------
+
+    /// Runs a faucet on a separate thread using a mock client.
+    fn run_faucet(
+        rx_mint_requests: mpsc::Receiver<(MintRequest, MintResponseSender)>,
+        batch_size: usize,
+    ) {
+        let secret = SecretKey::new();
+        let symbol = TokenSymbol::new("TEST").unwrap();
+        let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
+        let (account, account_seed) = AccountBuilder::new(rand::random())
+            .account_type(AccountType::FungibleFaucet)
+            .storage_mode(AccountStorageMode::Public)
+            .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
+            .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
+            .build()
+            .unwrap();
+        let key = AuthSecretKey::RpoFalcon512(secret);
+
+        std::thread::spawn(move || {
+            // Create a new runtime for this thread
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .enable_io()
+                .build()
+                .expect("Failed to build runtime");
+
+            // Run the faucet on this thread's runtime
+            rt.block_on(async {
+                let keystore =
+                    FilesystemKeyStore::<StdRng>::new(PathBuf::from("keystore")).unwrap();
+                keystore.add_key(&key).unwrap();
+
+                let mut client = MockClient::new(
+                    Arc::new(MockRpcApi::new(MockChain::new())),
+                    Box::new(RpoRandomCoin::new(Word::empty())),
+                    Arc::new(
+                        SqliteStore::new(temp_dir().join("batch_requests.sqlite3")).await.unwrap(),
+                    ),
+                    Some(Arc::new(keystore)),
+                    ExecutionOptions::new(None, 4096, false, false).unwrap(),
+                    None,
+                    None,
+                )
+                .await
+                .unwrap();
+                client.ensure_genesis_in_place().await.unwrap();
+                client.add_account(&account, Some(account_seed), false).await.unwrap();
+                let faucet = Faucet {
+                    id: FaucetId::new(account.id(), NetworkId::Testnet),
+                    client,
+                    tx_prover: Arc::new(LocalTransactionProver::default()),
+                    issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
+                    max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
+                    script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
+                };
+                faucet.run(rx_mint_requests, batch_size).await.unwrap();
+            });
+        });
+    }
+}

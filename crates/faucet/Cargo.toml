@@ -28,3 +28,6 @@ url       = { workspace = true }
 
 [build-dependencies]
 miden-client = { workspace = true }
+
+[dev-dependencies]
+miden-client = { features = ["testing"], workspace = true }
