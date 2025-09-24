@@ -29,6 +29,14 @@ pub async fn get_background() -> Response {
         .into_response()
 }
 
+pub async fn get_wallet_icon() -> Response {
+    (
+        [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/png"))],
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/wallet-icon.png"),),
+    )
+        .into_response()
+}
+
 pub async fn get_favicon() -> Response {
     (
         [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/x-icon"))],
