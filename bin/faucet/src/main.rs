@@ -102,15 +102,11 @@ pub enum Command {
         deploy: bool,
     },
 
-    /// Generate API keys that can be used by the faucet.
+    /// Generate an API key that can be used by the faucet.
     ///
-    /// Prints out the specified number of API keys to stdout as a comma-separated list.
-    /// This list can be supplied to the faucet via the `--api-keys` flag or `MIDEN_FAUCET_API_KEYS`
-    /// env var of the start command.
-    CreateApiKeys {
-        #[arg()]
-        count: u8,
-    },
+    /// Prints out the generated API key to stdout. Keys can then be supplied to the faucet via the
+    /// `--api-keys` flag or `MIDEN_FAUCET_API_KEYS` env var of the `start` command.
+    CreateApiKey,
 
     /// Start the faucet server
     Start {
@@ -280,13 +276,10 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             println!("Faucet account successfully initialized");
         },
 
-        Command::CreateApiKeys { count: key_count } => {
+        Command::CreateApiKey => {
             let mut rng = ChaCha20Rng::from_seed(rand::random());
-            let keys = (0..key_count)
-                .map(|_| ApiKey::generate(&mut rng).encode())
-                .collect::<Vec<_>>()
-                .join(",");
-            println!("{keys}");
+            let key = ApiKey::generate(&mut rng).encode();
+            println!("{key}");
         },
 
         Command::Start {
@@ -393,7 +386,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 /// Otherwise, it is derived from the specified network.
 fn parse_node_endpoint(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow::Result<Endpoint> {
     let url = if let Some(node_url) = node_url {
-        node_url.as_str().trim_end_matches('/').to_string()
+        node_url.to_string()
     } else {
         network
             .to_rpc_endpoint()
@@ -541,13 +534,15 @@ mod test {
         };
 
         // Start the stub node
-        tokio::spawn(async move { serve_stub(&stub_node_url).await.unwrap() });
+        tokio::spawn(async move {
+            serve_stub(&stub_node_url).await.expect("failed to start stub node");
+        });
 
-        // Create faucet account
+        // Create faucet account and initialize the faucet
         Box::pin(run_faucet_command(Cli {
             command: crate::Command::New {
                 config: config.clone(),
-                token_symbol: Some("TEST".to_string()),
+                token_symbol: Some("TEST".to_owned()),
                 decimals: Some(6),
                 max_supply: Some(1_000_000_000_000),
                 import_account_path: None,
@@ -555,7 +550,7 @@ mod test {
             },
         }))
         .await
-        .unwrap();
+        .expect("failed to create faucet account");
 
         // Start the faucet connected to the stub
         // Use std::thread to launch faucet - avoids Send requirements
@@ -586,7 +581,7 @@ mod test {
                     },
                 }))
                 .await
-                .unwrap();
+                .expect("failed to start faucet");
             });
         });
 
