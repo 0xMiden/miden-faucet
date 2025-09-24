@@ -10,7 +10,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@demox-labs/miden-wallet-adapter": "^0.6.1",
     "@demox-labs/miden-wallet-adapter-base": "^0.6.2",
     "@demox-labs/miden-wallet-adapter-miden": "^0.6.1"
   },
