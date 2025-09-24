@@ -7,8 +7,8 @@ use tokio::time::interval;
 use crate::challenge::Challenge;
 use crate::{Domain, Requestor};
 
-/// Represents the issuer of a challenge, i.e. a requestor and a domain.
-pub(crate) type Issuer = (Requestor, Domain);
+/// Represents the consumer of a challenge, i.e. a requestor and a domain.
+pub(crate) type Consumer = (Requestor, Domain);
 
 // CHALLENGE CACHE
 // ================================================================================================
@@ -19,46 +19,61 @@ pub(crate) type Issuer = (Requestor, Domain);
 /// domain. It also keeps track of the number of challenges submitted for each domain.
 ///
 /// The cache is cleaned up periodically, removing expired challenges.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) struct ChallengeCache {
-    /// Maps challenge timestamp to issuers.
-    challenges: BTreeMap<u64, Vec<Issuer>>,
+    /// The lifetime for challenges. After this time, challenges are considered expired.
+    challenge_lifetime: Duration,
+    /// Maps challenge timestamp to consumers.
+    challenges: BTreeMap<u64, Vec<Consumer>>,
     /// Maps domain to the number of submitted challenges.
     challenges_per_domain: HashMap<Domain, usize>,
-    /// Maps issuer to the timestamp of the last submitted challenge.
-    challenges_timestamps: HashMap<Issuer, u64>,
+    /// Maps consumer to the timestamp of the last submitted challenge.
+    challenges_timestamps: HashMap<Consumer, u64>,
 }
 
 impl ChallengeCache {
+    /// Creates a new challenge cache with the given challenges lifetime.
+    pub fn new(challenge_lifetime: Duration) -> Self {
+        Self {
+            challenge_lifetime,
+            challenges: BTreeMap::new(),
+            challenges_per_domain: HashMap::new(),
+            challenges_timestamps: HashMap::new(),
+        }
+    }
+
     /// Inserts a challenge into the cache, updating the number of challenges submitted for the
-    /// requestor and the domain.
+    /// domain.
     ///
-    /// Returns whether the value was newly inserted. That is:
+    /// Returns whether the challenge was newly inserted. That is:
     /// * If the cache did not previously contain this challenge, `true` is returned.
     /// * If the cache already contained this challenge, `false` is returned, and the cache is not
     ///   modified.
     pub fn insert_challenge(&mut self, challenge: &Challenge) -> bool {
-        let issuer = (challenge.requestor, challenge.domain);
+        let consumer = (challenge.requestor, challenge.domain);
 
         // check if (timestamp, requestor, domain) is already in the cache
-        let issuers = self.challenges.entry(challenge.timestamp).or_default();
-        if issuers.contains(&issuer) {
+        let consumers = self.challenges.entry(challenge.timestamp).or_default();
+        if consumers.contains(&consumer) {
             return false;
         }
 
-        issuers.push(issuer);
+        consumers.push(consumer);
         self.challenges_per_domain
             .entry(challenge.domain)
             .and_modify(|c| *c = c.saturating_add(1))
             .or_insert(1);
-        self.challenges_timestamps.insert(issuer, challenge.timestamp);
+        self.challenges_timestamps.insert(consumer, challenge.timestamp);
         true
     }
 
-    /// Returns the timestamp of the most recent challenge submitted by the given requestor and
-    /// domain, provided it is still valid and present in the cache.
-    pub fn last_challenge_timestamp(&self, issuer: &Issuer) -> Option<u64> {
-        self.challenges_timestamps.get(issuer).copied()
+    /// Returns the seconds remaining until the next challenge can be submitted for the given
+    /// requestor and domain. If the consumer has not submitted a challenge yet, or the previous
+    /// one expired, 0 is returned.
+    pub fn next_challenge_delay(&self, consumer: &Consumer, current_time: u64) -> u64 {
+        self.challenges_timestamps.get(consumer).map_or(0, |timestamp| {
+            (timestamp + self.challenge_lifetime.as_secs()).saturating_sub(current_time)
+        })
     }
 
     /// Returns the number of challenges submitted for the given domain.
@@ -76,15 +91,15 @@ impl ChallengeCache {
     /// # Panics
     /// Panics if any expired challenge has no corresponding entries on the requestor or domain
     /// maps.
-    fn cleanup_expired_challenges(&mut self, current_time: u64, challenge_lifetime: Duration) {
+    fn cleanup_expired_challenges(&mut self, current_time: u64) {
         // Challenges older than this are expired.
-        let limit_timestamp = current_time - challenge_lifetime.as_secs();
+        let limit_timestamp = current_time - self.challenge_lifetime.as_secs();
 
         let valid_challenges = self.challenges.split_off(&limit_timestamp);
         let expired_challenges = std::mem::replace(&mut self.challenges, valid_challenges);
 
-        for issuers in expired_challenges.into_values() {
-            for (requestor, domain) in issuers {
+        for consumers in expired_challenges.into_values() {
+            for (requestor, domain) in consumers {
                 let remove_domain = self
                     .challenges_per_domain
                     .get_mut(&domain)
@@ -109,11 +124,7 @@ impl ChallengeCache {
     /// The cleanup task is responsible for removing expired challenges from the cache.
     /// It runs every minute and removes challenges that are no longer valid because of their
     /// timestamp.
-    pub async fn run_cleanup(
-        cache: Arc<Mutex<Self>>,
-        challenge_lifetime: Duration,
-        cleanup_interval: Duration,
-    ) {
+    pub async fn run_cleanup(cache: Arc<Mutex<Self>>, cleanup_interval: Duration) {
         let mut interval = interval(cleanup_interval);
 
         loop {
@@ -125,7 +136,7 @@ impl ChallengeCache {
             cache
                 .lock()
                 .expect("challenge cache lock should not be poisoned")
-                .cleanup_expired_challenges(current_time, challenge_lifetime);
+                .cleanup_expired_challenges(current_time);
         }
     }
 }

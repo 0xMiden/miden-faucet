@@ -52,17 +52,12 @@ pub struct PoWRateLimiterConfig {
 impl PoWRateLimiter {
     /// Creates a new `PoW` instance.
     pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
-        let challenge_cache = Arc::new(Mutex::new(ChallengeCache::default()));
+        let challenge_cache = Arc::new(Mutex::new(ChallengeCache::new(config.challenge_lifetime)));
 
         // Start the cleanup task
         let cleanup_state = challenge_cache.clone();
         tokio::spawn(async move {
-            ChallengeCache::run_cleanup(
-                cleanup_state,
-                config.challenge_lifetime,
-                config.cleanup_interval,
-            )
-            .await;
+            ChallengeCache::run_cleanup(cleanup_state, config.cleanup_interval).await;
         });
 
         Self {
@@ -152,11 +147,9 @@ impl PoWRateLimiter {
             self.challenges.lock().expect("challenge cache lock should not be poisoned");
 
         // Check if issuer has submitted a challenge that is still valid
-        if let Some(timestamp) = challenge_cache.last_challenge_timestamp(&(requestor, domain)) {
-            let remaining_time = (timestamp
-                + self.config.challenge_lifetime.as_secs()
-                + self.config.cleanup_interval.as_secs())
-            .saturating_sub(current_time);
+        let remaining_time =
+            challenge_cache.next_challenge_delay(&(requestor, domain), current_time);
+        if remaining_time != 0 {
             return Err(ChallengeError::RateLimited(remaining_time));
         }
 
@@ -345,12 +338,12 @@ mod tests {
         tokio::time::sleep(pow.config.cleanup_interval + Duration::from_secs(1)).await;
 
         // check that the challenge is removed from the cache
-        assert!(
+        assert_eq!(
             pow.challenges
                 .lock()
                 .unwrap()
-                .last_challenge_timestamp(&(requestor, domain))
-                .is_none()
+                .next_challenge_delay(&(requestor, domain), current_time),
+            0
         );
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 0);
 
@@ -362,12 +355,12 @@ mod tests {
         pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
             .unwrap();
 
-        assert!(
+        assert_ne!(
             pow.challenges
                 .lock()
                 .unwrap()
-                .last_challenge_timestamp(&(requestor, domain))
-                .is_some()
+                .next_challenge_delay(&(requestor, domain), current_time),
+            0
         );
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
     }
