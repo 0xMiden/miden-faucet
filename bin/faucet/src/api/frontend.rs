@@ -13,8 +13,8 @@ pub async fn get_not_found_html() -> Html<&'static str> {
     Html(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/not_found.html")))
 }
 
-pub async fn get_index_js() -> JavaScript<&'static str> {
-    JavaScript(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/index.js")))
+pub async fn get_bundle_js() -> JavaScript<&'static str> {
+    JavaScript(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/bundle.js")))
 }
 
 pub async fn get_index_css() -> Css<&'static str> {

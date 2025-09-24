@@ -541,3 +541,33 @@ body {
     position: absolute;
     top: 26vh;
 }
+
+.input-with-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.form-input {
+    padding-right: 40px;
+}
+
+.wallet-icon-button {
+    position: absolute;
+    right: 1px;
+    top: 1px;
+    bottom: 1px;
+    border: none;
+    background: transparent;
+    padding: 0 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wallet-icon {
+    width: 20px;
+    height: 20px;
+    color: #888;
+}
