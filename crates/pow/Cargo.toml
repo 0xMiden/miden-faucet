@@ -15,10 +15,10 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-serde     = { workspace = true }
-sha2      = { workspace = true }
-thiserror = { workspace = true }
-tokio     = { features = ["fs"], workspace = true }
+miden-client = { workspace = true }
+sha2         = { workspace = true }
+thiserror    = { workspace = true }
+tokio        = { features = ["time"], workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
