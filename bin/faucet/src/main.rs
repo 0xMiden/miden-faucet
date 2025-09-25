@@ -77,7 +77,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Command {
     /// Create a new faucet account and initialize the client.
-    New {
+    Init {
         #[clap(flatten)]
         config: ClientConfig,
 
@@ -226,7 +226,7 @@ async fn main() -> anyhow::Result<()> {
 async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
     // Note: open-telemetry is handled in main.
     match cli.command {
-        Command::New {
+        Command::Init {
             config:
                 ClientConfig {
                     node_url,
@@ -540,7 +540,7 @@ mod test {
 
         // Create faucet account and initialize the faucet
         Box::pin(run_faucet_command(Cli {
-            command: crate::Command::New {
+            command: crate::Command::Init {
                 config: config.clone(),
                 token_symbol: Some("TEST".to_owned()),
                 decimals: Some(6),
