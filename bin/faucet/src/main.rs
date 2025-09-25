@@ -76,7 +76,7 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum Command {
-    /// Create a new faucet account and initialize the client.
+    /// Initialize the faucet with a new or existing account.
     Init {
         #[clap(flatten)]
         config: ClientConfig,
