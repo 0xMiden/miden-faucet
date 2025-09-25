@@ -225,8 +225,16 @@ impl RawMintRequest {
         // Validate Challenge and nonce
         let challenge_str = self.challenge.ok_or(MintRequestError::MissingPowParameters)?;
         let nonce = self.nonce.ok_or(MintRequestError::MissingPowParameters)?;
+        let request_complexity =
+            (asset_amount.base_units() / server.metadata.pow_base_difficulty_amount) + 1;
 
-        server.submit_challenge(&challenge_str, nonce, account_id, api_key.unwrap_or_default())?;
+        server.submit_challenge(
+            &challenge_str,
+            nonce,
+            account_id,
+            api_key.unwrap_or_default(),
+            request_complexity,
+        )?;
 
         Ok(MintRequest { account_id, note_type, asset_amount })
     }

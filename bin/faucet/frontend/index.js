@@ -49,7 +49,7 @@ class MidenFaucet {
 
         this.updateMintingTitle('PREPARING THE REQUEST');
 
-        const powData = await this.getPowChallenge(recipient);
+        const powData = await this.getPowChallenge(recipient, amount);
         if (!powData) {
             this.hideModals();
             return;
@@ -103,10 +103,11 @@ class MidenFaucet {
             });
     }
 
-    async getPowChallenge(recipient) {
+    async getPowChallenge(recipient, amount) {
         let powResponse;
         try {
             powResponse = await fetch(window.location.origin + '/pow?' + new URLSearchParams({
+                amount: amount,
                 account_id: recipient
             }), {
                 method: "GET"

@@ -3,10 +3,10 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
-use miden_pow_rate_limiter::{Challenge, PoWRateLimiter};
+use miden_pow_rate_limiter::Challenge;
 use serde::Deserialize;
 
-use crate::api::AccountError;
+use crate::api::{AccountError, Server};
 use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
 
@@ -14,14 +14,19 @@ use crate::error_report::ErrorReport;
 // ================================================================================================
 
 pub async fn get_pow(
-    State(rate_limiter): State<PoWRateLimiter>,
+    State(server): State<Server>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
     let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
     let mut requestor = [0u8; 32];
     requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
-    let challenge = rate_limiter.build_challenge(requestor, request.api_key);
+
+    let request_complexity = (request.amount / server.metadata.pow_base_difficulty_amount) + 1;
+    let challenge =
+        server
+            .rate_limiter
+            .build_challenge(requestor, request.api_key, request_complexity);
     Ok(Json(challenge))
 }
 
@@ -30,6 +35,7 @@ pub async fn get_pow(
 
 /// Validated and parsed request for the `PoW` challenge.
 pub struct PowRequest {
+    pub amount: u64,
     pub account_id: AccountId,
     pub api_key: ApiKey,
 }
@@ -37,6 +43,7 @@ pub struct PowRequest {
 /// Used to receive the initial `get_pow` request from the user.
 #[derive(Deserialize)]
 pub struct RawPowRequest {
+    amount: u64,
     account_id: String,
     api_key: Option<String>,
 }
@@ -63,7 +70,7 @@ impl RawPowRequest {
             .map_err(|_| PowRequestError::InvalidApiKey(self.api_key.unwrap_or_default()))?
             .unwrap_or_default();
 
-        Ok(PowRequest { account_id, api_key })
+        Ok(PowRequest { amount: self.amount, account_id, api_key })
     }
 }
 

@@ -57,6 +57,7 @@ impl Server {
         max_supply: AssetAmount,
         issuance: Arc<RwLock<AssetAmount>>,
         max_claimable_amount: AssetAmount,
+        pow_base_difficulty_amount: u64,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
         rate_limiter_config: PoWRateLimiterConfig,
@@ -71,6 +72,7 @@ impl Server {
             max_supply,
             decimals,
             explorer_url,
+            pow_base_difficulty_amount,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
         let metadata = Box::leak(Box::new(metadata));
@@ -174,6 +176,7 @@ impl Server {
         nonce: u64,
         account_id: AccountId,
         api_key: ApiKey,
+        request_complexity: u64,
     ) -> Result<(), MintRequestError> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -183,7 +186,7 @@ impl Server {
         let mut requestor = [0u8; 32];
         requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
         self.rate_limiter
-            .submit_challenge(requestor, api_key, challenge, nonce, timestamp)
+            .submit_challenge(requestor, api_key, challenge, nonce, timestamp, request_complexity)
             .map_err(MintRequestError::PowError)
     }
 }
