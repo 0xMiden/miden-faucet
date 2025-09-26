@@ -17,9 +17,10 @@ use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
 use miden_client::account::{AccountBuilder, AccountFile, AccountStorageMode, AccountType};
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
-use miden_client::crypto::{RpoRandomCoin, SecretKey};
-use miden_client::store::sqlite_store::SqliteStore;
+use miden_client::crypto::RpoRandomCoin;
+use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::{Felt, Word};
+use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::Faucet;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
@@ -325,7 +326,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .map_err(anyhow::Error::msg)
                 .context("max supply value is greater than or equal to the field modulus")?;
 
-            let (account, account_seed) = AccountBuilder::new(rng.random())
+            let account = AccountBuilder::new(rng.random())
                 .account_type(AccountType::FungibleFaucet)
                 .storage_mode(AccountStorageMode::Public)
                 .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
@@ -333,11 +334,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .build()
                 .context("failed to create basic fungible faucet account")?;
 
-            let account_data = AccountFile::new(
-                account,
-                Some(account_seed),
-                vec![AuthSecretKey::RpoFalcon512(secret)],
-            );
+            let account_data = AccountFile::new(account, vec![AuthSecretKey::RpoFalcon512(secret)]);
 
             let output_path = current_dir.join(output_path);
             account_data.write(&output_path).with_context(|| {
