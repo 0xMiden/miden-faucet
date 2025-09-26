@@ -23,10 +23,11 @@ use miden_client::account::{
 };
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
-use miden_client::crypto::{RpoRandomCoin, SecretKey};
+use miden_client::crypto::RpoRandomCoin;
+use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::rpc::Endpoint;
-use miden_client::store::sqlite_store::SqliteStore;
 use miden_client::{Felt, Word};
+use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
 use miden_faucet_lib::{Faucet, FaucetConfig};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
@@ -241,17 +242,16 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             import_account_path,
             deploy,
         } => {
-            let (account, account_seed, secret) = if let Some(account_path) = import_account_path {
+            let (account, secret) = if let Some(account_path) = import_account_path {
                 // Import existing faucet account
                 let account_data = AccountFile::read(account_path)
                     .context("failed to read account data from file")?;
-                let seed = account_data.account_seed.context("account seed is required")?;
                 let secret = account_data
                     .auth_secret_keys
                     .first()
                     .context("auth secret key is required")?
                     .clone();
-                (account_data.account, seed, secret)
+                (account_data.account, secret)
             } else {
                 println!("Generating new faucet account. This may take a few minutes...");
                 let token_symbol =
@@ -263,13 +263,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             };
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
             let faucet_config = FaucetConfig {
-                store_path: store_path.to_str().context("invalid store path")?.to_string(),
+                store_path,
                 node_endpoint,
                 network_id: network.to_network_id()?,
                 timeout,
                 remote_tx_prover_url,
             };
-            Box::pin(Faucet::init(&faucet_config, account, account_seed, &secret, deploy))
+            Box::pin(Faucet::init(&faucet_config, account, &secret, deploy))
                 .await
                 .context("failed to initialize faucet")?;
 
@@ -305,7 +305,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
             let config = FaucetConfig {
-                store_path: store_path.to_str().context("invalid store path")?.to_string(),
+                store_path: store_path.clone(),
                 node_endpoint,
                 network_id: network.to_network_id()?,
                 timeout,
@@ -403,7 +403,7 @@ fn create_faucet_account(
     token_symbol: &str,
     max_supply: u64,
     decimals: u8,
-) -> anyhow::Result<(Account, Word, AuthSecretKey)> {
+) -> anyhow::Result<(Account, AuthSecretKey)> {
     let mut rng = ChaCha20Rng::from_seed(rand::random());
     let secret = {
         let auth_seed: [u64; 4] = rng.random();
@@ -416,14 +416,15 @@ fn create_faucet_account(
         .map_err(anyhow::Error::msg)
         .context("max supply value is greater than or equal to the field modulus")?;
 
-    let (account, account_seed) = AccountBuilder::new(rng.random())
+    let account = AccountBuilder::new(rng.random())
         .account_type(AccountType::FungibleFaucet)
         .storage_mode(AccountStorageMode::Public)
         .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
         .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
         .build()
         .context("failed to create basic fungible faucet account")?;
-    Ok((account, account_seed, AuthSecretKey::RpoFalcon512(secret)))
+
+    Ok((account, AuthSecretKey::RpoFalcon512(secret)))
 }
 
 #[cfg(test)]

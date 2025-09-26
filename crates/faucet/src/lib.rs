@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -29,6 +30,7 @@ use miden_client::transaction::{
 };
 use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
+use miden_client_sqlite_store::SqliteStore;
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
@@ -43,6 +45,7 @@ use crate::types::AssetAmount;
 
 const KEYSTORE_PATH: &str = "keystore";
 const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
+const DEFAULT_ACCOUNT_ID_SETTING: &str = "default_account_id";
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -81,7 +84,7 @@ pub struct Faucet {
 /// Configuration for initializing and loading a faucet.
 pub struct FaucetConfig {
     /// The path to the client store file.
-    pub store_path: String,
+    pub store_path: PathBuf,
     /// The endpoint of the node to connect to.
     pub node_endpoint: Endpoint,
     /// The network ID of the node to connect to.
@@ -100,7 +103,6 @@ impl Faucet {
     pub async fn init(
         config: &FaucetConfig,
         account: Account,
-        account_seed: Word,
         secret_key: &AuthSecretKey,
         deploy: bool,
     ) -> anyhow::Result<()> {
@@ -108,14 +110,16 @@ impl Faucet {
             .context("failed to create keystore")?;
         keystore.add_key(secret_key)?;
 
-        let mut client = ClientBuilder::<FilesystemKeyStore<StdRng>>::new()
+        let sqlite_store = SqliteStore::new(config.store_path.clone()).await?;
+
+        let mut client = ClientBuilder::new()
             .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
-            .sqlite_store(&config.store_path)
+            .store(Arc::new(sqlite_store))
             .build()
             .await?;
-        client.add_account(&account, Some(account_seed), false).await?;
-        client.set_default_account_id(account.id()).await?;
+        client.add_account(&account, false).await?;
+        client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
         client.ensure_genesis_in_place().await?;
 
         if deploy {
@@ -135,13 +139,15 @@ impl Faucet {
         let client = ClientBuilder::new()
             .tonic_rpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .filesystem_keystore(KEYSTORE_PATH)
-            .sqlite_store(&config.store_path)
+            .store(Arc::new(SqliteStore::new(config.store_path.clone()).await?))
             .build()
             .await
             .context("failed to build client")?;
 
-        let account_id =
-            client.get_default_account_id().await?.context("no default account id found")?;
+        let account_id = client
+            .get_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned())
+            .await?
+            .context("no default account id found")?;
         let record = client.get_account(account_id).await?.context("no account found")?;
         let account = record.account();
 
@@ -222,7 +228,7 @@ impl Faucet {
                 let rng_seed = Word::from(auth_seed.map(Felt::new));
                 RpoRandomCoin::new(rng_seed)
             };
-            let notes = build_p2id_notes(&self.id, &valid_requests, &mut rng)?;
+            let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
             let tx_request =
                 self.create_transaction(notes).context("faucet failed to create transaction")?;
