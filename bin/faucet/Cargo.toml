@@ -19,7 +19,8 @@ miden-faucet-lib       = { workspace = true }
 miden-pow-rate-limiter = { workspace = true }
 
 # Miden dependencies.
-miden-client = { features = ["sqlite", "tonic"], workspace = true }
+miden-client              = { features = ["tonic"], workspace = true }
+miden-client-sqlite-store = { workspace = true }
 
 # External dependencies.
 anyhow                = { workspace = true }

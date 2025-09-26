@@ -27,6 +27,7 @@ use miden_client::transaction::{
 };
 use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
+use miden_client_sqlite_store::SqliteStore;
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
@@ -48,7 +49,7 @@ const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scr
 ///
 /// Used as a type safety mechanism to avoid confusion with user account IDs, and allows us to
 /// implement traits.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct FaucetId {
     pub account_id: AccountId,
     pub network_id: NetworkId,
@@ -61,7 +62,7 @@ impl FaucetId {
 
     pub fn to_bech32(&self) -> String {
         let address = AccountIdAddress::new(self.account_id, AddressInterface::Unspecified);
-        Address::from(address).to_bech32(self.network_id)
+        Address::from(address).to_bech32(self.network_id.clone())
     }
 }
 
@@ -106,10 +107,12 @@ impl Faucet {
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("failed to parse node url: {node_url}"))?;
 
+        let sqlite_store = SqliteStore::new(store_path).await?;
+
         let mut client = ClientBuilder::new()
             .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
-            .sqlite_store(store_path.to_str().context("invalid store path")?)
+            .store(Arc::new(sqlite_store))
             .build()
             .await?;
 
@@ -126,7 +129,7 @@ impl Faucet {
                 );
                 record.account().get_token_issuance()?
             },
-            Err(_) => match client.add_account(&account, account_file.account_seed, false).await {
+            Err(_) => match client.add_account(&account, false).await {
                 Ok(()) => {
                     info!(
                         commitment = %account.commitment(),
@@ -227,7 +230,7 @@ impl Faucet {
                 let rng_seed = Word::from(auth_seed.map(Felt::new));
                 RpoRandomCoin::new(rng_seed)
             };
-            let notes = build_p2id_notes(self.id, &valid_requests, &mut rng)?;
+            let notes = build_p2id_notes(self.faucet_id(), &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
             let tx_id = Box::pin(self.create_transaction(notes))
                 .await
@@ -294,7 +297,7 @@ impl Faucet {
 
     /// Returns the id of the faucet account.
     pub fn faucet_id(&self) -> FaucetId {
-        self.id
+        self.id.clone()
     }
 
     /// Returns the available supply of the faucet.
