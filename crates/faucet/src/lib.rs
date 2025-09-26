@@ -230,7 +230,7 @@ impl Faucet {
                 let rng_seed = Word::from(auth_seed.map(Felt::new));
                 RpoRandomCoin::new(rng_seed)
             };
-            let notes = build_p2id_notes(self.faucet_id(), &valid_requests, &mut rng)?;
+            let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
             let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
             let tx_id = Box::pin(self.create_transaction(notes))
                 .await
@@ -320,7 +320,7 @@ impl Faucet {
 ///
 /// Returns an error if creating any p2id note fails.
 fn build_p2id_notes(
-    source: FaucetId,
+    source: &FaucetId,
     requests: &[MintRequest],
     rng: &mut RpoRandomCoin,
 ) -> Result<Vec<Note>, NoteError> {
