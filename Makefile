@@ -21,7 +21,6 @@ fix: ## Runs Fix with configs
 
 .PHONY: build
 build: ## By default we should build in release mode
-	cd bin/faucet/frontend && npm install && npm run build
 	cargo build --release
 
 .PHONY: format
@@ -81,7 +80,6 @@ check: ## Check all targets and features for errors without code generation
 
 .PHONY: install-faucet
 install-faucet: ## Installs faucet
-	cd bin/faucet/frontend && npm install && npm run build
 	${BUILD_PROTO} cargo install --path bin/faucet --locked
 
 .PHONY: check-tools
