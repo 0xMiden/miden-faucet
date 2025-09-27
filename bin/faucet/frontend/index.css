@@ -548,6 +548,17 @@ body {
     align-items: center;
 }
 
+.input-with-icon .wallet-icon-button {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease;
+}
+
+.input-with-icon:focus-within .wallet-icon-button {
+    opacity: 1;
+    visibility: visible;
+}
+
 .form-input {
     padding-right: 40px;
 }
