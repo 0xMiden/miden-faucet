@@ -1,9 +1,13 @@
+import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
+import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
+
 class MidenFaucet {
     constructor() {
         this.recipientInput = document.getElementById('recipient-address');
         this.tokenSelect = document.getElementById('token-amount');
         this.privateButton = document.getElementById('send-private-button');
         this.publicButton = document.getElementById('send-public-button');
+        this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
         this.progressFill = document.getElementById('progress-fill');
         this.issuance = document.getElementById('issuance');
@@ -21,6 +25,22 @@ class MidenFaucet {
         this.startMetadataPolling();
         this.privateButton.addEventListener('click', () => this.handleSendTokens(true));
         this.publicButton.addEventListener('click', () => this.handleSendTokens(false));
+        this.walletConnectButton.addEventListener('click', () => this.handleWalletConnect());
+
+        this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
+    }
+
+    async handleWalletConnect() {
+        try {
+            await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
+
+            if (this.walletAdapter.accountId) {
+                this.recipientInput.value = this.walletAdapter.accountId;
+            }
+        } catch (error) {
+            console.error("WalletConnectionError:", error);
+            this.showError("Failed to connect wallet.");
+        }
     }
 
     async handleSendTokens(isPrivateNote) {

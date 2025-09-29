@@ -22,7 +22,12 @@
 
             <div class="form-group">
                 <label for="recipient-address" class="form-label">RECIPIENT ADDRESS</label>
-                <input type="text" id="recipient-address" class="form-input" placeholder="">
+                <div class="input-with-icon">
+                    <input type="text" id="recipient-address" class="form-input" placeholder="">
+                    <button id="wallet-connect-button" class="wallet-icon-button" aria-label="Connect Wallet">
+                        <img src="wallet-icon.png" alt="Connect Wallet" class="wallet-icon">
+                    </button>
+                </div>
             </div>
 
             <div class="form-group">
@@ -218,7 +223,7 @@
         <div class="footer-line"></div>
     </footer>
 
-    <script src="index.js"></script>
+    <script type="module" src="bundle.js"></script>
 </body>
 
 </html>
