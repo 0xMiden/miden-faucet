@@ -45,7 +45,7 @@ use crate::types::AssetAmount;
 
 const KEYSTORE_PATH: &str = "keystore";
 const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
-const DEFAULT_ACCOUNT_ID_SETTING: &str = "default_account_id";
+const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 
 // FAUCET CLIENT
 // ================================================================================================

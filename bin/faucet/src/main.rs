@@ -253,7 +253,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     .clone();
                 (account_data.account, secret)
             } else {
-                println!("Generating new faucet account. This may take a few minutes...");
+                println!("Generating new faucet account. This may take a few seconds...");
                 let token_symbol =
                     token_symbol.expect("token_symbol should be present when not importing");
                 let decimals = decimals.expect("decimals should be present when not importing");
