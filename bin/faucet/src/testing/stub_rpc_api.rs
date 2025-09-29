@@ -20,13 +20,6 @@ impl api_server::Api for StubRpcApi {
         unimplemented!();
     }
 
-    async fn check_nullifiers_by_prefix(
-        &self,
-        _request: Request<proto::rpc_store::CheckNullifiersByPrefixRequest>,
-    ) -> Result<Response<proto::rpc_store::CheckNullifiersByPrefixResponse>, Status> {
-        unimplemented!();
-    }
-
     async fn get_block_header_by_number(
         &self,
         _request: Request<proto::shared::BlockHeaderByNumberRequest>,
@@ -101,13 +94,6 @@ impl api_server::Api for StubRpcApi {
         unimplemented!()
     }
 
-    async fn get_account_proofs(
-        &self,
-        _request: Request<proto::rpc_store::AccountProofsRequest>,
-    ) -> Result<Response<proto::rpc_store::AccountProofs>, Status> {
-        unimplemented!()
-    }
-
     async fn status(
         &self,
         _request: Request<()>,
@@ -126,6 +112,27 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc_store::SyncStorageMapsRequest>,
     ) -> Result<Response<proto::rpc_store::SyncStorageMapsResponse>, Status> {
+        unimplemented!()
+    }
+
+    async fn get_account_proof(
+        &self,
+        _request: Request<proto::rpc_store::AccountProofRequest>,
+    ) -> Result<Response<proto::rpc_store::AccountProof>, Status> {
+        unimplemented!()
+    }
+
+    async fn get_note_script_by_root(
+        &self,
+        _request: Request<proto::note::NoteRoot>,
+    ) -> Result<Response<proto::rpc_store::MaybeNoteScript>, Status> {
+        unimplemented!()
+    }
+
+    async fn sync_nullifiers(
+        &self,
+        _request: Request<proto::rpc_store::SyncNullifiersRequest>,
+    ) -> Result<Response<proto::rpc_store::SyncNullifiersResponse>, Status> {
         unimplemented!()
     }
 }
