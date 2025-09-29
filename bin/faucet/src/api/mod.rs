@@ -95,9 +95,10 @@ impl Server {
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
                 .route("/", get(frontend::get_index_html))
-                .route("/index.js", get(frontend::get_index_js))
+                .route("/bundle.js", get(frontend::get_bundle_js))
                 .route("/index.css", get(frontend::get_index_css))
                 .route("/background.png", get(frontend::get_background))
+                .route("/wallet-icon.png", get(frontend::get_wallet_icon))
                 .route("/favicon.ico", get(frontend::get_favicon))
                 .fallback(get(frontend::get_not_found_html))
                 .route("/get_metadata", get(get_metadata))

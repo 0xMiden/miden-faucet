@@ -541,3 +541,44 @@ body {
     position: absolute;
     top: 26vh;
 }
+
+.input-with-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-with-icon .wallet-icon-button {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease;
+}
+
+.input-with-icon:focus-within .wallet-icon-button {
+    opacity: 1;
+    visibility: visible;
+}
+
+.form-input {
+    padding-right: 40px;
+}
+
+.wallet-icon-button {
+    position: absolute;
+    right: 1px;
+    top: 1px;
+    bottom: 1px;
+    border: none;
+    background: transparent;
+    padding: 0 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wallet-icon {
+    width: 20px;
+    height: 20px;
+    color: #888;
+}

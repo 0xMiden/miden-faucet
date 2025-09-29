@@ -1,6 +1,6 @@
 use axum::Json;
 use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, Address};
 use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
@@ -125,7 +125,7 @@ pub enum GetTokenError {
 impl GetTokenError {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited)) => {
+            Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited(_))) => {
                 StatusCode::TOO_MANY_REQUESTS
             },
             Self::InvalidRequest(_) | Self::MintError(_) => StatusCode::BAD_REQUEST,
@@ -162,12 +162,25 @@ impl GetTokenError {
             },
         }
     }
+
+    /// Returns headers for the error response. In case of a rate limited error, the Retry-After
+    /// header is set. Otherwise, just returns an empty header map.
+    fn headers(&self) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        if let Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited(
+            timestamp,
+        ))) = self
+        {
+            headers.insert(axum::http::header::RETRY_AFTER, HeaderValue::from(*timestamp));
+        }
+        headers
+    }
 }
 
 impl IntoResponse for GetTokenError {
     fn into_response(self) -> Response {
         self.trace();
-        (self.status_code(), self.user_facing_error()).into_response()
+        (self.headers(), (self.status_code(), self.user_facing_error())).into_response()
     }
 }
 
