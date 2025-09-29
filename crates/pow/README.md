@@ -22,7 +22,7 @@ The `PoWRateLimiterConfig` struct allows you to customize the behavior of the ra
 
 - **`challenge_lifetime`**: How long a challenge remains valid after generation. After this duration, challenges expire and cannot be submitted. Choose based on expected solving time and security requirements.
 
-- **`challenges_per_difficulty`**: Sets how many challenges are needed to increase the difficulty by 1. Higher values mean more aggressive rate limiting.
+- **`growth_rate`**: Controls how aggressively difficulty increases with more active challenges. The number of active challenges gets multiplied by the growth rate to compute the load difficulty, so higher values mean more aggressive rate limiting.
 
 - **`baseline`**: Sets the initial difficulty baseline. The maximum target is calculated as `u64::MAX >> baseline`. Higher baseline values make challenges harder from the start. Range: 0-63.
 
@@ -39,15 +39,15 @@ A challenge solution is valid when:
 ## Dynamic Difficulty
 
 The system automatically adjusts challenges difficulty based on usage and the request complexity:
-- **Target calculation**: `max_target / (load_difficulty * request_complexity)`
-- **Max target**: `u64::MAX >> baseline`
-- **Load difficulty**: `max(num_active_challenges / challenges_per_difficulty, 1)`
+- **Load difficulty**: `2^baseline * (num_active_challenges + 1) * growth_rate`
+- **Request difficulty**: `load_difficulty * request_complexity`
+- **Target**: `u64::MAX / request_difficulty`
 
 Where:
 - **Request complexity** is a scaling number set by the user on each challenge creation. It's up to the user to define how complex their different requests are.
 
 > [!TIP]
-> If the request complexity is `2^x`, that means that the difficulty of the challenge increases by `x` bits.
+> The request complexity affects the challenge difficulty by adding $log_2(request\_complexity)$ bits of work.
 
 Overall, as more users solve challenges the difficulty increases, providing automatic rate limiting.
 

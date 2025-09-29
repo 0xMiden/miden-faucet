@@ -1,4 +1,3 @@
-use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -40,12 +39,10 @@ type Domain = [u8; 32];
 pub struct PoWRateLimiterConfig {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     pub challenge_lifetime: Duration,
-    /// Sets the `max_target` used for challenges. The initial target (with difficulty = 1) for
-    /// challenges will be `u64::MAX >> baseline`.
+    /// Determines how much the difficulty increases with the amount of active challenges.
+    pub growth_rate: f64,
+    /// Sets the baseline difficulty bits when there are no active challenges.
     pub baseline: u8,
-    /// Sets how many challenges are needed to increase the difficulty by 1. Lower values mean more
-    /// aggressive rate limiting.
-    pub challenges_per_difficulty: NonZeroUsize,
     /// The interval at which the challenge cache is cleaned up. Only expired challenges are
     /// removed during cleanup.
     pub cleanup_interval: Duration,
@@ -74,7 +71,16 @@ impl PoWRateLimiter {
         }
     }
 
-    /// Generates a new challenge.
+    /// Generates a new challenge with a difficulty that will depend on the number of active
+    /// challenges for the given domain and the request complexity.
+    ///
+    /// # Arguments
+    /// * `requestor` - A unique identifier for the user that is requesting the challenge.
+    /// * `domain` - A unique identifier for the service that is requesting the challenge.
+    /// * `request_complexity` - A measure of the complexity of the request. Must be greater than 0.
+    ///
+    /// # Panics
+    /// Panics if the request complexity is 0.
     pub fn build_challenge(
         &self,
         requestor: impl Into<Requestor>,
@@ -93,15 +99,14 @@ impl PoWRateLimiter {
     }
 
     /// Computes the target for a given domain by checking the amount of active challenges in the
-    /// cache. This sets the difficulty of the challenge. Also the request complexity is used to
-    /// scale the difficulty.
+    /// cache and the given request complexity.
     ///
     /// The target is computed as:
-    /// `max_target / (load_difficulty * request_complexity)`
+    /// `(u64::MAX >> baseline) / request_difficulty`
     ///
     /// Where:
-    /// * `max_target = u64::MAX >> baseline`
-    /// * `load_difficulty = (num_active_challenges / challenges_per_difficulty) + 1`
+    /// * `request_difficulty = load_difficulty * request_complexity`
+    /// * `load_difficulty = ceil((num_active_challenges + 1) * growth_rate)`
     fn get_challenge_target(&self, domain: &Domain, request_complexity: u64) -> u64 {
         let num_challenges = self
             .challenges
@@ -110,9 +115,11 @@ impl PoWRateLimiter {
             .num_challenges_for_domain(domain) as u64;
 
         let max_target = u64::MAX >> self.config.baseline;
-        let load_difficulty =
-            (num_challenges / self.config.challenges_per_difficulty.get() as u64) + 1;
-        max_target / (load_difficulty * request_complexity)
+        #[allow(clippy::cast_precision_loss, reason = "num_challenges is smaller than f64::MAX")]
+        #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
+        let load_difficulty = ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
+        let request_difficulty = load_difficulty * request_complexity;
+        max_target / request_difficulty
     }
 
     /// Submits a challenge.
@@ -210,8 +217,8 @@ mod tests {
             secret,
             PoWRateLimiterConfig {
                 challenge_lifetime: Duration::from_secs(30),
+                growth_rate: 1.0,
                 cleanup_interval: Duration::from_millis(500),
-                challenges_per_difficulty: NonZeroUsize::new(1).unwrap(),
                 baseline: 0,
             },
         )
@@ -327,8 +334,7 @@ mod tests {
 
     #[tokio::test]
     async fn submit_challenge_and_check_difficulty() {
-        let mut pow = create_test_pow();
-        pow.config.challenges_per_difficulty = NonZeroUsize::new(1).unwrap();
+        let pow = create_test_pow();
         let domain = [1u8; 32];
         let requestor = [0u8; 32];
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -361,8 +367,7 @@ mod tests {
 
     #[tokio::test]
     async fn difficulty_increases_with_request_complexity() {
-        let mut pow = create_test_pow();
-        pow.config.challenges_per_difficulty = NonZeroUsize::new(1).unwrap();
+        let pow = create_test_pow();
         let domain = [1u8; 32];
 
         // test: request complexity 1 should have difficulty 1
