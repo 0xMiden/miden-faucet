@@ -1,12 +1,6 @@
+use std::array::TryFromSliceError;
 use std::time::Duration;
 
-use miden_client::utils::{
-    ByteReader,
-    ByteWriter,
-    Deserializable,
-    DeserializationError,
-    Serializable,
-};
 use sha2::{Digest, Sha256};
 
 use crate::{ChallengeError, Domain, Requestor};
@@ -130,27 +124,51 @@ impl Challenge {
     }
 }
 
-impl Serializable for Challenge {
-    fn write_into<W: ByteWriter>(&self, target: &mut W) {
-        target.write_bytes(&self.target.to_bytes());
-        target.write_bytes(&self.timestamp.to_bytes());
-        target.write_bytes(&self.requestor);
-        target.write_bytes(&self.domain);
-        target.write_bytes(&self.signature);
+// SERIALIZATION
+// ================================================================================================
+
+impl Challenge {
+    pub fn to_bytes(&self) -> [u8; Self::SERIALIZED_SIZE] {
+        let mut bytes = [0u8; Self::SERIALIZED_SIZE];
+        bytes[..8].copy_from_slice(&self.target.to_le_bytes());
+        bytes[8..16].copy_from_slice(&self.timestamp.to_le_bytes());
+        bytes[16..48].copy_from_slice(&self.requestor);
+        bytes[48..80].copy_from_slice(&self.domain);
+        bytes[80..].copy_from_slice(&self.signature);
+        bytes
     }
 }
 
-impl Deserializable for Challenge {
-    fn read_from<R: ByteReader>(source: &mut R) -> Result<Self, DeserializationError> {
-        let target = u64::read_from(source)?;
-        let timestamp = u64::read_from(source)?;
-        let requestor = Requestor::read_from(source)?;
-        let domain = Domain::read_from(source)?;
-        let signature = <[u8; 32]>::read_from(source)?;
-
-        Ok(Self::from_parts(target, timestamp, requestor, domain, signature))
+impl From<Challenge> for [u8; Challenge::SERIALIZED_SIZE] {
+    fn from(challenge: Challenge) -> Self {
+        challenge.to_bytes()
     }
 }
+
+impl TryFrom<[u8; Challenge::SERIALIZED_SIZE]> for Challenge {
+    type Error = TryFromSliceError;
+    fn try_from(bytes: [u8; Challenge::SERIALIZED_SIZE]) -> Result<Self, Self::Error> {
+        Ok(Self::from_parts(
+            u64::from_le_bytes(bytes[..8].try_into()?),
+            u64::from_le_bytes(bytes[8..16].try_into()?),
+            bytes[16..48].try_into()?,
+            bytes[48..80].try_into()?,
+            bytes[80..].try_into()?,
+        ))
+    }
+}
+
+impl TryFrom<&[u8]> for Challenge {
+    type Error = ChallengeError;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let array: [u8; Challenge::SERIALIZED_SIZE] =
+            bytes.try_into().map_err(|_| ChallengeError::InvalidSerialization)?;
+        Challenge::try_from(array).map_err(|_| ChallengeError::InvalidSerialization)
+    }
+}
+
+// TESTS
+// ================================================================================================
 
 #[cfg(test)]
 mod tests {
@@ -173,7 +191,7 @@ mod tests {
 
         let serialized = challenge.to_bytes();
 
-        let deserialized = Challenge::read_from_bytes(&serialized).unwrap();
+        let deserialized = Challenge::try_from(serialized).unwrap();
         assert_eq!(deserialized, challenge);
     }
 

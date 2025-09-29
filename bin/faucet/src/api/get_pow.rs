@@ -3,7 +3,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
-use miden_client::utils::{Serializable, ToHex};
+use miden_client::utils::ToHex;
 use miden_pow_rate_limiter::PoWRateLimiter;
 use serde::Deserialize;
 

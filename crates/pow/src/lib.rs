@@ -2,7 +2,6 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use miden_client::utils::Deserializable;
 use tokio::time::Duration;
 
 use crate::challenge_cache::ChallengeCache;
@@ -133,8 +132,7 @@ impl PoWRateLimiter {
         nonce: u64,
         current_time: u64,
     ) -> Result<(), ChallengeError> {
-        let challenge = Challenge::read_from_bytes(challenge_bytes)
-            .map_err(|_| ChallengeError::InvalidSerialization)?;
+        let challenge = Challenge::try_from(challenge_bytes)?;
         challenge.verify_signature(self.secret)?;
         let requestor = requestor.into();
         let domain = domain.into();
@@ -193,8 +191,6 @@ pub enum ChallengeError {
 
 #[cfg(test)]
 mod tests {
-    use miden_client::utils::Serializable;
-
     use super::*;
 
     fn find_pow_solution(challenge: &Challenge, max_iterations: u64) -> Option<u64> {
