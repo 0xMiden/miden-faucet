@@ -1,8 +1,6 @@
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use tokio::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::challenge_cache::ChallengeCache;
 
@@ -53,17 +51,12 @@ pub struct PoWRateLimiterConfig {
 impl PoWRateLimiter {
     /// Creates a new `PoW` instance.
     pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
-        let challenge_cache = Arc::new(Mutex::new(ChallengeCache::default()));
+        let challenge_cache = Arc::new(Mutex::new(ChallengeCache::new(config.challenge_lifetime)));
 
         // Start the cleanup task
         let cleanup_state = challenge_cache.clone();
         tokio::spawn(async move {
-            ChallengeCache::run_cleanup(
-                cleanup_state,
-                config.challenge_lifetime,
-                config.cleanup_interval,
-            )
-            .await;
+            ChallengeCache::run_cleanup(cleanup_state, config.cleanup_interval).await;
         });
 
         Self {
@@ -153,9 +146,11 @@ impl PoWRateLimiter {
         let mut challenge_cache =
             self.challenges.lock().expect("challenge cache lock should not be poisoned");
 
-        // Check if requestor has recently submitted a challenge.
-        if challenge_cache.has_challenge_for_requestor(requestor) {
-            return Err(ChallengeError::RateLimited);
+        // Check if issuer has submitted a challenge that is still valid
+        let remaining_time =
+            challenge_cache.next_challenge_delay(&(requestor, domain), current_time);
+        if remaining_time != 0 {
+            return Err(ChallengeError::RateLimited(remaining_time));
         }
 
         // Check if the cache already contains the challenge. If not, it is inserted.
@@ -174,8 +169,8 @@ pub enum ChallengeError {
     ExpiredServerTimestamp(u64, u64),
     #[error("invalid PoW solution")]
     InvalidPoW,
-    #[error("requestor is rate limited")]
-    RateLimited,
+    #[error("requestor is rate limited for {0} more seconds")]
+    RateLimited(u64),
     #[error("challenge already used")]
     ChallengeAlreadyUsed,
     #[error("server signatures do not match")]
@@ -270,9 +265,8 @@ mod tests {
         let challenge = pow.build_challenge(requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.to_bytes(), nonce, current_time);
+        let time_1 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let result = pow.submit_challenge(requestor, domain, &challenge.to_bytes(), nonce, time_1);
         assert!(result.is_ok());
 
         // Try to submit second challenge - should fail because of rate limiting
@@ -280,11 +274,26 @@ mod tests {
         let challenge = pow.build_challenge(requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.to_bytes(), nonce, current_time);
+        let time_2 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let result = pow.submit_challenge(requestor, domain, &challenge.to_bytes(), nonce, time_2);
         assert!(result.is_err());
-        assert!(matches!(result.err(), Some(ChallengeError::RateLimited)));
+        let remaining_time = time_1
+            + pow.config.challenge_lifetime.as_secs()
+            + pow.config.cleanup_interval.as_secs()
+            - time_2;
+        match result {
+            Err(ChallengeError::RateLimited(timestamp)) => {
+                assert_eq!(timestamp, remaining_time);
+            },
+            _ => panic!("Expected RateLimited error"),
+        }
+
+        // Try to submit it using a different api key - should succeed
+        let domain = [2u8; 32];
+        let challenge = pow.build_challenge(requestor, domain);
+        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
+        let result = pow.submit_challenge(requestor, domain, &challenge.to_bytes(), nonce, time_2);
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -329,7 +338,13 @@ mod tests {
         tokio::time::sleep(pow.config.cleanup_interval + Duration::from_secs(1)).await;
 
         // check that the challenge is removed from the cache
-        assert!(!pow.challenges.lock().unwrap().has_challenge_for_requestor(requestor));
+        assert_eq!(
+            pow.challenges
+                .lock()
+                .unwrap()
+                .next_challenge_delay(&(requestor, domain), current_time),
+            0
+        );
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 0);
 
         // submit second challenge - should succeed
@@ -340,7 +355,13 @@ mod tests {
         pow.submit_challenge(requestor, domain, &challenge.to_bytes(), nonce, current_time)
             .unwrap();
 
-        assert!(pow.challenges.lock().unwrap().has_challenge_for_requestor(requestor));
+        assert_ne!(
+            pow.challenges
+                .lock()
+                .unwrap()
+                .next_challenge_delay(&(requestor, domain), current_time),
+            0
+        );
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
     }
 }

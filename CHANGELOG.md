@@ -1,10 +1,11 @@
 # Changelog
 
-## 0.12 (TBD)
+## 0.12.0 (TBD)
 
 ### Changes
 
 - Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
+- Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
 
 ## 0.11.5 (2025-09-18)
 
@@ -31,12 +32,6 @@
 
 ### Changes
 
-- [BREAKING] Incremented MSRV to 1.89.
-
-## 0.11.0 (2025-09-01)
-
-### Changes
-
 - Introduced `miden-faucet-lib` crate ([#10](https://github.com/0xMiden/miden-faucet/pull/10)).
 - Integrated miden-client ([#11](https://github.com/0xMiden/miden-faucet/pull/11)).
 - Added `/get_note` endpoint ([#19](https://github.com/0xMiden/miden-faucet/pull/19)).
@@ -49,6 +44,7 @@
 - Added `mdbook` documentation ([#61](https://github.com/0xMiden/miden-faucet/pull/61)).
 - Added `--explorer-url` CLI parameter to optionally set the explorer url ([#63](https://github.com/0xMiden/miden-faucet/pull/63)).
 - Introduced `miden-pow-rate-limiter` crate ([#67](https://github.com/0xMiden/miden-faucet/pull/67))
+- [BREAKING] Incremented MSRV to 1.89.
 
 ## 0.10.0 (2025-07-10)
 
