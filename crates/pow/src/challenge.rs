@@ -121,6 +121,16 @@ impl Challenge {
         hasher.update(domain);
         hasher.finalize().into()
     }
+
+    /// Returns the numerical target required to solve the challenge.
+    pub fn target(&self) -> u64 {
+        self.target
+    }
+
+    /// Returns the timestamp of the challenge creation.
+    pub fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
 }
 
 // SERIALIZATION
