@@ -6,7 +6,6 @@ use crate::challenge_cache::ChallengeCache;
 
 mod challenge;
 mod challenge_cache;
-mod utils;
 
 pub use challenge::Challenge;
 
@@ -122,11 +121,12 @@ impl PoWRateLimiter {
         &self,
         requestor: impl Into<Requestor>,
         domain: impl Into<Domain>,
-        challenge: &str,
+        challenge: &Challenge,
         nonce: u64,
         current_time: u64,
     ) -> Result<(), ChallengeError> {
-        let challenge = Challenge::decode(challenge, self.secret)?;
+        challenge.verify_signature(self.secret)?;
+
         let requestor = requestor.into();
         let domain = domain.into();
 
@@ -154,7 +154,7 @@ impl PoWRateLimiter {
         }
 
         // Check if the cache already contains the challenge. If not, it is inserted.
-        if !challenge_cache.insert_challenge(&challenge) {
+        if !challenge_cache.insert_challenge(challenge) {
             return Err(ChallengeError::ChallengeAlreadyUsed);
         }
 
@@ -175,8 +175,8 @@ pub enum ChallengeError {
     ChallengeAlreadyUsed,
     #[error("server signatures do not match")]
     ServerSignaturesDoNotMatch,
-    #[error("invalid challenge size")]
-    InvalidChallengeSize,
+    #[error("invalid challenge serialization")]
+    InvalidSerialization,
     #[error("domain {0} is invalid")]
     InvalidDomain(String),
 }
@@ -218,14 +218,12 @@ mod tests {
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         // Submit challenge with correct nonce - should succeed
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
+        let result = pow.submit_challenge(requestor, domain, &challenge, nonce, current_time);
         assert!(result.is_ok());
 
         // Try to use the same challenge again with another requestor - should fail
         let requestor = [1u8; 32];
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
+        let result = pow.submit_challenge(requestor, domain, &challenge, nonce, current_time);
         assert!(result.is_err());
     }
 
@@ -243,15 +241,14 @@ mod tests {
         let result = pow.submit_challenge(
             requestor,
             domain,
-            &challenge.encode(),
+            &challenge,
             nonce,
             current_time + pow.config.challenge_lifetime.as_secs() + 1,
         );
         assert!(result.is_err());
 
         // Submit challenge with correct timestamp - should succeed
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
+        let result = pow.submit_challenge(requestor, domain, &challenge, nonce, current_time);
         assert!(result.is_ok());
     }
 
@@ -266,7 +263,7 @@ mod tests {
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let time_1 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let result = pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, time_1);
+        let result = pow.submit_challenge(requestor, domain, &challenge, nonce, time_1);
         assert!(result.is_ok());
 
         // Try to submit second challenge - should fail because of rate limiting
@@ -275,7 +272,7 @@ mod tests {
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let time_2 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let result = pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, time_2);
+        let result = pow.submit_challenge(requestor, domain, &challenge, nonce, time_2);
         assert!(result.is_err());
         let remaining_time = time_1
             + pow.config.challenge_lifetime.as_secs()
@@ -292,7 +289,7 @@ mod tests {
         let domain = [2u8; 32];
         let challenge = pow.build_challenge(requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-        let result = pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, time_2);
+        let result = pow.submit_challenge(requestor, domain, &challenge, nonce, time_2);
         assert!(result.is_ok());
     }
 
@@ -309,7 +306,7 @@ mod tests {
         let challenge = pow.build_challenge(requestor, domain);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
-        pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
+        pow.submit_challenge(requestor, domain, &challenge, nonce, current_time)
             .unwrap();
 
         assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
@@ -331,7 +328,7 @@ mod tests {
         let challenge = Challenge::from_parts(target, timestamp, requestor, domain, signature);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
-        pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
+        pow.submit_challenge(requestor, domain, &challenge, nonce, current_time)
             .unwrap();
 
         // wait for cleanup
@@ -352,7 +349,7 @@ mod tests {
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
+        pow.submit_challenge(requestor, domain, &challenge, nonce, current_time)
             .unwrap();
 
         assert_ne!(

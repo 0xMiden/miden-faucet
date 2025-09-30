@@ -9,11 +9,11 @@ use axum::routing::get;
 use http::{HeaderValue, Request};
 use miden_client::account::{AccountId, AccountIdError, AddressError};
 use miden_client::store::Store;
-use miden_client::utils::RwLock;
+use miden_client::utils::{RwLock, hex_to_bytes};
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
-use miden_pow_rate_limiter::{PoWRateLimiter, PoWRateLimiterConfig};
+use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
 use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -183,8 +183,12 @@ impl Server {
         let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = account_id.into();
         let mut requestor = [0u8; 32];
         requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
+
+        let challenge = hex_to_bytes::<{ Challenge::SERIALIZED_SIZE }>(&format!("0x{challenge}"))
+            .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?
+            .into();
         self.rate_limiter
-            .submit_challenge(requestor, api_key, challenge, nonce, timestamp)
+            .submit_challenge(requestor, api_key, &challenge, nonce, timestamp)
             .map_err(MintRequestError::PowError)
     }
 }
