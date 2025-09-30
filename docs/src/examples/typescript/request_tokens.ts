@@ -22,7 +22,7 @@ async function solveChallenge(challenge: string, target: bigint): Promise<number
         try {
             // Compute hash using SHA-256 with the challenge and nonce
             let hash = sha256.create();
-            hash.update(challengeBytes); // Use the hex-encoded challenge string directly
+            hash.update(challengeBytes);
 
             // Convert nonce to 8-byte big-endian format to match backend
             const nonceBytes = new ArrayBuffer(8);
