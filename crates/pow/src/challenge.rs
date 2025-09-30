@@ -1,4 +1,3 @@
-use std::array::TryFromSliceError;
 use std::time::Duration;
 
 use sha2::{Digest, Sha256};
@@ -145,16 +144,15 @@ impl From<Challenge> for [u8; Challenge::SERIALIZED_SIZE] {
     }
 }
 
-impl TryFrom<[u8; Challenge::SERIALIZED_SIZE]> for Challenge {
-    type Error = TryFromSliceError;
-    fn try_from(bytes: [u8; Challenge::SERIALIZED_SIZE]) -> Result<Self, Self::Error> {
-        Ok(Self::from_parts(
-            u64::from_le_bytes(bytes[..8].try_into()?),
-            u64::from_le_bytes(bytes[8..16].try_into()?),
-            bytes[16..48].try_into()?,
-            bytes[48..80].try_into()?,
-            bytes[80..].try_into()?,
-        ))
+impl From<[u8; Challenge::SERIALIZED_SIZE]> for Challenge {
+    fn from(bytes: [u8; Challenge::SERIALIZED_SIZE]) -> Self {
+        Self::from_parts(
+            u64::from_le_bytes(bytes[..8].try_into().expect("bytes should serialize target")),
+            u64::from_le_bytes(bytes[8..16].try_into().expect("bytes should serialize timestamp")),
+            bytes[16..48].try_into().expect("bytes should serialize requestor"),
+            bytes[48..80].try_into().expect("bytes should serialize domain"),
+            bytes[80..].try_into().expect("bytes should serialize signature"),
+        )
     }
 }
 
@@ -163,7 +161,7 @@ impl TryFrom<&[u8]> for Challenge {
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let array: [u8; Challenge::SERIALIZED_SIZE] =
             bytes.try_into().map_err(|_| ChallengeError::InvalidSerialization)?;
-        Challenge::try_from(array).map_err(|_| ChallengeError::InvalidSerialization)
+        Ok(Challenge::from(array))
     }
 }
 
@@ -191,7 +189,7 @@ mod tests {
 
         let serialized = challenge.to_bytes();
 
-        let deserialized = Challenge::try_from(serialized).unwrap();
+        let deserialized = Challenge::from(serialized);
         assert_eq!(deserialized, challenge);
     }
 

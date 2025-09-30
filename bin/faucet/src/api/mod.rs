@@ -184,7 +184,8 @@ impl Server {
         requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
 
         let challenge = hex_to_bytes::<{ Challenge::SERIALIZED_SIZE }>(challenge)
-            .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?;
+            .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?
+            .into();
         self.rate_limiter
             .submit_challenge(requestor, api_key, &challenge, nonce, timestamp)
             .map_err(MintRequestError::PowError)
