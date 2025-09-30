@@ -61,8 +61,8 @@ impl Challenge {
         }
     }
 
-    /// Decodes the challenge and verifies that the signature part of the challenge is valid
-    /// in the context of the specified secret.
+    /// Verifies that the signature part of the challenge is valid in the context of the specified
+    /// secret.
     pub fn verify_signature(&self, secret: [u8; 32]) -> Result<(), ChallengeError> {
         if self.signature
             == Self::compute_signature(
