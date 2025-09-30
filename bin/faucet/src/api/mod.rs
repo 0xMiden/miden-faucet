@@ -183,7 +183,7 @@ impl Server {
         let mut requestor = [0u8; 32];
         requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
 
-        let challenge = hex_to_bytes::<{ Challenge::SERIALIZED_SIZE }>(challenge)
+        let challenge = hex_to_bytes::<{ Challenge::SERIALIZED_SIZE }>(&format!("0x{challenge}"))
             .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?
             .into();
         self.rate_limiter
