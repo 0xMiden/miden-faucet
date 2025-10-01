@@ -24,7 +24,7 @@ The `PoWRateLimiterConfig` struct allows you to customize the behavior of the ra
 
 - **`growth_rate`**: Controls how aggressively difficulty increases with more active challenges. The number of active challenges gets multiplied by the growth rate to compute the load difficulty, so higher values mean more aggressive rate limiting.
 
-- **`baseline`**: Sets the initial difficulty baseline. The maximum target is calculated as `u64::MAX >> baseline`. Higher baseline values make challenges harder from the start. Range: 0-63.
+- **`baseline`**: Sets the initial difficulty baseline. Higher baseline values make challenges harder from the start. Range: 0-63.
 
 - **`cleanup_interval`**: How often the system removes expired challenges from memory.
 
@@ -38,16 +38,17 @@ A challenge solution is valid when:
 
 ## Dynamic Difficulty
 
-The system automatically adjusts challenges difficulty based on usage and the request complexity:
-- **Load difficulty**: `2^baseline * (num_active_challenges + 1) * growth_rate`
-- **Request difficulty**: `load_difficulty * request_complexity`
-- **Target**: `u64::MAX / request_difficulty`
+The system automatically adjusts challenges difficulty based on usage and the request complexity. 
+
+The challenge target $t$ is computed as follows: $$ t = \dfrac{2^{64}} {d} $$
+
+We call $d$ "difficulty" such that $log_2(d)$ is the number of bits of work that we need to do to solve the challenge. We compute it as: $$ d = 2^b \centerdot c \centerdot n \centerdot g $$
 
 Where:
-- **Request complexity** is a scaling number set by the user on each challenge creation. It's up to the user to define how complex their different requests are.
-
-> [!TIP]
-> The request complexity affects the challenge difficulty by adding $log_2(request\_complexity)$ bits of work.
+- $b$ is the baseline difficulty (in bits).
+- $c$ is the request complexity such that $log_2(c)$ is the request difficulty in bits.
+- $n$ is the number of active requests.
+- $g$ is the growth rate.
 
 Overall, as more users solve challenges the difficulty increases, providing automatic rate limiting.
 

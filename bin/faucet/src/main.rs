@@ -115,6 +115,9 @@ pub enum Command {
         /// Defines how quickly the `PoW` difficulty grows with the number of requests. The number
         /// of active challenges gets multiplied by the growth rate to compute the load
         /// difficulty.
+        ///
+        /// Meaning, the difficulty bits of the challenge will increase approximately by
+        /// `log2(growth_rate * num_active_challenges)`.
         #[arg(value_parser = clap::value_parser!(f64))]
         #[arg(long = "pow-growth-rate", value_name = "F64", env = ENV_POW_GROWTH_RATE, default_value = "0.1")]
         pow_growth_rate: f64,
