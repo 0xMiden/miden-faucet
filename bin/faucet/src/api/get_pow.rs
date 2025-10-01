@@ -3,8 +3,8 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
-use miden_pow_rate_limiter::Challenge;
-use serde::Deserialize;
+use miden_client::utils::ToHex;
+use serde::{Deserialize, Serialize};
 
 use crate::api::{AccountError, Server};
 use crate::api_key::ApiKey;
@@ -16,18 +16,30 @@ use crate::error_report::ErrorReport;
 pub async fn get_pow(
     State(server): State<Server>,
     Query(params): Query<RawPowRequest>,
-) -> Result<Json<Challenge>, PowRequestError> {
+) -> Result<Json<GetPowResponse>, PowRequestError> {
     let request = params.validate()?;
     let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
     let mut requestor = [0u8; 32];
     requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
-
     let request_complexity = (request.amount / server.metadata.pow_base_difficulty_amount) + 1;
+
     let challenge =
         server
             .rate_limiter
             .build_challenge(requestor, request.api_key, request_complexity);
-    Ok(Json(challenge))
+
+    Ok(Json(GetPowResponse {
+        challenge: challenge.to_bytes().to_hex(),
+        target: challenge.target(),
+        timestamp: challenge.timestamp(),
+    }))
+}
+
+#[derive(Serialize)]
+pub struct GetPowResponse {
+    challenge: String,
+    target: u64,
+    timestamp: u64,
 }
 
 // REQUEST VALIDATION

@@ -1,13 +1,8 @@
 use std::time::Duration;
 
-use serde::{Serialize, Serializer};
 use sha2::{Digest, Sha256};
 
-use crate::utils::{bytes_to_hex, hex_to_bytes};
 use crate::{ChallengeError, Domain, Requestor};
-
-/// The size of the encoded challenge in bytes.
-const CHALLENGE_ENCODED_SIZE: usize = 120;
 
 /// A challenge for proof-of-work validation.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -28,21 +23,10 @@ pub struct Challenge {
     pub(crate) signature: [u8; 32],
 }
 
-impl Serialize for Challenge {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Challenge", 3)?;
-        state.serialize_field("challenge", &self.encode())?;
-        state.serialize_field("target", &self.target)?;
-        state.serialize_field("timestamp", &self.timestamp)?;
-        state.end()
-    }
-}
-
 impl Challenge {
+    /// The size of the serialized challenge in bytes.
+    pub const SERIALIZED_SIZE: usize = 120;
+
     /// Creates a new challenge with the given parameters.
     /// The signature is computed internally using the provided secret.
     pub fn new(
@@ -90,54 +74,23 @@ impl Challenge {
         }
     }
 
-    /// Decodes the challenge and verifies that the signature part of the challenge is valid
-    /// in the context of the specified secret.
-    pub fn decode(value: &str, secret: [u8; 32]) -> Result<Self, ChallengeError> {
-        // Parse the hex-encoded challenge string
-        let bytes: [u8; CHALLENGE_ENCODED_SIZE] =
-            hex_to_bytes(value).ok_or(ChallengeError::InvalidChallengeSize)?;
-
-        // SAFETY: Length of the bytes is enforced above.
-        let target = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
-        let timestamp = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
-        let request_complexity = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
-        let requestor = bytes[24..56].try_into().unwrap();
-        let domain = bytes[56..88].try_into().unwrap();
-        let signature = bytes[88..CHALLENGE_ENCODED_SIZE].try_into().unwrap();
-
-        // Verify the signature
-        let expected_signature = Self::compute_signature(
-            secret,
-            target,
-            timestamp,
-            request_complexity,
-            &requestor,
-            &domain,
-        );
-        if signature == expected_signature {
-            Ok(Self::from_parts(
-                target,
-                timestamp,
-                request_complexity,
-                requestor,
-                domain,
-                signature,
-            ))
+    /// Verifies that the signature part of the challenge is valid in the context of the specified
+    /// secret.
+    pub fn verify_signature(&self, secret: [u8; 32]) -> Result<(), ChallengeError> {
+        if self.signature
+            == Self::compute_signature(
+                secret,
+                self.target,
+                self.timestamp,
+                self.request_complexity,
+                &self.requestor,
+                &self.domain,
+            )
+        {
+            Ok(())
         } else {
             Err(ChallengeError::ServerSignaturesDoNotMatch)
         }
-    }
-
-    /// Encodes the challenge into a hex string.
-    pub fn encode(&self) -> String {
-        let mut bytes = Vec::with_capacity(CHALLENGE_ENCODED_SIZE);
-        bytes.extend_from_slice(&self.target.to_le_bytes());
-        bytes.extend_from_slice(&self.timestamp.to_le_bytes());
-        bytes.extend_from_slice(&self.request_complexity.to_le_bytes());
-        bytes.extend_from_slice(&self.requestor);
-        bytes.extend_from_slice(&self.domain);
-        bytes.extend_from_slice(&self.signature);
-        bytes_to_hex(&bytes)
     }
 
     /// Checks whether the provided nonce satisfies the target requirement encoded in the
@@ -147,7 +100,7 @@ impl Challenge {
     /// big-endian u64 from the first 8 bytes, is lower than the target value.
     pub fn validate_pow(&self, nonce: u64) -> bool {
         let mut hasher = Sha256::new();
-        hasher.update(self.encode());
+        hasher.update(self.to_bytes());
         hasher.update(nonce.to_be_bytes());
         let hash = hasher.finalize();
         // take 8 bytes from the hash and parse them as u64
@@ -184,7 +137,65 @@ impl Challenge {
         hasher.update(domain);
         hasher.finalize().into()
     }
+
+    /// Returns the numerical target required to solve the challenge.
+    pub fn target(&self) -> u64 {
+        self.target
+    }
+
+    /// Returns the timestamp of the challenge creation.
+    pub fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
 }
+
+// SERIALIZATION
+// ================================================================================================
+
+impl Challenge {
+    pub fn to_bytes(&self) -> [u8; Self::SERIALIZED_SIZE] {
+        let mut bytes = [0u8; Self::SERIALIZED_SIZE];
+        bytes[..8].copy_from_slice(&self.target.to_le_bytes());
+        bytes[8..16].copy_from_slice(&self.timestamp.to_le_bytes());
+        bytes[16..48].copy_from_slice(&self.requestor);
+        bytes[48..80].copy_from_slice(&self.domain);
+        bytes[80..].copy_from_slice(&self.signature);
+        bytes
+    }
+}
+
+impl From<Challenge> for [u8; Challenge::SERIALIZED_SIZE] {
+    fn from(challenge: Challenge) -> Self {
+        challenge.to_bytes()
+    }
+}
+
+impl From<[u8; Challenge::SERIALIZED_SIZE]> for Challenge {
+    fn from(bytes: [u8; Challenge::SERIALIZED_SIZE]) -> Self {
+        Self::from_parts(
+            u64::from_le_bytes(bytes[..8].try_into().expect("bytes should serialize target")),
+            u64::from_le_bytes(bytes[8..16].try_into().expect("bytes should serialize timestamp")),
+            u64::from_le_bytes(
+                bytes[16..24].try_into().expect("bytes should serialize request complexity"),
+            ),
+            bytes[24..56].try_into().expect("bytes should serialize requestor"),
+            bytes[56..88].try_into().expect("bytes should serialize domain"),
+            bytes[88..].try_into().expect("bytes should serialize signature"),
+        )
+    }
+}
+
+impl TryFrom<&[u8]> for Challenge {
+    type Error = ChallengeError;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let array: [u8; Challenge::SERIALIZED_SIZE] =
+            bytes.try_into().map_err(|_| ChallengeError::InvalidSerialization)?;
+        Ok(Challenge::from(array))
+    }
+}
+
+// TESTS
+// ================================================================================================
 
 #[cfg(test)]
 mod tests {
@@ -199,7 +210,7 @@ mod tests {
     }
 
     #[test]
-    fn challenge_serialize_and_deserialize_json() {
+    fn challenge_serialize_and_deserialize() {
         let secret = [1u8; 32];
         let requestor = [1u8; 32];
         let domain = [2u8; 32];
@@ -207,39 +218,10 @@ mod tests {
         let timestamp = 1_234_567_890;
         let challenge = Challenge::new(2, timestamp, request_complexity, requestor, domain, secret);
 
-        // Test that it serializes to the expected JSON format
-        let json = serde_json::to_string(&challenge).unwrap();
+        let serialized = challenge.to_bytes();
 
-        // Should contain the expected fields
-        assert!(json.contains("\"challenge\":"));
-        assert!(json.contains("\"target\":"));
-        assert!(json.contains(&format!("\"timestamp\":{timestamp}")));
-
-        // Parse back to verify structure
-        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert!(parsed.get("challenge").is_some());
-        assert!(parsed.get("target").is_some());
-        assert!(parsed.get("timestamp").is_some());
-        assert_eq!(parsed["target"], challenge.target);
-        assert_eq!(parsed["timestamp"], timestamp);
-    }
-
-    #[test]
-    fn challenge_encode_decode() {
-        let secret = create_test_secret();
-        let target = 3;
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let requestor = [1u8; 32];
-        let domain = [2u8; 32];
-        let request_complexity = 100;
-
-        let challenge =
-            Challenge::new(target, current_time, request_complexity, requestor, domain, secret);
-
-        let encoded = challenge.encode();
-        let decoded = Challenge::decode(&encoded, secret).unwrap();
-
-        assert_eq!(challenge, decoded);
+        let deserialized = Challenge::from(serialized);
+        assert_eq!(deserialized, challenge);
     }
 
     #[test]
