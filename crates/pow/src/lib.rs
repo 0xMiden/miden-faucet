@@ -93,12 +93,11 @@ impl PoWRateLimiter {
     /// Computes the target for a given domain by checking the amount of active challenges in the
     /// cache and the given request complexity.
     ///
-    /// The target is computed as:
-    /// `(u64::MAX >> baseline) / request_difficulty`
+    /// The target is computed as: `target = u64::MAX / request_difficulty`
     ///
     /// Where:
     /// * `request_difficulty = load_difficulty * request_complexity`
-    /// * `load_difficulty = ceil((num_active_challenges + 1) * growth_rate)`
+    /// * `load_difficulty = 2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
     fn get_challenge_target(&self, domain: &Domain, request_complexity: u64) -> u64 {
         let num_challenges = self
             .challenges
@@ -106,12 +105,12 @@ impl PoWRateLimiter {
             .expect("challenge cache lock should not be poisoned")
             .num_challenges_for_domain(domain) as u64;
 
-        let max_target = u64::MAX >> self.config.baseline;
         #[allow(clippy::cast_precision_loss, reason = "num_challenges is smaller than f64::MAX")]
         #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
-        let load_difficulty = ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
+        let load_difficulty = 2_u64.pow(self.config.baseline.into())
+            * ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
         let request_difficulty = load_difficulty * request_complexity;
-        max_target / request_difficulty
+        u64::MAX / request_difficulty
     }
 
     /// Submits a challenge.
