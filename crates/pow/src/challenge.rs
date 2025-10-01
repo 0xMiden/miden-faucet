@@ -157,9 +157,10 @@ impl Challenge {
         let mut bytes = [0u8; Self::SERIALIZED_SIZE];
         bytes[..8].copy_from_slice(&self.target.to_le_bytes());
         bytes[8..16].copy_from_slice(&self.timestamp.to_le_bytes());
-        bytes[16..48].copy_from_slice(&self.requestor);
-        bytes[48..80].copy_from_slice(&self.domain);
-        bytes[80..].copy_from_slice(&self.signature);
+        bytes[16..24].copy_from_slice(&self.request_complexity.to_le_bytes());
+        bytes[24..56].copy_from_slice(&self.requestor);
+        bytes[56..88].copy_from_slice(&self.domain);
+        bytes[88..].copy_from_slice(&self.signature);
         bytes
     }
 }

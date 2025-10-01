@@ -119,7 +119,6 @@ pub enum Command {
         ///
         /// Meaning, the difficulty bits of the challenge will increase approximately by
         /// `log2(growth_rate * num_active_challenges)`.
-        #[arg(value_parser = clap::value_parser!(f64))]
         #[arg(long = "pow-growth-rate", value_name = "F64", env = ENV_POW_GROWTH_RATE, default_value = "0.1")]
         pow_growth_rate: f64,
 
