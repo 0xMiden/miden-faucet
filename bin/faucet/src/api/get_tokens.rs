@@ -238,8 +238,7 @@ impl RawMintRequest {
         // Validate Challenge and nonce
         let challenge_str = self.challenge.ok_or(MintRequestError::MissingPowParameters)?;
         let nonce = self.nonce.ok_or(MintRequestError::MissingPowParameters)?;
-        let request_complexity =
-            (asset_amount.base_units() / server.metadata.pow_base_difficulty_amount) + 1;
+        let request_complexity = (asset_amount.base_units() / server.metadata.base_amount) + 1;
 
         server.submit_challenge(
             &challenge_str,

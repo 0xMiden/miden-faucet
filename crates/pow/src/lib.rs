@@ -36,7 +36,7 @@ type Domain = [u8; 32];
 pub struct PoWRateLimiterConfig {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     pub challenge_lifetime: Duration,
-    /// Determines how much the difficulty increases with the amount of active challenges.
+    /// Determines how much the difficulty increases with the number of active challenges.
     pub growth_rate: f64,
     /// Sets the baseline difficulty bits when there are no active challenges.
     pub baseline: u8,
@@ -99,17 +99,24 @@ impl PoWRateLimiter {
     /// * `request_difficulty = load_difficulty * request_complexity`
     /// * `load_difficulty = 2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
     fn get_challenge_target(&self, domain: &Domain, request_complexity: u64) -> u64 {
+        if request_complexity == 0 {
+            return u64::MAX;
+        }
+
         let num_challenges = self
             .challenges
             .lock()
             .expect("challenge cache lock should not be poisoned")
-            .num_challenges_for_domain(domain) as u64;
+            .num_challenges_for_domain(domain);
 
         #[allow(clippy::cast_precision_loss, reason = "num_challenges is smaller than f64::MAX")]
         #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
-        let load_difficulty = 2_u64.pow(self.config.baseline.into())
-            * ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
-        let request_difficulty = load_difficulty * request_complexity;
+        let growth_multiplier =
+            ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
+        let baseline_factor = 2_u64.saturating_mul(self.config.baseline.into());
+        let load_difficulty = baseline_factor.saturating_mul(growth_multiplier);
+        let request_difficulty = load_difficulty.saturating_mul(request_complexity);
+
         u64::MAX / request_difficulty
     }
 

@@ -15,7 +15,7 @@ pub struct Metadata {
     pub max_supply: AssetAmount,
     pub decimals: u8,
     pub explorer_url: Option<Url>,
-    pub pow_base_difficulty_amount: u64,
+    pub base_amount: u64,
 }
 
 impl Serialize for Metadata {
@@ -30,7 +30,7 @@ impl Serialize for Metadata {
         state.serialize_field("max_supply", &self.max_supply.base_units())?;
         state.serialize_field("decimals", &self.decimals)?;
         state.serialize_field("explorer_url", &self.explorer_url)?;
-        state.serialize_field("pow_base_difficulty_amount", &self.pow_base_difficulty_amount)?;
+        state.serialize_field("base_amount", &self.base_amount)?;
         state.end()
     }
 }

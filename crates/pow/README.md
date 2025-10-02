@@ -24,7 +24,7 @@ The `PoWRateLimiterConfig` struct allows you to customize the behavior of the ra
 
 - **`growth_rate`**: Controls how aggressively difficulty increases with more active challenges. The number of active challenges gets multiplied by the growth rate to compute the load difficulty, so higher values mean more aggressive rate limiting.
 
-- **`baseline`**: Sets the initial difficulty baseline. Higher baseline values make challenges harder from the start. Range: 0-63.
+- **`baseline`**: Sets the initial difficulty baseline. Higher baseline values make challenges harder from the start. Range: 0-32.
 
 - **`cleanup_interval`**: How often the system removes expired challenges from memory.
 
@@ -40,9 +40,15 @@ A challenge solution is valid when:
 
 The system automatically adjusts challenges difficulty based on usage and the request complexity. 
 
-The challenge target $t$ is computed as follows: $$ t = \dfrac{2^{64}} {d} $$
+The challenge target $t$ is computed as follows: 
+$$
+t = \dfrac{2^{64}} {d}
+$$
 
-We call $d$ "difficulty" such that $log_2(d)$ is the number of bits of work that we need to do to solve the challenge. We compute it as: $$ d = 2^b \centerdot c \centerdot n \centerdot g $$
+We call $d$ "difficulty" such that $log_2(d)$ is the number of bits of work that we need to do to solve the challenge. We compute it as: 
+$$
+d = 2^b \centerdot c \centerdot n \centerdot g
+$$
 
 Where:
 - $b$ is the baseline difficulty (in bits).

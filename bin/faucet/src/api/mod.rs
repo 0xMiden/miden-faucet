@@ -57,7 +57,7 @@ impl Server {
         max_supply: AssetAmount,
         issuance: Arc<RwLock<AssetAmount>>,
         max_claimable_amount: AssetAmount,
-        pow_base_difficulty_amount: u64,
+        base_amount: u64,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
         rate_limiter_config: PoWRateLimiterConfig,
@@ -72,7 +72,7 @@ impl Server {
             max_supply,
             decimals,
             explorer_url,
-            pow_base_difficulty_amount,
+            base_amount,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
         let metadata = Box::leak(Box::new(metadata));
