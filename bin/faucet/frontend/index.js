@@ -384,7 +384,7 @@ class MidenFaucet {
         } else {
             estimatedTime = `5m+`;
         }
-        this.tokenAmountHint.textContent = `Larger claims involve harder challenges. Estimated: ${estimatedTime}`;
+        this.tokenAmountHint.textContent = `Larger claims involve longer processing times. Estimated: ${estimatedTime}`;
     }
 }
 
