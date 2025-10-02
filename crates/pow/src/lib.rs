@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::challenge_cache::ChallengeCache;
@@ -19,7 +19,7 @@ pub struct PoWRateLimiter {
     /// The server secret used to sign and validate challenges.
     secret: [u8; 32],
     /// The cache used to store submitted challenges.
-    challenges: Arc<Mutex<ChallengeCache>>,
+    challenges: Arc<RwLock<ChallengeCache>>,
     /// The settings of the rate limiter.
     config: PoWRateLimiterConfig,
 }
@@ -48,7 +48,7 @@ pub struct PoWRateLimiterConfig {
 impl PoWRateLimiter {
     /// Creates a new `PoW` instance.
     pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
-        let challenge_cache = Arc::new(Mutex::new(ChallengeCache::new(config.challenge_lifetime)));
+        let challenge_cache = Arc::new(RwLock::new(ChallengeCache::new(config.challenge_lifetime)));
 
         // Start the cleanup task
         let cleanup_state = challenge_cache.clone();
@@ -90,6 +90,23 @@ impl PoWRateLimiter {
         Challenge::new(target, current_time, request_complexity, requestor, domain, self.secret)
     }
 
+    /// Returns the load difficulty for a given domain.
+    ///
+    /// The load difficulty is computed as:
+    /// `2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
+    #[allow(clippy::cast_precision_loss, reason = "num_challenges is smaller than f64::MAX")]
+    #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
+    pub fn get_load_difficulty(&self, domain: impl Into<Domain>) -> u64 {
+        let num_challenges = self
+            .challenges
+            .read()
+            .expect("challenge cache lock should not be poisoned")
+            .num_challenges_for_domain(&domain.into());
+
+        ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64
+            * 2_u64.pow(self.config.baseline.into())
+    }
+
     /// Computes the target for a given domain by checking the amount of active challenges in the
     /// cache and the given request complexity.
     ///
@@ -99,16 +116,7 @@ impl PoWRateLimiter {
     /// * `request_difficulty = load_difficulty * request_complexity`
     /// * `load_difficulty = 2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
     fn get_challenge_target(&self, domain: &Domain, request_complexity: u64) -> u64 {
-        let num_challenges = self
-            .challenges
-            .lock()
-            .expect("challenge cache lock should not be poisoned")
-            .num_challenges_for_domain(domain) as u64;
-
-        #[allow(clippy::cast_precision_loss, reason = "num_challenges is smaller than f64::MAX")]
-        #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
-        let load_difficulty = 2_u64.pow(self.config.baseline.into())
-            * ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
+        let load_difficulty = self.get_load_difficulty(*domain);
         let request_difficulty = load_difficulty * request_complexity;
         u64::MAX / request_difficulty
     }
@@ -154,18 +162,23 @@ impl PoWRateLimiter {
             return Err(ChallengeError::InvalidPoW);
         }
 
-        let mut challenge_cache =
-            self.challenges.lock().expect("challenge cache lock should not be poisoned");
-
         // Check if issuer has submitted a challenge that is still valid
-        let remaining_time =
-            challenge_cache.next_challenge_delay(&(requestor, domain), current_time);
+        let remaining_time = self
+            .challenges
+            .read()
+            .expect("challenge cache lock should not be poisoned")
+            .next_challenge_delay(&(requestor, domain), current_time);
         if remaining_time != 0 {
             return Err(ChallengeError::RateLimited(remaining_time));
         }
 
         // Check if the cache already contains the challenge. If not, it is inserted.
-        if !challenge_cache.insert_challenge(challenge) {
+        if !self
+            .challenges
+            .write()
+            .expect("challenge cache lock should not be poisoned")
+            .insert_challenge(challenge)
+        {
             return Err(ChallengeError::ChallengeAlreadyUsed);
         }
 
@@ -357,7 +370,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
+        assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain), 1);
         assert_eq!(
             pow.get_challenge_target(&domain, request_complexity),
             (u64::MAX >> pow.config.baseline) / 2
@@ -433,12 +446,12 @@ mod tests {
         // check that the challenge is removed from the cache
         assert_eq!(
             pow.challenges
-                .lock()
+                .read()
                 .unwrap()
                 .next_challenge_delay(&(requestor, domain), current_time),
             0
         );
-        assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 0);
+        assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain), 0);
 
         // submit second challenge - should succeed
         let challenge = pow.build_challenge(requestor, domain, request_complexity);
@@ -457,11 +470,11 @@ mod tests {
 
         assert_ne!(
             pow.challenges
-                .lock()
+                .read()
                 .unwrap()
                 .next_challenge_delay(&(requestor, domain), current_time),
             0
         );
-        assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
+        assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain), 1);
     }
 }

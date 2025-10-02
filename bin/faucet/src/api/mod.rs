@@ -43,7 +43,7 @@ mod get_tokens;
 #[derive(Clone)]
 pub struct Server {
     mint_state: GetTokensState,
-    metadata: &'static Metadata,
+    metadata: Metadata,
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
     store: Arc<dyn Store>,
@@ -74,8 +74,6 @@ impl Server {
             explorer_url,
             pow_base_difficulty_amount,
         };
-        // SAFETY: Leaking is okay because we want it to live as long as the application.
-        let metadata = Box::leak(Box::new(metadata));
 
         // Hash the string secret to [u8; 32] for PoW
         let mut hasher = Sha256::new();
@@ -196,9 +194,9 @@ impl Server {
     }
 }
 
-impl FromRef<Server> for &'static Metadata {
+impl FromRef<Server> for Metadata {
     fn from_ref(input: &Server) -> Self {
-        input.metadata
+        input.metadata.clone()
     }
 }
 

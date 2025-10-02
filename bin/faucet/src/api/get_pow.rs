@@ -26,7 +26,7 @@ pub async fn get_pow(
     let challenge =
         server
             .rate_limiter
-            .build_challenge(requestor, request.api_key, request_complexity);
+            .build_challenge(requestor, request.api_key.clone(), request_complexity);
 
     Ok(Json(GetPowResponse {
         challenge: challenge.to_bytes().to_hex(),

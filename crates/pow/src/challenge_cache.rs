@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tokio::time::interval;
@@ -124,7 +124,7 @@ impl ChallengeCache {
     /// The cleanup task is responsible for removing expired challenges from the cache.
     /// It runs every minute and removes challenges that are no longer valid because of their
     /// timestamp.
-    pub async fn run_cleanup(cache: Arc<Mutex<Self>>, cleanup_interval: Duration) {
+    pub async fn run_cleanup(cache: Arc<RwLock<Self>>, cleanup_interval: Duration) {
         let mut interval = interval(cleanup_interval);
 
         loop {
@@ -134,7 +134,7 @@ impl ChallengeCache {
                 .expect("current timestamp should be greater than unix epoch")
                 .as_secs();
             cache
-                .lock()
+                .write()
                 .expect("challenge cache lock should not be poisoned")
                 .cleanup_expired_challenges(current_time);
         }

@@ -13,8 +13,10 @@ class MidenFaucet {
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountOptions = [100, 500, 1000];
-        this.explorer_url = null;
+        this.tokenAmountHint = document.getElementById('token-amount-hint');
+        this.explorerUrl = null;
         this.metadataInitialized = false;
+        this.metadata = null;
 
         // Check if Web Crypto API is available
         if (!window.crypto || !window.crypto.subtle) {
@@ -26,6 +28,7 @@ class MidenFaucet {
         this.privateButton.addEventListener('click', () => this.handleSendTokens(true));
         this.publicButton.addEventListener('click', () => this.handleSendTokens(false));
         this.walletConnectButton.addEventListener('click', () => this.handleWalletConnect());
+        this.tokenSelect.addEventListener('change', () => this.updateTokenHint());
 
         this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
     }
@@ -99,19 +102,21 @@ class MidenFaucet {
         fetch(window.location.origin + '/get_metadata')
             .then(response => response.json())
             .then(data => {
-                if (!this.metadataInitialized) {
-                    this.faucetAddress.textContent = data.id;
-                    this.explorer_url = data.explorer_url;
+                this.faucetAddress.textContent = data.id;
+                this.explorerUrl = data.explorer_url;
 
+                if (!this.metadata) {
                     this.tokenSelect.innerHTML = '';
                     for (const amount of this.tokenAmountOptions) {
                         const option = document.createElement('option');
-                        option.value = Utils.tokensToBaseUnits(amount, data.decimals);
+                        const baseUnits = Utils.tokensToBaseUnits(amount, data.decimals);
+                        option.value = baseUnits;
                         option.textContent = amount;
                         this.tokenSelect.appendChild(option);
                     }
-                    this.metadataInitialized = true;
+                    this.updateTokenHint();
                 }
+                this.metadata = data;
 
                 this.issuance.textContent = Utils.baseUnitsToTokens(data.issuance, data.decimals);
                 this.tokensSupply.textContent = Utils.baseUnitsToTokens(data.max_supply, data.decimals);
@@ -119,7 +124,6 @@ class MidenFaucet {
             })
             .catch(error => {
                 console.error('Error fetching metadata:', error);
-                this.showError('Failed to load metadata. Please try again.');
             });
     }
 
@@ -274,9 +278,9 @@ class MidenFaucet {
             completedPublicModal.classList.add('active');
 
             const explorerButton = document.getElementById('explorer-button');
-            if (this.explorer_url) {
+            if (this.explorerUrl) {
                 explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(this.explorer_url + 'tx/' + mintingData.tx_id, '_blank');
+                explorerButton.onclick = () => window.open(this.explorerUrl + 'tx/' + mintingData.tx_id, '_blank');
             } else {
                 explorerButton.style.display = 'none';
             }
@@ -354,6 +358,33 @@ class MidenFaucet {
         const progressBarTotal = document.getElementById('progress-bar-total');
         progressBarTotal.classList.remove('active');
     }
+
+    updateTokenHint() {
+        if (!this.metadata) return;
+
+        const requestComplexity =
+            Math.floor(this.tokenSelect.value / Number(this.metadata.pow_base_difficulty_amount)) + 1;
+        const difficulty = requestComplexity * Number(this.metadata.pow_load_difficulty);
+        console.log(Number(this.metadata.pow_load_difficulty), difficulty);
+        const difficultyBits = Math.log2(difficulty);
+        console.log(difficultyBits);
+
+        let estimatedTime;
+        if (difficultyBits <= 17) {
+            estimatedTime = `<5s`;
+        } else if (difficultyBits <= 18) {
+            estimatedTime = `5-15s`;
+        } else if (difficultyBits <= 19) {
+            estimatedTime = `15-30s`;
+        } else if (difficultyBits <= 20) {
+            estimatedTime = `30s-1m`;
+        } else if (difficultyBits <= 21) {
+            estimatedTime = `1-5m`;
+        } else {
+            estimatedTime = `5m+`;
+        }
+        this.tokenAmountHint.textContent = `Larger claims involve harder challenges. Estimated: ${estimatedTime}`;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -377,24 +408,24 @@ const Utils = {
                 // Convert nonce to 8-byte big-endian format to match backend
                 const nonceBytes = new ArrayBuffer(8);
                 const nonceView = new DataView(nonceBytes);
-                nonceView.setBigUint64(0, BigInt(nonce), false); // false = big-endian
+                nonceView.setBigUint64(0, BigInt(nonce), false); // false = big-endian	
                 const nonceByteArray = new Uint8Array(nonceBytes);
 
-                // Combine challenge and nonce
+                // Combine challenge and nonce	
                 const combined = new Uint8Array(challengeBytes.length + nonceByteArray.length);
                 combined.set(challengeBytes);
                 combined.set(nonceByteArray, challengeBytes.length);
 
-                // Compute SHA-256 hash using Web Crypto API
+                // Compute SHA-256 hash using Web Crypto API	
                 const hashBuffer = await window.crypto.subtle.digest('SHA-256', combined);
                 const hashArray = new Uint8Array(hashBuffer);
 
-                // Take the first 8 bytes of the hash and parse them as u64 in big-endian
+                // Take the first 8 bytes of the hash and parse them as u64 in big-endian	
                 const first8Bytes = hashArray.slice(0, 8);
                 const dataView = new DataView(first8Bytes.buffer);
-                const digest = dataView.getBigUint64(0, false); // false = big-endian
+                const digest = dataView.getBigUint64(0, false); // false = big-endian	
 
-                // Check if the hash is less than the target
+                // Check if the hash is less than the target	
                 if (digest < targetNum) {
                     return nonce;
                 }
@@ -437,5 +468,5 @@ const Utils = {
 
     tokensToBaseUnits: (tokens, decimals) => {
         return tokens * (10 ** decimals);
-    }
+    },
 };

@@ -5,10 +5,14 @@ use axum::extract::State;
 use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::types::AssetAmount;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use url::Url;
 
+use crate::api::Server;
+use crate::api_key::ApiKey;
+
 /// Describes the faucet metadata needed to show on the frontend.
+#[derive(Clone)]
 pub struct Metadata {
     pub id: FaucetId,
     pub issuance: Arc<RwLock<AssetAmount>>,
@@ -18,26 +22,29 @@ pub struct Metadata {
     pub pow_base_difficulty_amount: u64,
 }
 
-impl Serialize for Metadata {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Metadata", 6)?;
-        state.serialize_field("id", &self.id.to_bech32())?;
-        state.serialize_field("issuance", &self.issuance.read().base_units())?;
-        state.serialize_field("max_supply", &self.max_supply.base_units())?;
-        state.serialize_field("decimals", &self.decimals)?;
-        state.serialize_field("explorer_url", &self.explorer_url)?;
-        state.serialize_field("pow_base_difficulty_amount", &self.pow_base_difficulty_amount)?;
-        state.end()
-    }
-}
-
 // ENDPOINT
 // ================================================================================================
 
-pub async fn get_metadata(State(metadata): State<&'static Metadata>) -> Json<&'static Metadata> {
-    Json(metadata)
+pub async fn get_metadata(State(server): State<Server>) -> Json<GetMetadataResponse> {
+    let metadata = server.metadata;
+    Json(GetMetadataResponse {
+        id: metadata.id.to_bech32(),
+        issuance: metadata.issuance.read().base_units(),
+        max_supply: metadata.max_supply.base_units(),
+        decimals: metadata.decimals,
+        explorer_url: metadata.explorer_url,
+        pow_load_difficulty: server.rate_limiter.get_load_difficulty(ApiKey::default()),
+        pow_base_difficulty_amount: metadata.pow_base_difficulty_amount,
+    })
+}
+
+#[derive(Serialize)]
+pub struct GetMetadataResponse {
+    pub id: String,
+    pub issuance: u64,
+    pub max_supply: u64,
+    pub decimals: u8,
+    pub explorer_url: Option<Url>,
+    pub pow_load_difficulty: u64,
+    pub pow_base_difficulty_amount: u64,
 }
