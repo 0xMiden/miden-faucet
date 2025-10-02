@@ -102,10 +102,12 @@ class MidenFaucet {
         fetch(window.location.origin + '/get_metadata')
             .then(response => response.json())
             .then(data => {
+                this.metadata = data;
                 this.faucetAddress.textContent = data.id;
                 this.explorerUrl = data.explorer_url;
 
-                if (!this.metadata) {
+                if (!this.metadataInitialized) {
+                    this.metadataInitialized = true;
                     this.tokenSelect.innerHTML = '';
                     for (const amount of this.tokenAmountOptions) {
                         const option = document.createElement('option');
@@ -116,7 +118,6 @@ class MidenFaucet {
                     }
                     this.updateTokenHint();
                 }
-                this.metadata = data;
 
                 this.issuance.textContent = Utils.baseUnitsToTokens(data.issuance, data.decimals);
                 this.tokensSupply.textContent = Utils.baseUnitsToTokens(data.max_supply, data.decimals);
