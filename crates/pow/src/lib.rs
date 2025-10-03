@@ -113,8 +113,8 @@ impl PoWRateLimiter {
         #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
         let growth_multiplier =
             ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
-        let baseline_factor = 2_u64.saturating_mul(self.config.baseline.into());
-        let load_difficulty = baseline_factor.saturating_mul(growth_multiplier);
+        let load_difficulty =
+            2_u64.pow(self.config.baseline.into()).saturating_mul(growth_multiplier);
         let request_difficulty = load_difficulty.saturating_mul(request_complexity);
 
         u64::MAX / request_difficulty
