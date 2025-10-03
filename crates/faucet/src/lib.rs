@@ -31,7 +31,7 @@ use miden_client_sqlite_store::SqliteStore;
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
-use tracing::{error, info, instrument, warn};
+use tracing::{Instrument, error, info, info_span, instrument, warn};
 use url::Url;
 
 pub mod requests;
@@ -86,7 +86,7 @@ impl Faucet {
     ///
     /// If a remote transaction prover url is provided, it is used to prove transactions. Otherwise,
     /// a local transaction prover is used.
-    #[instrument(target = COMPONENT, name = "faucet.load", fields(id), skip_all)]
+    #[instrument(target = COMPONENT, name = "faucet.load", fields(account_id), skip_all, err)]
     pub async fn load(
         store_path: PathBuf,
         network_id: NetworkId,
@@ -96,7 +96,7 @@ impl Faucet {
         remote_tx_prover_url: Option<Url>,
     ) -> anyhow::Result<Self> {
         let account = account_file.account;
-        tracing::Span::current().record("id", account.id().to_string());
+        tracing::Span::current().record("account_id", account.id().to_string());
 
         let keystore = FilesystemKeyStore::<StdRng>::new(PathBuf::from("keystore"))
             .context("failed to create keystore")?;
@@ -186,7 +186,6 @@ impl Faucet {
     ///
     /// Once the available supply is exceeded, any requests that exceed the supply will return an
     /// error. The request stream is closed and the minter shuts down.
-    #[instrument(target = COMPONENT, name = "faucet.run", skip_all, err)]
     pub async fn run(
         mut self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
@@ -195,104 +194,113 @@ impl Faucet {
         let mut buffer = Vec::new();
 
         while requests.recv_many(&mut buffer, batch_size).await > 0 {
-            // Check if there are enough tokens available and update the supply counter for each
-            // request.
-            let mut valid_requests = vec![];
-            let mut response_senders = vec![];
-            for (request, response_sender) in buffer.drain(..) {
-                let available_amount = self.available_supply().unwrap_or_default();
-                let requested_amount = request.asset_amount;
-                if available_amount < requested_amount {
-                    error!(
-                        requested_amount = requested_amount.base_units(),
-                        available_amount = available_amount.base_units(),
-                        account_id = %request.account_id,
-                        "Requested amount exceeds available supply",
-                    );
-                    let _ = response_sender.send(Err(MintError::AvailableSupplyExceeded));
-                    continue;
-                }
-                valid_requests.push(request);
-                response_senders.push(response_sender);
-                let mut issuance = self.issuance.write();
-                *issuance = issuance
-                    .checked_add(requested_amount)
-                    .expect("issuance should never be an invalid amount");
-            }
-            if self.available_supply().is_none() {
-                error!("Faucet has run out of tokens");
-            }
-            if valid_requests.is_empty() {
-                continue;
-            }
+            self.mint(buffer.drain(..)).await?;
+        }
+        info!(target = COMPONENT, "Request stream closed, shutting down minter");
 
-            // Root span for this mint attempt (batch)
-            let total_requested: u64 =
-                valid_requests.iter().map(|r| r.asset_amount.base_units()).sum();
-            let num_private = valid_requests
-                .iter()
-                .filter(|r| matches!(r.note_type, crate::types::NoteType::Private))
-                .count() as u64;
-            let num_public = valid_requests.len() as u64 - num_private;
-            let mint_span = tracing::info_span!(
-                target: COMPONENT,
-                "faucet.mint",
-                faucet_id = %self.id.account_id,
-                num_requests = valid_requests.len() as u64,
-                total_requested = total_requested,
-                num_private = num_private,
-                num_public = num_public,
-                tx_id = tracing::field::Empty,
-            );
-            let _mint_enter = mint_span.enter();
+        Ok(())
+    }
 
-            // Build notes
-            let build_span = tracing::info_span!(
-                target: COMPONENT,
-                "faucet.mint.build_notes",
-                num_requests = valid_requests.len() as u64
-            );
-            let notes = {
-                let _enter = build_span.enter();
-                let mut rng = {
-                    let auth_seed: [u64; 4] = rng().random();
-                    let rng_seed = Word::from(auth_seed.map(Felt::new));
-                    RpoRandomCoin::new(rng_seed)
-                };
-                build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?
+    #[instrument(parent = None, target = COMPONENT, name = "faucet.mint", skip_all, fields(num_requests, tx_id), err)]
+    async fn mint(
+        &mut self,
+        requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
+    ) -> anyhow::Result<()> {
+        let span = tracing::Span::current();
+
+        let (valid_requests, response_senders) = self.filter_requests_by_supply(requests);
+        span.record("num_requests", valid_requests.len());
+
+        if valid_requests.is_empty() {
+            return Ok(());
+        }
+
+        // Build notes
+        let build_span = info_span!(target: COMPONENT, "faucet.mint.build_notes");
+        let notes = {
+            let _enter = build_span.enter();
+            let mut rng = {
+                let auth_seed: [u64; 4] = rng().random();
+                let rng_seed = Word::from(auth_seed.map(Felt::new));
+                RpoRandomCoin::new(rng_seed)
             };
-            let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
-            let tx_id = Box::pin(self.create_transaction(notes))
-                .await
-                .context("faucet failed to create transaction")?;
-            tracing::Span::current().record("tx_id", tx_id.to_string());
+            build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?
+        };
+        let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
 
-            let send_resp_span =
-                tracing::info_span!(target: COMPONENT, "faucet.mint.send_responses");
-            let _enter = send_resp_span.enter();
+        // Create the transaction
+        let tx_id = self
+            .create_transaction(notes)
+            .await
+            .context("faucet failed to create transaction")
+            .inspect_err(|err| {
+                error!(?err, "failed to create transaction");
+            })?;
+        span.record("tx_id", tx_id.to_string());
+
+        // Send the responses
+        let send_response_span = info_span!(target: COMPONENT, "faucet.mint.send_responses");
+        {
+            let _enter = send_response_span.enter();
             for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
                 // Ignore errors if the request was dropped.
                 let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
             }
-            let sync_span = tracing::info_span!(target: COMPONENT, "faucet.mint.state_sync");
-            {
-                let _enter = sync_span.enter();
-                self.client.sync_state().await.context("faucet failed to sync state")?;
-            }
         }
-
-        tracing::info!("Request stream closed, shutting down minter");
-
+        // Sync state
+        self.client
+            .sync_state()
+            .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
+            .await
+            .context("faucet failed to sync state")
+            .inspect_err(|err| {
+                error!(?err, "failed to sync state");
+            })?;
         Ok(())
+    }
+
+    /// Updates the issuance counter for the requested amounts and filters the requests that exceed
+    /// the available supply. For the filtered requests, the response sender is notified with an
+    /// error.
+    ///
+    /// Returns a tuple of valid requests and response senders.
+    pub fn filter_requests_by_supply(
+        &self,
+        requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
+    ) -> (Vec<MintRequest>, Vec<MintResponseSender>) {
+        let mut valid_requests = vec![];
+        let mut response_senders = vec![];
+        for (request, response_sender) in requests {
+            let available_amount = self.available_supply().unwrap_or_default();
+            let requested_amount = request.asset_amount;
+            if available_amount < requested_amount {
+                error!(
+                    requested_amount = requested_amount.base_units(),
+                    available_amount = available_amount.base_units(),
+                    account_id = %request.account_id,
+                    "Requested amount exceeds available supply",
+                );
+                let _ = response_sender.send(Err(MintError::AvailableSupplyExceeded));
+                continue;
+            }
+            valid_requests.push(request);
+            response_senders.push(response_sender);
+            let mut issuance = self.issuance.write();
+            *issuance = issuance
+                .checked_add(requested_amount)
+                .expect("issuance should never be an invalid amount");
+        }
+        if self.available_supply().is_none() {
+            error!("Faucet has run out of tokens");
+        }
+        (valid_requests, response_senders)
     }
 
     /// Creates a transaction with the given notes, executes it, proves it, and submits using the
     /// local miden-client. This results in submitting the transaction to the node and updating the
     /// local db to track the created notes.
-    #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err, fields(num_notes, tx_id))]
+    #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all)]
     async fn create_transaction(&mut self, notes: Vec<Note>) -> Result<TransactionId, ClientError> {
-        let span = tracing::Span::current();
-        span.record("num_notes", notes.len() as u64);
         // Build the transaction
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
         let n = notes.len() as u64;
@@ -317,33 +325,24 @@ impl Faucet {
             .build()?;
 
         // Execute the transaction
-        let exec_span = tracing::info_span!(target: COMPONENT, "faucet.mint.execute");
-        let tx_result = {
-            let _enter = exec_span.enter();
-            Box::pin(self.client.new_transaction(self.id.account_id, tx_request)).await?
-        };
+        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx_request))
+            .instrument(info_span!(target: COMPONENT, "faucet.mint.execute"))
+            .await?;
         let tx_id = tx_result.executed_transaction().id();
-        tracing::Span::current().record("tx_id", tx_id.to_string());
 
         // Prove and submit the transaction
-        let prove_remote_span = tracing::info_span!(target: COMPONENT, "faucet.mint.prove_remote");
-        let prover_failed = {
-            let _enter = prove_remote_span.enter();
-            Box::pin(
-                self.client
-                    .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
-            )
-            .await
-            .is_err()
-        };
+        let prover_failed = Box::pin(
+            self.client
+                .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
+        )
+        .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_remote"))
+        .await
+        .is_err();
         if prover_failed {
             warn!("Failed to prove transaction with remote prover, falling back to local prover");
-            let submit_local_span =
-                tracing::info_span!(target: COMPONENT, "faucet.mint.prove_local_and_submit");
-            {
-                let _enter = submit_local_span.enter();
-                Box::pin(self.client.submit_transaction(tx_result)).await?;
-            }
+            Box::pin(self.client.submit_transaction(tx_result))
+                .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_local_and_submit"))
+                .await?;
         }
 
         Ok(tx_id)
@@ -386,13 +385,16 @@ fn build_p2id_notes(
         let asset =
             FungibleAsset::new(source.account_id, request.asset_amount.base_units()).unwrap();
         let note = create_p2id_note(
-                source.account_id,
-                request.account_id,
-                vec![asset.into()],
-                request.note_type.into(),
-                Felt::default(),
-                rng,
-            ).inspect_err(|err| tracing::error!(request.account_id=%request.account_id, ?err, "failed to build note"))?;
+            source.account_id,
+            request.account_id,
+            vec![asset.into()],
+            request.note_type.into(),
+            Felt::default(),
+            rng,
+        )
+        .inspect_err(
+            |err| error!(request.account_id=%request.account_id, ?err, "failed to build note"),
+        )?;
         notes.push(note);
     }
     Ok(notes)

@@ -8,7 +8,7 @@ use miden_client::note::NoteId;
 use miden_client::store::{NoteExportType, NoteFilter};
 use miden_client::utils::Serializable;
 use serde::Deserialize;
-use tracing::instrument;
+use tracing::{Instrument, info_span, instrument};
 
 use crate::COMPONENT;
 use crate::api::Server;
@@ -17,7 +17,7 @@ use crate::api::Server;
 // ================================================================================================
 
 #[instrument(
-    parent = None, target = COMPONENT, name = "faucet.server.get_note", skip_all,
+    parent = None, target = COMPONENT, name = "server.get_note", skip_all, err,
     fields(
         note_id = %request.note_id,
     )
@@ -30,9 +30,10 @@ pub async fn get_note(
     let note = server
         .store
         .get_output_notes(NoteFilter::Unique(request.note_id))
+        .instrument(info_span!(target: COMPONENT, "store.get_output_notes"))
         .await
         .map_err(|e| {
-            tracing::error!("failed to read note from store: {}", e);
+            tracing::error!(?e, "failed to read note from store");
             NoteRequestError::NoteNotFound
         })?
         .pop()

@@ -39,7 +39,7 @@ impl Serialize for Metadata {
 // ENDPOINT
 // ================================================================================================
 
-#[instrument(parent = None, target = COMPONENT, name = "faucet.server.get_metadata", skip_all)]
+#[instrument(parent = None, level = "debug", target = COMPONENT, name = "server.get_metadata", skip_all)]
 pub async fn get_metadata(State(metadata): State<&'static Metadata>) -> Json<&'static Metadata> {
     Json(metadata)
 }

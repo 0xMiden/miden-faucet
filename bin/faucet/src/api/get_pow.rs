@@ -6,7 +6,7 @@ use miden_client::account::{AccountId, Address};
 use miden_client::utils::ToHex;
 use miden_pow_rate_limiter::PoWRateLimiter;
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{info_span, instrument};
 
 use crate::COMPONENT;
 use crate::api::AccountError;
@@ -17,8 +17,8 @@ use crate::error_report::ErrorReport;
 // ================================================================================================
 
 #[instrument(
-    parent = None, target = COMPONENT, name = "faucet.server.get_pow", skip_all,
-    fields(account_id = %params.account_id)
+    parent = None, target = COMPONENT, name = "server.get_pow", skip_all,
+    fields(account_id = %params.account_id, api_key = ?params.api_key), err
 )]
 pub async fn get_pow(
     State(rate_limiter): State<PoWRateLimiter>,
@@ -28,7 +28,15 @@ pub async fn get_pow(
     let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
     let mut requestor = [0u8; 32];
     requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
-    let challenge = rate_limiter.build_challenge(requestor, request.api_key);
+
+    let challenge = {
+        let span =
+            info_span!("server.get_pow.build_challenge", leading_zeros = tracing::field::Empty);
+        let _enter = span.enter();
+        let challenge = rate_limiter.build_challenge(requestor, request.api_key);
+        span.record("leading_zeros", challenge.target().leading_zeros());
+        challenge
+    };
 
     Ok(Json(GetPowResponse {
         challenge: challenge.to_bytes().to_hex(),
@@ -37,7 +45,7 @@ pub async fn get_pow(
     }))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct GetPowResponse {
     challenge: String,
     target: u64,
