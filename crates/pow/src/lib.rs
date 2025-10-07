@@ -101,7 +101,6 @@ impl PoWRateLimiter {
 
         let max_target = u64::MAX >> self.config.baseline;
         let difficulty = usize::max(num_challenges << self.config.growth_rate.get(), 1);
-
         max_target / difficulty as u64
     }
 
