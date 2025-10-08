@@ -198,7 +198,8 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Configure tracing with optional OpenTelemetry exporting support.
-    logging::setup_tracing(cli.command.open_telemetry()).context("failed to initialize logging")?;
+    let _otel_guard = logging::setup_tracing(cli.command.open_telemetry())
+        .context("failed to initialize logging")?;
 
     Box::pin(run_faucet_command(cli)).await
 }
