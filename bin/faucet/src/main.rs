@@ -128,7 +128,7 @@ pub enum Command {
 
         /// The baseline for the `PoW` challenges. This sets the `PoW` difficulty (in bits) that a
         /// a challenge will have when there are no requests against the faucet. It must be between
-        /// 0 and 64.
+        /// 0 and 32.
         #[arg(value_parser = clap::value_parser!(u8).range(0..=32))]
         #[arg(long = "pow-baseline", value_name = "U8", env = ENV_POW_BASELINE, default_value = "16")]
         pow_baseline: u8,

@@ -21,7 +21,7 @@ pub async fn get_pow(
     let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
     let mut requestor = [0u8; 32];
     requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
-    let request_complexity = (request.amount / server.metadata.base_amount) + 1;
+    let request_complexity = server.compute_request_complexity(request.amount);
 
     let challenge =
         server

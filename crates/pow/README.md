@@ -41,11 +41,13 @@ A challenge solution is valid when:
 The system automatically adjusts challenges difficulty based on usage and the request complexity. 
 
 The challenge target $t$ is computed as follows: 
+
 $$
 t = \dfrac{2^{64}} {d}
 $$
 
 We call $d$ "difficulty" such that $log_2(d)$ is the number of bits of work that we need to do to solve the challenge. We compute it as: 
+
 $$
 d = 2^b \centerdot c \centerdot n \centerdot g
 $$
@@ -54,7 +56,7 @@ Where:
 - $b$ is the baseline difficulty (in bits).
 - $c$ is the request complexity such that $log_2(c)$ is the request difficulty in bits.
 - $n$ is the number of active requests.
-- $g$ is the growth rate.
+- $g$ is the growth rate, represented as a floating-point value.
 
 Overall, as more users solve challenges the difficulty increases, providing automatic rate limiting.
 

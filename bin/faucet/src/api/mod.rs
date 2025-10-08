@@ -194,6 +194,11 @@ impl Server {
             .submit_challenge(requestor, api_key, &challenge, nonce, timestamp, request_complexity)
             .map_err(MintRequestError::PowError)
     }
+
+    /// Computes the request complexity for a given asset amount.
+    pub(crate) fn compute_request_complexity(&self, base_units: u64) -> u64 {
+        (base_units / self.metadata.base_amount) + 1
+    }
 }
 
 impl FromRef<Server> for &'static Metadata {
