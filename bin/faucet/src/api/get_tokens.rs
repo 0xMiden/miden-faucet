@@ -8,7 +8,7 @@ use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
-use tracing::instrument;
+use tracing::{Instrument, info_span, instrument};
 
 use crate::COMPONENT;
 use crate::api::{AccountError, Server};
@@ -20,7 +20,7 @@ use crate::pow::api_key::ApiKey;
 // ================================================================================================
 
 #[instrument(
-    parent = None, target = COMPONENT, name = "faucet.server.get_tokens", skip_all,
+    parent = None, target = COMPONENT, name = "server.get_tokens", skip_all, err,
     fields(
         account_id = %request.account_id,
         is_private_note = %request.is_private_note,
@@ -34,23 +34,22 @@ pub async fn get_tokens(
     let (mint_response_sender, mint_response_receiver) = oneshot::channel();
 
     let validated_request = request.validate(&server).map_err(GetTokenError::InvalidRequest)?;
-    let requested_amount = validated_request.asset_amount.base_units();
 
-    let span = tracing::Span::current();
-    span.record("account", validated_request.account_id.to_hex());
-    span.record("amount", requested_amount);
-    span.record("note_type", validated_request.note_type.to_string());
-
-    server
-        .mint_state
-        .request_sender
-        .try_send((validated_request, mint_response_sender))
-        .map_err(|err| match err {
-            TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
-            TrySendError::Closed(_) => GetTokenError::FaucetClosed,
-        })?;
+    let enqueue_span = info_span!(target: COMPONENT, "server.get_tokens.enqueue");
+    {
+        let _enter = enqueue_span.enter();
+        server
+            .mint_state
+            .request_sender
+            .try_send((validated_request, mint_response_sender))
+            .map_err(|err| match err {
+                TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
+                TrySendError::Closed(_) => GetTokenError::FaucetClosed,
+            })?;
+    }
 
     let mint_response = mint_response_receiver
+        .instrument(info_span!(target: COMPONENT, "server.get_tokens.await_mint"))
         .await
         .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
         .map_err(GetTokenError::MintError)?;
@@ -61,7 +60,7 @@ pub async fn get_tokens(
     }))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct GetTokensResponse {
     tx_id: String,
     note_id: String,
@@ -114,11 +113,17 @@ pub enum MintRequestError {
     MissingPowParameters,
 }
 
+#[derive(Debug, thiserror::Error)]
 pub enum GetTokenError {
-    InvalidRequest(MintRequestError),
-    MintError(MintError),
+    #[error("invalid request: {0}")]
+    InvalidRequest(#[source] MintRequestError),
+    #[error("mint error: {0}")]
+    MintError(#[source] MintError),
+    #[error("faucet overloaded")]
     FaucetOverloaded,
+    #[error("faucet closed")]
     FaucetClosed,
+    #[error("faucet return channel closed")]
     FaucetReturnChannelClosed,
 }
 
@@ -185,7 +190,6 @@ impl RawMintRequest {
     ///   - the nonce is missing or doesn't solve the challenge
     ///   - the challenge timestamp is expired
     ///   - the challenge has already been used
-    #[instrument(level = "debug", target = COMPONENT, name = "faucet.server.validate", skip_all)]
     fn validate(self, server: &Server) -> Result<MintRequest, MintRequestError> {
         let note_type = if self.is_private_note {
             NoteType::Private
