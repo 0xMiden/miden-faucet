@@ -6,7 +6,7 @@ use anyhow::Context;
 use axum::Router;
 use axum::extract::FromRef;
 use axum::routing::get;
-use http::{HeaderValue, Request};
+use http::HeaderValue;
 use miden_client::account::{AccountId, AccountIdError, AddressError};
 use miden_client::store::Store;
 use miden_client::utils::{RwLock, hex_to_bytes};
@@ -19,8 +19,7 @@ use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
-use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
@@ -96,56 +95,31 @@ impl Server {
     #[allow(clippy::too_many_lines)]
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
-                .route("/", get(frontend::get_index_html))
-                .route("/bundle.js", get(frontend::get_bundle_js))
-                .route("/index.css", get(frontend::get_index_css))
-                .route("/background.png", get(frontend::get_background))
-                .route("/wallet-icon.png", get(frontend::get_wallet_icon))
-                .route("/favicon.ico", get(frontend::get_favicon))
-                .fallback(get(frontend::get_not_found_html))
-                .route("/get_metadata", get(get_metadata))
-                .route("/pow", get(get_pow))
-                // TODO: This feels rather ugly, and would be nice to move but I can't figure out the types.
-                .route(
-                    "/get_tokens",
-                    get(get_tokens)
-                        .route_layer(
-                            ServiceBuilder::new()
-                                .layer(
-                                    // The other routes are serving static files and are therefore less interesting to log.
-                                    TraceLayer::new_for_http()
-                                        // Pre-register the account and amount so we can fill them in in the request.
-                                        //
-                                        // TODO: switch input from json to query params so we can fill in here.
-                                        .make_span_with(|_request: &Request<_>| {
-                                            use tracing::field::Empty;
-                                            tracing::info_span!(
-                                                "token_request",
-                                                account = Empty,
-                                                note_type = Empty,
-                                                amount = Empty
-                                            )
-                                        })
-                                        .on_response(DefaultOnResponse::new().level(Level::INFO))
-                                        // Disable failure logs since we already trace errors in the method.
-                                        .on_failure(())
-                                ))
-                )
-                .route("/get_note", get(get_note))
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(SetResponseHeaderLayer::if_not_present(
-                            http::header::CACHE_CONTROL,
-                            HeaderValue::from_static("no-cache"),
-                        ))
-                        .layer(
-                            CorsLayer::new()
-                                .allow_origin(tower_http::cors::Any)
-                                .allow_methods(tower_http::cors::Any)
-                                .allow_headers([http::header::CONTENT_TYPE]),
-                        ),
-                )
-                .with_state(self);
+            .route("/", get(frontend::get_index_html))
+            .route("/bundle.js", get(frontend::get_bundle_js))
+            .route("/index.css", get(frontend::get_index_css))
+            .route("/background.png", get(frontend::get_background))
+            .route("/wallet-icon.png", get(frontend::get_wallet_icon))
+            .route("/favicon.ico", get(frontend::get_favicon))
+            .fallback(get(frontend::get_not_found_html))
+            .route("/get_metadata", get(get_metadata))
+            .route("/pow", get(get_pow))
+            .route("/get_tokens", get(get_tokens))
+            .route("/get_note", get(get_note))
+            .layer(
+                ServiceBuilder::new()
+                    .layer(SetResponseHeaderLayer::if_not_present(
+                        http::header::CACHE_CONTROL,
+                        HeaderValue::from_static("no-cache"),
+                    ))
+                    .layer(
+                        CorsLayer::new()
+                            .allow_origin(tower_http::cors::Any)
+                            .allow_methods(tower_http::cors::Any)
+                            .allow_headers([http::header::CONTENT_TYPE]),
+                    ),
+            )
+            .with_state(self);
 
         let listener = url
             .socket_addrs(|| None)
@@ -171,6 +145,7 @@ impl Server {
     ///
     /// # Panics
     /// Panics if the current timestamp is before the UNIX epoch.
+    #[instrument(target = COMPONENT, name = "server.submit_challenge", skip_all)]
     pub(crate) fn submit_challenge(
         &self,
         challenge: &str,

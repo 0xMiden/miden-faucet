@@ -4,7 +4,7 @@ use anyhow::Result;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithTonicConfig;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
-use opentelemetry_sdk::trace::SpanExporter;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use tracing::subscriber::Subscriber;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::{Filter, SubscriberExt};
@@ -23,6 +23,20 @@ impl OpenTelemetry {
     }
 }
 
+/// A guard that shuts down the tracer provider when dropped. This ensures that the logs are flushed
+/// to the exporter before the program exits.
+pub struct OtelGuard {
+    tracer_provider: SdkTracerProvider,
+}
+
+impl Drop for OtelGuard {
+    fn drop(&mut self) {
+        if let Err(err) = self.tracer_provider.shutdown() {
+            eprintln!("{err:?}");
+        }
+    }
+}
+
 /// Initializes tracing to stdout and optionally an open-telemetry exporter.
 ///
 /// Trace filtering defaults to `INFO` and can be configured using the conventional `RUST_LOG`
@@ -30,7 +44,12 @@ impl OpenTelemetry {
 ///
 /// The open-telemetry configuration is controlled via environment variables as defined in the
 /// [specification](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md#opentelemetry-protocol-exporter)
-pub fn setup_tracing(otel: OpenTelemetry) -> Result<()> {
+///
+/// Registers a panic hook so that panic errors are reported to the open-telemetry exporter.
+///
+/// Returns an [`OtelGuard`] if open-telemetry is enabled, otherwise `None`. When this guard is
+/// dropped, the tracer provider is shutdown.
+pub fn setup_tracing(otel: OpenTelemetry) -> Result<Option<OtelGuard>> {
     if otel.is_enabled() {
         opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
     }
@@ -38,37 +57,37 @@ pub fn setup_tracing(otel: OpenTelemetry) -> Result<()> {
     // Note: open-telemetry requires a tokio-runtime, so this _must_ be lazily evaluated (aka not
     // `then_some`) to avoid crashing sync callers (with OpenTelemetry::Disabled set). Examples of
     // such callers are tests with logging enabled.
-    let otel_layer = {
-        if otel.is_enabled() {
-            let exporter = opentelemetry_otlp::SpanExporter::builder()
-                .with_tonic()
-                .with_tls_config(tonic::transport::ClientTlsConfig::new().with_native_roots())
-                .build()?;
-            Some(open_telemetry_layer(exporter))
-        } else {
-            None
-        }
+    let tracer_provider = if otel.is_enabled() {
+        Some(init_tracer_provider()?)
+    } else {
+        None
     };
+    let otel_layer = tracer_provider.as_ref().map(|provider| {
+        OpenTelemetryLayer::new(provider.tracer("tracing-otel-subscriber")).boxed()
+    });
 
     let subscriber = Registry::default()
         .with(stdout_layer().with_filter(env_or_default_filter()))
         .with(otel_layer.with_filter(env_or_default_filter()));
-    tracing::subscriber::set_global_default(subscriber).map_err(Into::into)
+    tracing::subscriber::set_global_default(subscriber).map_err(Into::<anyhow::Error>::into)?;
+
+    // Register panic hook now that tracing is initialized.
+    std::panic::set_hook(Box::new(|info| {
+        tracing::error!(panic = true, "{info}");
+    }));
+
+    Ok(tracer_provider.map(|tracer_provider| OtelGuard { tracer_provider }))
 }
 
-fn open_telemetry_layer<S>(
-    exporter: impl SpanExporter + 'static,
-) -> Box<dyn tracing_subscriber::Layer<S> + Send + Sync + 'static>
-where
-    S: Subscriber + Sync + Send,
-    for<'a> S: tracing_subscriber::registry::LookupSpan<'a>,
-{
-    let tracer = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-        .with_batch_exporter(exporter)
-        .build();
+fn init_tracer_provider() -> Result<SdkTracerProvider> {
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .with_tls_config(tonic::transport::ClientTlsConfig::new().with_native_roots())
+        .build()?;
 
-    let tracer = tracer.tracer("tracing-otel-subscriber");
-    OpenTelemetryLayer::new(tracer).boxed()
+    Ok(opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .build())
 }
 
 fn stdout_layer<S>() -> Box<dyn tracing_subscriber::Layer<S> + Send + Sync + 'static>
