@@ -2,7 +2,7 @@
 
 ## 0.11.6 (2025-10-08)
 
-- Improved telemetry ([#111](https://github.com/0xMiden/miden-faucet/pull/111))
+- Improved telemetry ([#111](https://github.com/0xMiden/miden-faucet/pull/111)).
 
 ## 0.11.5 (2025-09-18)
 
