@@ -16,7 +16,7 @@ use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
-use miden_client::note::{Note, NoteError, create_p2id_note};
+use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
     LocalTransactionProver,
@@ -201,6 +201,10 @@ impl Faucet {
         Ok(())
     }
 
+    /// Mints a batch of requests.
+    ///
+    /// The requests size is guaranteed to be smaller or equal to the batch size set in
+    /// `Faucet::run`.
     #[instrument(parent = None, target = COMPONENT, name = "faucet.mint", skip_all, fields(num_requests, tx_id), err)]
     async fn mint(
         &mut self,
@@ -216,16 +220,12 @@ impl Faucet {
         }
 
         // Build notes
-        let build_span = info_span!(target: COMPONENT, "faucet.mint.build_notes");
-        let notes = {
-            let _enter = build_span.enter();
-            let mut rng = {
-                let auth_seed: [u64; 4] = rng().random();
-                let rng_seed = Word::from(auth_seed.map(Felt::new));
-                RpoRandomCoin::new(rng_seed)
-            };
-            build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?
+        let mut rng = {
+            let auth_seed: [u64; 4] = rng().random();
+            let rng_seed = Word::from(auth_seed.map(Felt::new));
+            RpoRandomCoin::new(rng_seed)
         };
+        let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
         let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
 
         // Create the transaction
@@ -238,16 +238,8 @@ impl Faucet {
             })?;
         span.record("tx_id", tx_id.to_string());
 
-        // Send the responses
-        let send_response_span = info_span!(target: COMPONENT, "faucet.mint.send_responses");
-        {
-            let _enter = send_response_span.enter();
-            for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
-                // Ignore errors if the request was dropped.
-                let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
-            }
-        }
-        // Sync state
+        Self::send_responses(response_senders, note_ids, tx_id);
+
         self.client
             .sync_state()
             .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
@@ -259,12 +251,27 @@ impl Faucet {
         Ok(())
     }
 
+    /// Sends a `MintResponse` with the transaction id and note id through each of the response
+    /// senders. Any errors while sending the response are ignored.
+    #[instrument(target = COMPONENT, name = "faucet.mint.send_responses", skip_all)]
+    fn send_responses(
+        response_senders: Vec<MintResponseSender>,
+        note_ids: Vec<NoteId>,
+        tx_id: TransactionId,
+    ) {
+        for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
+            // Ignore errors if the request was dropped.
+            let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
+        }
+    }
+
     /// Updates the issuance counter for the requested amounts and filters the requests that exceed
     /// the available supply. For the filtered requests, the response sender is notified with an
     /// error.
     ///
     /// Returns a tuple of valid requests and response senders.
-    pub fn filter_requests_by_supply(
+    #[instrument(target = COMPONENT, name = "faucet.mint.filter_requests_by_supply", skip_all)]
+    fn filter_requests_by_supply(
         &self,
         requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
     ) -> (Vec<MintRequest>, Vec<MintResponseSender>) {
@@ -372,6 +379,7 @@ impl Faucet {
 /// # Errors
 ///
 /// Returns an error if creating any p2id note fails.
+#[instrument(target = COMPONENT, name = "faucet.mint.build_notes", skip_all)]
 fn build_p2id_notes(
     source: &FaucetId,
     requests: &[MintRequest],
