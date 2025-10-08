@@ -4,7 +4,9 @@ use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
 use serde::Deserialize;
+use tracing::{Span, info_span, instrument};
 
+use crate::COMPONENT;
 use crate::api::AccountError;
 use crate::error_report::ErrorReport;
 use crate::pow::api_key::ApiKey;
@@ -14,12 +16,25 @@ use crate::pow::{PoW, PowRequest};
 // ENDPOINT
 // ================================================================================================
 
+#[instrument(
+    parent = None, target = COMPONENT, name = "server.get_pow", skip_all,
+    fields(account_id = %params.account_id, api_key = ?params.api_key), err
+)]
 pub async fn get_pow(
     State(pow): State<PoW>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<Challenge>, PowRequestError> {
     let request = params.validate()?;
-    let challenge = pow.build_challenge(request);
+
+    let challenge = {
+        let span =
+            info_span!("server.get_pow.build_challenge", leading_zeros = tracing::field::Empty);
+        let _enter = span.enter();
+        let challenge = pow.build_challenge(request);
+        Span::current().record("leading_zeros", challenge.target.leading_zeros());
+        challenge
+    };
+
     Ok(Json(challenge))
 }
 
