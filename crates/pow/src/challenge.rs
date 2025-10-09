@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use crate::{ChallengeError, Domain, Requestor};
 
 /// A challenge for proof-of-work validation.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Challenge {
     /// The target used to validate the challenge solution. A lower target makes the challenge more
     /// difficult to solve. A solution is valid if the hash `H(challenge, nonce)`, interpreted as a
@@ -13,6 +13,8 @@ pub struct Challenge {
     pub(crate) target: u64,
     /// The timestamp of the challenge creation.
     pub(crate) timestamp: u64,
+    /// The request complexity, used to scale the difficulty of the challenge.
+    pub(crate) request_complexity: u64,
     /// The requestor of the challenge.
     pub(crate) requestor: Requestor,
     /// The domain used to request the challenge.
@@ -23,21 +25,30 @@ pub struct Challenge {
 
 impl Challenge {
     /// The size of the serialized challenge in bytes.
-    pub const SERIALIZED_SIZE: usize = 112;
+    pub const SERIALIZED_SIZE: usize = 120;
 
     /// Creates a new challenge with the given parameters.
     /// The signature is computed internally using the provided secret.
     pub fn new(
         target: u64,
         timestamp: u64,
+        request_complexity: u64,
         requestor: Requestor,
         domain: Domain,
         secret: [u8; 32],
     ) -> Self {
-        let signature = Self::compute_signature(secret, target, timestamp, &requestor, &domain);
+        let signature = Self::compute_signature(
+            secret,
+            target,
+            timestamp,
+            request_complexity,
+            &requestor,
+            &domain,
+        );
         Self {
             target,
             timestamp,
+            request_complexity,
             requestor,
             domain,
             signature,
@@ -48,6 +59,7 @@ impl Challenge {
     pub fn from_parts(
         target: u64,
         timestamp: u64,
+        request_complexity: u64,
         requestor: Requestor,
         domain: Domain,
         signature: [u8; 32],
@@ -55,6 +67,7 @@ impl Challenge {
         Self {
             target,
             timestamp,
+            request_complexity,
             requestor,
             domain,
             signature,
@@ -69,6 +82,7 @@ impl Challenge {
                 secret,
                 self.target,
                 self.timestamp,
+                self.request_complexity,
                 &self.requestor,
                 &self.domain,
             )
@@ -110,6 +124,7 @@ impl Challenge {
         secret: [u8; 32],
         target: u64,
         timestamp: u64,
+        request_complexity: u64,
         requestor: &Requestor,
         domain: &Domain,
     ) -> [u8; 32] {
@@ -117,6 +132,7 @@ impl Challenge {
         hasher.update(secret);
         hasher.update(target.to_le_bytes());
         hasher.update(timestamp.to_le_bytes());
+        hasher.update(request_complexity.to_le_bytes());
         hasher.update(requestor);
         hasher.update(domain);
         hasher.finalize().into()
@@ -141,9 +157,10 @@ impl Challenge {
         let mut bytes = [0u8; Self::SERIALIZED_SIZE];
         bytes[..8].copy_from_slice(&self.target.to_le_bytes());
         bytes[8..16].copy_from_slice(&self.timestamp.to_le_bytes());
-        bytes[16..48].copy_from_slice(&self.requestor);
-        bytes[48..80].copy_from_slice(&self.domain);
-        bytes[80..].copy_from_slice(&self.signature);
+        bytes[16..24].copy_from_slice(&self.request_complexity.to_le_bytes());
+        bytes[24..56].copy_from_slice(&self.requestor);
+        bytes[56..88].copy_from_slice(&self.domain);
+        bytes[88..].copy_from_slice(&self.signature);
         bytes
     }
 }
@@ -159,9 +176,12 @@ impl From<[u8; Challenge::SERIALIZED_SIZE]> for Challenge {
         Self::from_parts(
             u64::from_le_bytes(bytes[..8].try_into().expect("bytes should serialize target")),
             u64::from_le_bytes(bytes[8..16].try_into().expect("bytes should serialize timestamp")),
-            bytes[16..48].try_into().expect("bytes should serialize requestor"),
-            bytes[48..80].try_into().expect("bytes should serialize domain"),
-            bytes[80..].try_into().expect("bytes should serialize signature"),
+            u64::from_le_bytes(
+                bytes[16..24].try_into().expect("bytes should serialize request complexity"),
+            ),
+            bytes[24..56].try_into().expect("bytes should serialize requestor"),
+            bytes[56..88].try_into().expect("bytes should serialize domain"),
+            bytes[88..].try_into().expect("bytes should serialize signature"),
         )
     }
 }
@@ -195,7 +215,9 @@ mod tests {
         let secret = [1u8; 32];
         let requestor = [1u8; 32];
         let domain = [2u8; 32];
-        let challenge = Challenge::new(2, 1_234_567_890, requestor, domain, secret);
+        let request_complexity = 100;
+        let timestamp = 1_234_567_890;
+        let challenge = Challenge::new(2, timestamp, request_complexity, requestor, domain, secret);
 
         let serialized = challenge.to_bytes();
 
@@ -212,12 +234,12 @@ mod tests {
         let challenge_lifetime = Duration::from_secs(30);
 
         // Valid timestamp (current time)
-        let challenge = Challenge::new(12, current_time, requestor, domain, secret);
+        let challenge = Challenge::new(12, current_time, 100, requestor, domain, secret);
         assert!(!challenge.is_expired(current_time, challenge_lifetime));
 
         // Expired timestamp (too old)
         let old_timestamp = current_time - challenge_lifetime.as_secs() - 10;
-        let challenge = Challenge::new(12, old_timestamp, requestor, domain, secret);
+        let challenge = Challenge::new(12, old_timestamp, 100, requestor, domain, secret);
         assert!(challenge.is_expired(current_time, challenge_lifetime));
     }
 }

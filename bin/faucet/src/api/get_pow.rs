@@ -4,12 +4,11 @@ use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_client::account::{AccountId, Address};
 use miden_client::utils::ToHex;
-use miden_pow_rate_limiter::PoWRateLimiter;
 use serde::{Deserialize, Serialize};
 use tracing::{info_span, instrument};
 
 use crate::COMPONENT;
-use crate::api::AccountError;
+use crate::api::{AccountError, Server};
 use crate::api_key::ApiKey;
 use crate::error_report::ErrorReport;
 
@@ -21,7 +20,7 @@ use crate::error_report::ErrorReport;
     fields(account_id = %params.account_id, api_key = ?params.api_key), err
 )]
 pub async fn get_pow(
-    State(rate_limiter): State<PoWRateLimiter>,
+    State(server): State<Server>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<GetPowResponse>, PowRequestError> {
     let request = params.validate()?;
@@ -33,7 +32,11 @@ pub async fn get_pow(
         let span =
             info_span!("server.get_pow.build_challenge", leading_zeros = tracing::field::Empty);
         let _enter = span.enter();
-        let challenge = rate_limiter.build_challenge(requestor, request.api_key);
+        let request_complexity = server.compute_request_complexity(request.amount);
+        let challenge =
+            server
+                .rate_limiter
+                .build_challenge(requestor, request.api_key, request_complexity);
         span.record("leading_zeros", challenge.target().leading_zeros());
         challenge
     };
@@ -57,6 +60,7 @@ pub struct GetPowResponse {
 
 /// Validated and parsed request for the `PoW` challenge.
 pub struct PowRequest {
+    pub amount: u64,
     pub account_id: AccountId,
     pub api_key: ApiKey,
 }
@@ -64,6 +68,7 @@ pub struct PowRequest {
 /// Used to receive the initial `get_pow` request from the user.
 #[derive(Deserialize)]
 pub struct RawPowRequest {
+    amount: u64,
     account_id: String,
     api_key: Option<String>,
 }
@@ -90,7 +95,7 @@ impl RawPowRequest {
             .map_err(|_| PowRequestError::InvalidApiKey(self.api_key.unwrap_or_default()))?
             .unwrap_or_default();
 
-        Ok(PowRequest { account_id, api_key })
+        Ok(PowRequest { amount: self.amount, account_id, api_key })
     }
 }
 

@@ -18,6 +18,7 @@ pub struct Metadata {
     pub max_supply: AssetAmount,
     pub decimals: u8,
     pub explorer_url: Option<Url>,
+    pub base_amount: u64,
 }
 
 impl Serialize for Metadata {
@@ -26,12 +27,13 @@ impl Serialize for Metadata {
         S: Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Metadata", 5)?;
+        let mut state = serializer.serialize_struct("Metadata", 6)?;
         state.serialize_field("id", &self.id.to_bech32())?;
         state.serialize_field("issuance", &self.issuance.read().base_units())?;
         state.serialize_field("max_supply", &self.max_supply.base_units())?;
         state.serialize_field("decimals", &self.decimals)?;
         state.serialize_field("explorer_url", &self.explorer_url)?;
+        state.serialize_field("base_amount", &self.base_amount)?;
         state.end()
     }
 }

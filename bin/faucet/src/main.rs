@@ -6,7 +6,6 @@ mod network;
 #[cfg(test)]
 mod testing;
 
-use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -51,6 +50,7 @@ const ENV_POW_CHALLENGE_LIFETIME: &str = "MIDEN_FAUCET_POW_CHALLENGE_LIFETIME";
 const ENV_POW_CLEANUP_INTERVAL: &str = "MIDEN_FAUCET_POW_CLEANUP_INTERVAL";
 const ENV_POW_GROWTH_RATE: &str = "MIDEN_FAUCET_POW_GROWTH_RATE";
 const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
+const ENV_BASE_AMOUNT: &str = "MIDEN_FAUCET_BASE_AMOUNT";
 const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
@@ -89,7 +89,7 @@ pub enum Command {
         #[arg(long = "account", value_name = "FILE", env = ENV_ACCOUNT_PATH)]
         faucet_account_path: PathBuf,
 
-        /// The maximum amount of assets base units that can be dispersed on each request.
+        /// The maximum amount of assets' base units that can be dispersed on each request.
         #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
         max_claimable_amount: u64,
 
@@ -113,10 +113,14 @@ pub enum Command {
         #[arg(long = "pow-challenge-lifetime", value_name = "DURATION", env = ENV_POW_CHALLENGE_LIFETIME, default_value = "30s", value_parser = humantime::parse_duration)]
         pow_challenge_lifetime: Duration,
 
-        /// A measure of how quickly the `PoW` difficult grows with the number of requests. When
-        /// set to 1, the difficulty will roughly double when the number of requests doubles.
-        #[arg(long = "pow-growth-rate", value_name = "NON_ZERO_USIZE", env = ENV_POW_GROWTH_RATE, default_value = "1")]
-        pow_growth_rate: NonZeroUsize,
+        /// Defines how quickly the `PoW` difficulty grows with the number of requests. The number
+        /// of active challenges gets multiplied by the growth rate to compute the load
+        /// difficulty.
+        ///
+        /// Meaning, the difficulty bits of the challenge will increase approximately by
+        /// `log2(growth_rate * num_active_challenges)`.
+        #[arg(long = "pow-growth-rate", value_name = "F64", env = ENV_POW_GROWTH_RATE, default_value = "0.1")]
+        pow_growth_rate: f64,
 
         /// The interval at which the `PoW` challenge cache is cleaned up.
         #[arg(long = "pow-cleanup-interval", value_name = "DURATION", env = ENV_POW_CLEANUP_INTERVAL, default_value = "2s", value_parser = humantime::parse_duration)]
@@ -126,8 +130,16 @@ pub enum Command {
         /// a challenge will have when there are no requests against the faucet. It must be between
         /// 0 and 32.
         #[arg(value_parser = clap::value_parser!(u8).range(0..=32))]
-        #[arg(long = "pow-baseline", value_name = "U8", env = ENV_POW_BASELINE, default_value = "12")]
+        #[arg(long = "pow-baseline", value_name = "U8", env = ENV_POW_BASELINE, default_value = "16")]
         pow_baseline: u8,
+
+        /// The baseline amount for token requests (in base units). Requests for greater amounts
+        /// would require higher level of `PoW`.
+        ///
+        /// The request complexity for challenges is computed as: `request_complexity = (amount /
+        /// base_amount) + 1`
+        #[arg(long = "base-amount", value_name = "U64", env = ENV_BASE_AMOUNT, default_value = "100000000")]
+        base_amount: u64,
 
         /// Comma-separated list of API keys.
         #[arg(long = "api-keys", value_name = "STRING", env = ENV_API_KEYS, num_args = 1.., value_delimiter = ',')]
@@ -221,6 +233,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             pow_cleanup_interval,
             pow_growth_rate,
             pow_baseline,
+            base_amount,
             api_keys,
             open_telemetry: _,
             store_path,
@@ -271,6 +284,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 max_supply,
                 faucet.issuance(),
                 max_claimable_amount,
+                base_amount,
                 tx_mint_requests,
                 pow_secret.as_str(),
                 rate_limiter_config,
@@ -361,7 +375,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 #[cfg(test)]
 mod test {
     use std::env::temp_dir;
-    use std::num::NonZeroUsize;
     use std::process::Stdio;
     use std::str::FromStr;
     use std::time::{Duration, Instant};
@@ -501,8 +514,9 @@ mod test {
                         pow_secret: "test".to_string(),
                         pow_challenge_lifetime: Duration::from_secs(30),
                         pow_cleanup_interval: Duration::from_secs(1),
-                        pow_growth_rate: NonZeroUsize::new(1).unwrap(),
+                        pow_growth_rate: 1.0,
                         pow_baseline: 12,
+                        base_amount: 100_000,
                         faucet_account_path: faucet_account_path.clone(),
                         remote_tx_prover_url: None,
                         open_telemetry: false,

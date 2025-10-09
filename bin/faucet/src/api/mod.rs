@@ -56,6 +56,7 @@ impl Server {
         max_supply: AssetAmount,
         issuance: Arc<RwLock<AssetAmount>>,
         max_claimable_amount: AssetAmount,
+        base_amount: u64,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
         rate_limiter_config: PoWRateLimiterConfig,
@@ -70,6 +71,7 @@ impl Server {
             max_supply,
             decimals,
             explorer_url,
+            base_amount,
         };
         // SAFETY: Leaking is okay because we want it to live as long as the application.
         let metadata = Box::leak(Box::new(metadata));
@@ -150,6 +152,7 @@ impl Server {
         nonce: u64,
         account_id: AccountId,
         api_key: ApiKey,
+        request_complexity: u64,
     ) -> Result<(), MintRequestError> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -163,8 +166,13 @@ impl Server {
             .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?
             .into();
         self.rate_limiter
-            .submit_challenge(requestor, api_key, &challenge, nonce, timestamp)
+            .submit_challenge(requestor, api_key, &challenge, nonce, timestamp, request_complexity)
             .map_err(MintRequestError::PowError)
+    }
+
+    /// Computes the request complexity for a given asset amount.
+    pub(crate) fn compute_request_complexity(&self, base_units: u64) -> u64 {
+        (base_units / self.metadata.base_amount) + 1
     }
 }
 
