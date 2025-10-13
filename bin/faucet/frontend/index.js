@@ -69,7 +69,7 @@ class MidenFaucet {
 
         this.updateMintingTitle('PREPARING THE REQUEST');
 
-        const powData = await this.getPowChallenge(recipient);
+        const powData = await this.getPowChallenge(recipient, amount);
         if (!powData) {
             this.hideModals();
             return;
@@ -123,10 +123,11 @@ class MidenFaucet {
             });
     }
 
-    async getPowChallenge(recipient) {
+    async getPowChallenge(recipient, amount) {
         let powResponse;
         try {
             powResponse = await fetch(window.location.origin + '/pow?' + new URLSearchParams({
+                amount: amount,
                 account_id: recipient
             }), {
                 method: "GET"
@@ -367,14 +368,12 @@ const Utils = {
     findValidNonce: async (challenge, target) => {
         let nonce = 0;
         let targetNum = BigInt(target);
+        const challengeBytes = Uint8Array.fromHex(challenge);
 
         while (true) {
             nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
             try {
-                // Convert challenge from hex string to Uint8Array
-                const challengeBytes = new TextEncoder().encode(challenge);
-
                 // Convert nonce to 8-byte big-endian format to match backend
                 const nonceBytes = new ArrayBuffer(8);
                 const nonceView = new DataView(nonceBytes);

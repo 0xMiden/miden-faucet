@@ -6,7 +6,6 @@ mod network;
 #[cfg(test)]
 mod testing;
 
-use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -58,6 +57,7 @@ const ENV_POW_CHALLENGE_LIFETIME: &str = "MIDEN_FAUCET_POW_CHALLENGE_LIFETIME";
 const ENV_POW_CLEANUP_INTERVAL: &str = "MIDEN_FAUCET_POW_CLEANUP_INTERVAL";
 const ENV_POW_GROWTH_RATE: &str = "MIDEN_FAUCET_POW_GROWTH_RATE";
 const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
+const ENV_BASE_AMOUNT: &str = "MIDEN_FAUCET_BASE_AMOUNT";
 const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
@@ -83,15 +83,20 @@ pub enum Command {
         config: ClientConfig,
 
         /// Symbol of the new token.
-        #[arg(short, long, value_name = "STRING", requires_all = ["decimals", "max_supply"])]
+        #[arg(
+            short,
+            long,
+            value_name = "STRING",
+            required_unless_present = "import_account_path"
+        )]
         token_symbol: Option<String>,
 
         /// Decimals of the new token.
-        #[arg(short, long, value_name = "U8", requires_all = ["token_symbol", "max_supply"])]
+        #[arg(short, long, value_name = "U8", required_unless_present = "import_account_path")]
         decimals: Option<u8>,
 
         /// Max supply of the new token (in base units).
-        #[arg(short, long, value_name = "U64", requires_all = ["token_symbol", "decimals"])]
+        #[arg(short, long, value_name = "U64", required_unless_present = "import_account_path")]
         max_supply: Option<u64>,
 
         /// Set an existing faucet account file to use, instead of creating a new account.
@@ -118,7 +123,7 @@ pub enum Command {
         #[arg(long = "endpoint", value_name = "URL", env = ENV_ENDPOINT)]
         endpoint: Url,
 
-        /// The maximum amount of assets base units that can be dispersed on each request.
+        /// The maximum amount of assets' base units that can be dispersed on each request.
         #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
         max_claimable_amount: u64,
 
@@ -133,10 +138,14 @@ pub enum Command {
         #[arg(long = "pow-challenge-lifetime", value_name = "DURATION", env = ENV_POW_CHALLENGE_LIFETIME, default_value = "30s", value_parser = humantime::parse_duration)]
         pow_challenge_lifetime: Duration,
 
-        /// A measure of how quickly the `PoW` difficult grows with the number of requests. When
-        /// set to 1, the difficulty will roughly double when the number of requests doubles.
-        #[arg(long = "pow-growth-rate", value_name = "NON_ZERO_USIZE", env = ENV_POW_GROWTH_RATE, default_value = "1")]
-        pow_growth_rate: NonZeroUsize,
+        /// Defines how quickly the `PoW` difficulty grows with the number of requests. The number
+        /// of active challenges gets multiplied by the growth rate to compute the load
+        /// difficulty.
+        ///
+        /// Meaning, the difficulty bits of the challenge will increase approximately by
+        /// `log2(growth_rate * num_active_challenges)`.
+        #[arg(long = "pow-growth-rate", value_name = "F64", env = ENV_POW_GROWTH_RATE, default_value = "0.1")]
+        pow_growth_rate: f64,
 
         /// The interval at which the `PoW` challenge cache is cleaned up.
         #[arg(long = "pow-cleanup-interval", value_name = "DURATION", env = ENV_POW_CLEANUP_INTERVAL, default_value = "2s", value_parser = humantime::parse_duration)]
@@ -146,8 +155,16 @@ pub enum Command {
         /// a challenge will have when there are no requests against the faucet. It must be between
         /// 0 and 32.
         #[arg(value_parser = clap::value_parser!(u8).range(0..=32))]
-        #[arg(long = "pow-baseline", value_name = "U8", env = ENV_POW_BASELINE, default_value = "12")]
+        #[arg(long = "pow-baseline", value_name = "U8", env = ENV_POW_BASELINE, default_value = "16")]
         pow_baseline: u8,
+
+        /// The baseline amount for token requests (in base units). Requests for greater amounts
+        /// would require higher level of `PoW`.
+        ///
+        /// The request complexity for challenges is computed as: `request_complexity = (amount /
+        /// base_amount) + 1`
+        #[arg(long = "base-amount", value_name = "U64", env = ENV_BASE_AMOUNT, default_value = "100000000")]
+        base_amount: u64,
 
         /// Comma-separated list of API keys.
         #[arg(long = "api-keys", value_name = "STRING", env = ENV_API_KEYS, num_args = 1.., value_delimiter = ',')]
@@ -218,7 +235,8 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Configure tracing with optional OpenTelemetry exporting support.
-    logging::setup_tracing(cli.command.open_telemetry()).context("failed to initialize logging")?;
+    let _otel_guard = logging::setup_tracing(cli.command.open_telemetry())
+        .context("failed to initialize logging")?;
 
     Box::pin(run_faucet_command(cli)).await
 }
@@ -298,6 +316,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             pow_cleanup_interval,
             pow_growth_rate,
             pow_baseline,
+            base_amount,
             api_keys,
             open_telemetry: _,
             explorer_url,
@@ -343,6 +362,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 max_supply,
                 faucet.issuance(),
                 max_claimable_amount,
+                base_amount,
                 tx_mint_requests,
                 pow_secret.as_str(),
                 rate_limiter_config,
@@ -430,7 +450,6 @@ fn create_faucet_account(
 #[cfg(test)]
 mod test {
     use std::env::temp_dir;
-    use std::num::NonZeroUsize;
     use std::process::Stdio;
     use std::str::FromStr;
     use std::time::{Duration, Instant};
@@ -574,8 +593,9 @@ mod test {
                         pow_secret: "test".to_string(),
                         pow_challenge_lifetime: Duration::from_secs(30),
                         pow_cleanup_interval: Duration::from_secs(1),
-                        pow_growth_rate: NonZeroUsize::new(1).unwrap(),
+                        pow_growth_rate: 1.0,
                         pow_baseline: 12,
+                        base_amount: 100_000,
                         open_telemetry: false,
                         explorer_url: None,
                         batch_size: 8,
