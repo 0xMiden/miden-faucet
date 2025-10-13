@@ -342,7 +342,7 @@ impl Faucet {
             self.client
                 .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
         )
-        .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_remote"))
+        .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_and_submit"))
         .await?;
 
         Ok(tx_id)
