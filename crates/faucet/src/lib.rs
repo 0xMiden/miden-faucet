@@ -338,19 +338,12 @@ impl Faucet {
         let tx_id = tx_result.executed_transaction().id();
 
         // Prove and submit the transaction
-        let prover_failed = Box::pin(
+        Box::pin(
             self.client
                 .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
         )
         .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_remote"))
-        .await
-        .is_err();
-        if prover_failed {
-            warn!("Failed to prove transaction with remote prover, falling back to local prover");
-            Box::pin(self.client.submit_transaction(tx_result))
-                .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_local_and_submit"))
-                .await?;
-        }
+        .await?;
 
         Ok(tx_id)
     }
