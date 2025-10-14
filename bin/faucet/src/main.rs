@@ -57,6 +57,7 @@ const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
+const ENV_PROVER_FALLBACK: &str = "MIDEN_FAUCET_PROVER_FALLBACK";
 
 // COMMANDS
 // ================================================================================================
@@ -164,6 +165,10 @@ pub enum Command {
         /// single transaction.
         #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
         batch_size: usize,
+
+        /// Enables a local prover fallback in case the remote prover fails.
+        #[arg(long = "prover-fallback", value_name = "BOOL", default_value_t = true, env = ENV_PROVER_FALLBACK)]
+        prover_fallback: bool,
     },
 
     /// Create a new public faucet account and save to the specified file.
@@ -239,6 +244,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             store_path,
             explorer_url,
             batch_size,
+            prover_fallback,
         } => {
             let account_file = AccountFile::read(&faucet_account_path).context(format!(
                 "failed to load faucet account from file ({})",
@@ -255,6 +261,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 &node_url,
                 timeout,
                 remote_tx_prover_url,
+                prover_fallback,
             )
             .await
             .context("failed to load faucet")?;
@@ -523,6 +530,7 @@ mod test {
                         store_path: temp_dir().join("test_store.sqlite3"),
                         explorer_url: None,
                         batch_size: 8,
+                        prover_fallback: false,
                     },
                 }))
                 .await

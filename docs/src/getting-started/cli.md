@@ -59,6 +59,7 @@ miden-faucet start \
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
 | `--remote-tx-prover-url` | Remote transaction prover | - | No |
+| `--fallback-prover` | Enable a local proving fallback when the remote transaction prover fails | true | No |
 | `--api-keys` | Comma-separated API keys | - | No |
 | `--enable-otel` | Enable OpenTelemetry | `false` | No |
 | `--batch-size` | Maximum number of P2ID notes to create per transaction | `32` | No |

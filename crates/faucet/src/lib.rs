@@ -72,6 +72,7 @@ pub struct Faucet {
     id: FaucetId,
     client: Client<FilesystemKeyStore<StdRng>>,
     tx_prover: Arc<dyn TransactionProver>,
+    prover_fallback: bool,
     issuance: Arc<RwLock<AssetAmount>>,
     max_supply: AssetAmount,
     script: TransactionScript,
@@ -94,6 +95,7 @@ impl Faucet {
         node_url: &Url,
         timeout: Duration,
         remote_tx_prover_url: Option<Url>,
+        prover_fallback: bool,
     ) -> anyhow::Result<Self> {
         let account = account_file.account;
         tracing::Span::current().record("account_id", account.id().to_string());
@@ -170,6 +172,7 @@ impl Faucet {
             id,
             client,
             tx_prover,
+            prover_fallback,
             issuance,
             max_supply,
             script,
@@ -338,12 +341,19 @@ impl Faucet {
         let tx_id = tx_result.executed_transaction().id();
 
         // Prove and submit the transaction
-        Box::pin(
+        let submit_result = Box::pin(
             self.client
                 .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
         )
         .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_and_submit"))
-        .await?;
+        .await;
+
+        if submit_result.is_err() && self.prover_fallback {
+            warn!("Failed to submit transaction, falling back to local prover");
+            Box::pin(self.client.submit_transaction(tx_result))
+                .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_local_and_submit"))
+                .await?;
+        }
 
         Ok(tx_id)
     }
