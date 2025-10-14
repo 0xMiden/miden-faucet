@@ -1,11 +1,13 @@
-mod api;
 mod api_key;
+mod backend;
 mod error_report;
+mod frontend;
 mod logging;
 mod network;
 #[cfg(test)]
 mod testing;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,10 +28,12 @@ use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 use url::Url;
 
-use crate::api::Server;
 use crate::api_key::ApiKey;
+use crate::backend::{BackendServer, Metadata};
+use crate::frontend::serve_frontend;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
 
@@ -39,7 +43,8 @@ use crate::network::FaucetNetwork;
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
 
-const ENV_ENDPOINT: &str = "MIDEN_FAUCET_ENDPOINT";
+const ENV_BACKEND_URL: &str = "MIDEN_FAUCET_BACKEND_URL";
+const ENV_FRONTEND_URL: &str = "MIDEN_FAUCET_FRONTEND_URL";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";
 const ENV_TIMEOUT: &str = "MIDEN_FAUCET_TIMEOUT";
 const ENV_ACCOUNT_PATH: &str = "MIDEN_FAUCET_ACCOUNT_PATH";
@@ -73,9 +78,14 @@ pub struct Cli {
 pub enum Command {
     /// Start the faucet server
     Start {
-        /// Endpoint of the faucet in the format `<ip>:<port>`.
-        #[arg(long = "endpoint", value_name = "URL", env = ENV_ENDPOINT)]
-        endpoint: Url,
+        /// Backend API URL, in the format `<ip>:<port>`.
+        #[arg(long = "backend-url", value_name = "URL", env = ENV_BACKEND_URL)]
+        backend_url: Url,
+
+        /// Frontend API URL, in the format `<ip>:<port>`. If not set, the frontend will not be
+        /// served.
+        #[arg(long = "frontend-url", value_name = "URL", env = ENV_FRONTEND_URL)]
+        frontend_url: Option<Url>,
 
         /// Node RPC gRPC endpoint in the format `http://<host>[:<port>]`.
         #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
@@ -221,7 +231,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         // Note: open-telemetry is handled in main.
         Command::Start {
-            endpoint,
+            backend_url,
+            frontend_url,
             node_url,
             timeout,
             faucet_account_path,
@@ -277,38 +288,53 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
             };
-
-            let server = Server::new(
-                faucet.faucet_id(),
-                decimals,
+            let metadata = Metadata {
+                id: faucet.faucet_id(),
+                issuance: faucet.issuance(),
                 max_supply,
-                faucet.issuance(),
-                max_claimable_amount,
+                decimals,
+                explorer_url,
                 base_amount,
-                tx_mint_requests,
+            };
+            // We keep a channel sender open in the main thread to avoid the faucet closing before
+            // servers can propagate any errors.
+            let tx_mint_requests_clone = tx_mint_requests.clone();
+            let backend_server = BackendServer::new(
+                metadata,
+                max_claimable_amount,
+                tx_mint_requests_clone,
                 pow_secret.as_str(),
                 rate_limiter_config,
                 &api_keys,
                 store,
-                explorer_url,
             );
 
             // Use select to concurrently:
             // - Run and wait for the faucet (on current thread)
-            // - Run and wait for server (in a spawned task)
+            // - Run and wait for backend server (in a spawned task)
+            // - Run and wait for frontend server (in a spawned task, only if set)
             let faucet_future = faucet.run(rx_mint_requests, batch_size);
-            let server_future = async {
-                let server_handle =
-                    tokio::spawn(
-                        async move { server.serve(endpoint).await.context("server failed") },
-                    );
-                server_handle.await.context("failed to join server task")?
-            };
+
+            let mut tasks = JoinSet::new();
+            let mut tasks_ids = HashMap::new();
+
+            let backend_id = tasks.spawn(backend_server.serve(backend_url.clone())).id();
+            tasks_ids.insert(backend_id, "backend");
+
+            if let Some(frontend_url) = frontend_url {
+                let frontend_id = tasks.spawn(serve_frontend(frontend_url, backend_url)).id();
+                tasks_ids.insert(frontend_id, "frontend");
+            }
 
             tokio::select! {
-                server_result = server_future => {
-                    // If server completes first, return its result
-                    server_result.context("server failed")
+                serve_result = tasks.join_next_with_id() => {
+                    let (id, err) = match serve_result.unwrap() {
+                        Ok((id, Ok(_))) => (id, Err(anyhow::anyhow!("completed unexpectedly"))),
+                        Ok((id, Err(err))) => (id, Err(err)),
+                        Err(join_err) => (join_err.id(), Err(join_err).context("failed to join task")),
+                    };
+                    let component = tasks_ids.get(&id).unwrap_or(&"unknown");
+                    err.context(format!("{component} server failed"))
                 },
                 faucet_result = faucet_future => {
                     // Faucet completed, return its result
@@ -381,11 +407,7 @@ mod test {
 
     use fantoccini::ClientBuilder;
     use miden_client::account::{
-        AccountId,
-        AccountIdAddress,
-        Address,
-        AddressInterface,
-        NetworkId,
+        AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
     };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
@@ -493,7 +515,6 @@ mod test {
 
         // Start the faucet connected to the stub
         // Use std::thread to launch faucet - avoids Send requirements
-        let endpoint_clone = Url::parse("http://localhost:8080").unwrap();
         std::thread::spawn(move || {
             // Create a new runtime for this thread
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -505,7 +526,8 @@ mod test {
             rt.block_on(async {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
-                        endpoint: endpoint_clone,
+                        backend_url: Url::try_from("http://localhost:3000").unwrap(),
+                        frontend_url: Some(Url::parse("http://localhost:8080").unwrap()),
                         node_url: stub_node_url,
                         timeout: Duration::from_millis(5000),
                         max_claimable_amount: 1_000_000_000,

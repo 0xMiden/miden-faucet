@@ -12,8 +12,8 @@ use tokio::sync::oneshot;
 use tracing::{Instrument, info_span, instrument};
 
 use crate::COMPONENT;
-use crate::api::{AccountError, Server};
 use crate::api_key::ApiKey;
+use crate::backend::{AccountError, BackendServer};
 use crate::error_report::ErrorReport;
 
 // ENDPOINT
@@ -28,7 +28,7 @@ use crate::error_report::ErrorReport;
     )
 )]
 pub async fn get_tokens(
-    State(server): State<Server>,
+    State(server): State<BackendServer>,
     Query(request): Query<RawMintRequest>,
 ) -> Result<Json<GetTokensResponse>, GetTokenError> {
     let (mint_response_sender, mint_response_receiver) = oneshot::channel();
@@ -203,7 +203,7 @@ impl RawMintRequest {
     ///   - the nonce is missing or doesn't solve the challenge
     ///   - the challenge timestamp is expired
     ///   - the challenge has already been used
-    fn validate(self, server: &Server) -> Result<MintRequest, MintRequestError> {
+    fn validate(self, server: &BackendServer) -> Result<MintRequest, MintRequestError> {
         let note_type = if self.is_private_note {
             NoteType::Private
         } else {

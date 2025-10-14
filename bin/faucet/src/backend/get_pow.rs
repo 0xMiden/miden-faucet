@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{info_span, instrument};
 
 use crate::COMPONENT;
-use crate::api::{AccountError, Server};
 use crate::api_key::ApiKey;
+use crate::backend::{AccountError, BackendServer};
 use crate::error_report::ErrorReport;
 
 // ENDPOINT
@@ -20,7 +20,7 @@ use crate::error_report::ErrorReport;
     fields(account_id = %params.account_id, api_key = ?params.api_key), err
 )]
 pub async fn get_pow(
-    State(server): State<Server>,
+    State(server): State<BackendServer>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<GetPowResponse>, PowRequestError> {
     let request = params.validate()?;

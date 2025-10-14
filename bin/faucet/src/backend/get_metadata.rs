@@ -12,6 +12,7 @@ use url::Url;
 use crate::COMPONENT;
 
 /// Describes the faucet metadata needed to show on the frontend.
+#[derive(Clone)]
 pub struct Metadata {
     pub id: FaucetId,
     pub issuance: Arc<RwLock<AssetAmount>>,
@@ -42,6 +43,6 @@ impl Serialize for Metadata {
 // ================================================================================================
 
 #[instrument(parent = None, target = COMPONENT, name = "server.get_metadata", skip_all)]
-pub async fn get_metadata(State(metadata): State<&'static Metadata>) -> Json<&'static Metadata> {
+pub async fn get_metadata(State(metadata): State<Metadata>) -> Json<Metadata> {
     Json(metadata)
 }

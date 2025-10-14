@@ -1,9 +1,47 @@
 //! This file explicitly embeds each of the frontend files into the binary using `include_str!` and
 //! `include_bytes!`.
-
+use anyhow::Context;
 use axum::response::{Html, IntoResponse, Response};
+use axum::routing::get;
+use axum::{Json, Router};
 use axum_extra::response::{Css, JavaScript};
 use http::header::{self};
+use tokio::net::TcpListener;
+use tracing::info;
+use url::Url;
+
+use crate::COMPONENT;
+
+/// Serves the frontend API endpoints.
+pub async fn serve_frontend(url: Url, backend_url: Url) -> anyhow::Result<()> {
+    let config_json = Json(
+        serde_json::json!({
+            "backend_url": backend_url
+        })
+        .to_string(),
+    );
+
+    let app = Router::new()
+        .route("/", get(get_index_html))
+        .route("/bundle.js", get(get_bundle_js))
+        .route("/index.css", get(get_index_css))
+        .route("/background.png", get(get_background))
+        .route("/wallet-icon.png", get(get_wallet_icon))
+        .route("/favicon.ico", get(get_favicon))
+        .route("/config.json", get(config_json))
+        .fallback(get(get_not_found_html));
+
+    let listener = url
+        .socket_addrs(|| None)
+        .with_context(|| format!("failed to parse url {url}"))?;
+    let listener = TcpListener::bind(&*listener)
+        .await
+        .with_context(|| format!("failed to bind TCP listener on {url}"))?;
+
+    info!(target: COMPONENT, address = %url, "Frontend server started");
+
+    axum::serve(listener, app).await.map_err(Into::into)
+}
 
 pub async fn get_index_html() -> Html<&'static str> {
     Html(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/index.html")))

@@ -9,6 +9,7 @@
 - Added `pow_base_difficulty_amount` CLI param and updated default values ([#68](https://github.com/0xMiden/miden-faucet/pull/68)).
 - Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
 - Added wallet connection to prefill the recipient address ([#100](https://github.com/0xMiden/miden-faucet/pull/100)).
+- Separated frontend and backend servers ([#119](https://github.com/0xMiden/miden-faucet/pull/119)).
 
 ## 0.11.6 (2025-10-08)
 
