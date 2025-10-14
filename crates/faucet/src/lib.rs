@@ -335,7 +335,7 @@ impl Faucet {
     /// Executes, proves, and then submits a transaction using the local miden-client.
     /// This results in submitting the transaction to the node and updating the local db to track
     /// the created notes.
-    #[instrument(target = COMPONENT, name = "faucet.mint.submit_tx", skip_all, err)]
+    #[instrument(target = COMPONENT, name = "faucet.mint.submit_transaction", skip_all, err)]
     async fn submit_transaction(
         &mut self,
         tx_request: TransactionRequest,
