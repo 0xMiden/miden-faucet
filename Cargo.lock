@@ -1695,9 +1695,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client"
-version = "0.11.9"
+version = "0.11.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f07f391499de2ab3859cbcdc248e2152db07cd776a8aafba1cc4819050fea91f"
+checksum = "d08825dd90a4616544cffcfd27bf1f90ca16c6babfb151ab2444c27e2eed1cc2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1779,7 +1779,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet"
-version = "0.11.6"
+version = "0.11.7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1818,7 +1818,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-lib"
-version = "0.11.6"
+version = "0.11.7"
 dependencies = [
  "anyhow",
  "miden-client",
