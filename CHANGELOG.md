@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.7 (2025-10-15)
+
+- Patched miden-client to 0.11.10 ([#121](https://github.com/0xMiden/miden-faucet/pull/121)).
+
 ## 0.11.6 (2025-10-08)
 
 - Improved telemetry ([#111](https://github.com/0xMiden/miden-faucet/pull/111)).
