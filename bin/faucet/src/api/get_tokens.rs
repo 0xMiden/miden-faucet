@@ -14,7 +14,6 @@ use tracing::{Instrument, info_span, instrument};
 use crate::COMPONENT;
 use crate::api::{AccountError, Server};
 use crate::api_key::ApiKey;
-use crate::error_report::ErrorReport;
 
 // ENDPOINT
 // ================================================================================================
@@ -99,13 +98,13 @@ pub struct RawMintRequest {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MintRequestError {
-    #[error("account error")]
-    AccountError(#[source] AccountError),
+    #[error(transparent)]
+    AccountError(#[from] AccountError),
     #[error("requested amount {0} exceeds the maximum claimable amount of {1}")]
     AssetAmountTooBig(AssetAmount, AssetAmount),
     #[error("requested amount {0} is not a valid asset amount")]
     InvalidAssetAmount(AssetAmountError),
-    #[error("PoW error")]
+    #[error(transparent)]
     PowError(#[from] ChallengeError),
     #[error("API key {0} is invalid")]
     InvalidApiKey(String),
@@ -142,8 +141,8 @@ impl GetTokenError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::InvalidRequest(error) => error.as_report(),
-            Self::MintError(error) => error.as_report(),
+            Self::InvalidRequest(error) => error.to_string(),
+            Self::MintError(error) => error.to_string(),
             Self::FaucetOverloaded => {
                 "The faucet is currently overloaded, please try again later.".to_owned()
             },

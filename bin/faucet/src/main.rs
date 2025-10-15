@@ -1,6 +1,5 @@
 mod api;
 mod api_key;
-mod error_report;
 mod logging;
 mod network;
 #[cfg(test)]

@@ -10,7 +10,6 @@ use tracing::{info_span, instrument};
 use crate::COMPONENT;
 use crate::api::{AccountError, Server};
 use crate::api_key::ApiKey;
-use crate::error_report::ErrorReport;
 
 // ENDPOINT
 // ================================================================================================
@@ -101,9 +100,9 @@ impl RawPowRequest {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PowRequestError {
-    #[error("account error")]
-    AccountError(#[source] AccountError),
-    #[error("API key failed to parse")]
+    #[error(transparent)]
+    AccountError(#[from] AccountError),
+    #[error("API key {0} failed to parse")]
     InvalidApiKey(String),
 }
 
@@ -111,7 +110,7 @@ impl PowRequestError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::AccountError(error) => error.as_report(),
+            Self::AccountError(error) => error.to_string(),
             Self::InvalidApiKey(_) => "Invalid API key".to_owned(),
         }
     }

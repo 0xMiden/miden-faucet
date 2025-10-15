@@ -201,9 +201,9 @@ impl FromRef<Server> for PoWRateLimiter {
 /// Errors that can occur when parsing an account ID or address.
 #[derive(Debug, thiserror::Error)]
 pub enum AccountError {
-    #[error("account ID failed to parse")]
+    #[error("account ID failed to parse: {0}")]
     ParseId(#[source] AccountIdError),
-    #[error("account address failed to parse")]
+    #[error("account address failed to parse: {0}")]
     ParseAddress(#[source] AddressError),
     #[error("account address is not an ID based")]
     AddressNotIdBased,
