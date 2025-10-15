@@ -42,8 +42,7 @@ impl api_server::Api for StubRpcApi {
         _request: Request<proto::rpc_store::SyncStateRequest>,
     ) -> Result<Response<proto::rpc_store::SyncStateResponse>, Status> {
         let mock_chain = MockChain::new();
-        let block_header: proto::blockchain::BlockHeader =
-            proto::blockchain::BlockHeader::from(mock_chain.latest_block_header()).into();
+        let block_header = proto::blockchain::BlockHeader::from(mock_chain.latest_block_header());
         let mmr_delta = mock_chain.blockchain().peaks_at(block_header.block_num.into()).unwrap();
 
         Ok(Response::new(proto::rpc_store::SyncStateResponse {
@@ -51,7 +50,7 @@ impl api_server::Api for StubRpcApi {
             block_header: Some(block_header),
             mmr_delta: Some(MmrDelta {
                 forest: mmr_delta.forest().num_leaves() as u64,
-                data: mmr_delta.peaks().into_iter().map(proto::primitives::Digest::from).collect(),
+                data: mmr_delta.peaks().iter().map(proto::primitives::Digest::from).collect(),
             }),
             accounts: vec![],
             transactions: vec![],
