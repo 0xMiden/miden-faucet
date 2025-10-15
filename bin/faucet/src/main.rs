@@ -530,7 +530,7 @@ mod test {
             rt.block_on(async {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
-                        backend_url: Url::try_from("http://localhost:3000").unwrap(),
+                        backend_url: Url::try_from("http://localhost:8000").unwrap(),
                         frontend_url: Some(Url::parse("http://localhost:8080").unwrap()),
                         node_url: stub_node_url,
                         timeout: Duration::from_millis(5000),
