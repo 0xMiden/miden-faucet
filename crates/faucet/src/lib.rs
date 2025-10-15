@@ -117,6 +117,17 @@ impl Faucet {
             .build()
             .await?;
 
+        // We sync to the chain tip before importing the account to avoid matching too many notes
+        // tags from the genesis block (in case this is a fresh store).
+        client
+            .sync_state()
+            .instrument(info_span!(target: COMPONENT, "faucet.load.sync_state"))
+            .await
+            .context("faucet failed to sync state")
+            .inspect_err(|err| {
+                error!(?err, "failed to sync state");
+            })?;
+
         info!("Fetching faucet state from node");
 
         let issuance = match client.import_account_by_id(account.id()).await {
