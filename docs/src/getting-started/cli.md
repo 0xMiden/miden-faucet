@@ -42,6 +42,7 @@ miden-faucet start \
 | `--max-claimable-amount` | Max claimable base units per request | `1000000000` | No |
 | `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
 | `--explorer-url` | Midenscan URL | - | No |
+| `--base-amount` | Token amount (in base units) at which the difficulty of the challenge starts to increase. | `100000000` | No |
 
 ### Proof of Work Configuration
 
@@ -52,7 +53,6 @@ miden-faucet start \
 | `--pow-challenge-lifetime` | Challenge validity duration, i.e. how long challenges remain valid. This affects the rate limiting, since it works by rejecting new submissions while the previous submitted challenge is still valid | `30s` | No |
 | `--pow-cleanup-interval` | Cache cleanup interval, i.e. how often expired challenges are removed | `2s` | No |
 | `--pow-growth-rate` | Difficulty growth rate, i.e. how quickly difficulty increases with load. | `0.1` | No |
-| `--pow-base-difficulty-amount` | Token amount (in base units) at which the difficulty of the challenge starts to increase. | `100000000` | No |
 
 ### Advanced Configuration
 
@@ -75,6 +75,7 @@ export MIDEN_FAUCET_ACCOUNT_PATH=./faucet.mac
 export MIDEN_FAUCET_NETWORK=testnet
 export MIDEN_FAUCET_EXPLORER_URL=https://testnet.midenscan.com
 export MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT=1000000000
+export MIDEN_FAUCET_BASE_AMOUNT=100000000
 
 # Proof of Work
 export MIDEN_FAUCET_POW_SECRET=your-secret-here
@@ -82,7 +83,6 @@ export MIDEN_FAUCET_POW_BASELINE=12
 export MIDEN_FAUCET_POW_CHALLENGE_LIFETIME=30s
 export MIDEN_FAUCET_POW_CLEANUP_INTERVAL=2s
 export MIDEN_FAUCET_POW_GROWTH_RATE=0.1
-export MIDEN_FAUCET_POW_BASE_DIFFICULTY_AMOUNT=100000000
 
 # Advanced
 export MIDEN_FAUCET_TIMEOUT=10s

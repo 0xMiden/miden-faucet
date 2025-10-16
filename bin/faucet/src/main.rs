@@ -1,6 +1,5 @@
 mod api;
 mod api_key;
-mod error_report;
 mod logging;
 mod network;
 #[cfg(test)]
@@ -50,7 +49,7 @@ const ENV_POW_CHALLENGE_LIFETIME: &str = "MIDEN_FAUCET_POW_CHALLENGE_LIFETIME";
 const ENV_POW_CLEANUP_INTERVAL: &str = "MIDEN_FAUCET_POW_CLEANUP_INTERVAL";
 const ENV_POW_GROWTH_RATE: &str = "MIDEN_FAUCET_POW_GROWTH_RATE";
 const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
-const ENV_POW_BASE_DIFFICULTY_AMOUNT: &str = "MIDEN_FAUCET_POW_BASE_DIFFICULTY_AMOUNT";
+const ENV_BASE_AMOUNT: &str = "MIDEN_FAUCET_BASE_AMOUNT";
 const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
@@ -128,18 +127,18 @@ pub enum Command {
 
         /// The baseline for the `PoW` challenges. This sets the `PoW` difficulty (in bits) that a
         /// a challenge will have when there are no requests against the faucet. It must be between
-        /// 0 and 64.
-        #[arg(value_parser = clap::value_parser!(u8).range(0..=64))]
+        /// 0 and 32.
+        #[arg(value_parser = clap::value_parser!(u8).range(0..=32))]
         #[arg(long = "pow-baseline", value_name = "U8", env = ENV_POW_BASELINE, default_value = "16")]
         pow_baseline: u8,
 
-        /// The base difficulty amount for the `PoW` challenges. This sets the requested amount at
-        /// which the difficulty of the challenges starts to increase.
+        /// The baseline amount for token requests (in base units). Requests for greater amounts
+        /// would require higher level of `PoW`.
         ///
-        /// The request complexity for challenges is computed as:
-        /// `request_complexity = (amount / base_difficulty_amount) + 1`
-        #[arg(long = "pow-base-difficulty-amount", value_name = "U64", env = ENV_POW_BASE_DIFFICULTY_AMOUNT, default_value = "100000000")]
-        pow_base_difficulty_amount: u64,
+        /// The request complexity for challenges is computed as: `request_complexity = (amount /
+        /// base_amount) + 1`
+        #[arg(long = "base-amount", value_name = "U64", env = ENV_BASE_AMOUNT, default_value = "100000000")]
+        base_amount: u64,
 
         /// Comma-separated list of API keys.
         #[arg(long = "api-keys", value_name = "STRING", env = ENV_API_KEYS, num_args = 1.., value_delimiter = ',')]
@@ -210,7 +209,8 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Configure tracing with optional OpenTelemetry exporting support.
-    logging::setup_tracing(cli.command.open_telemetry()).context("failed to initialize logging")?;
+    let _otel_guard = logging::setup_tracing(cli.command.open_telemetry())
+        .context("failed to initialize logging")?;
 
     Box::pin(run_faucet_command(cli)).await
 }
@@ -232,7 +232,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             pow_cleanup_interval,
             pow_growth_rate,
             pow_baseline,
-            pow_base_difficulty_amount,
+            base_amount,
             api_keys,
             open_telemetry: _,
             store_path,
@@ -283,7 +283,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 max_supply,
                 faucet.issuance(),
                 max_claimable_amount,
-                pow_base_difficulty_amount,
+                base_amount,
                 tx_mint_requests,
                 pow_secret.as_str(),
                 rate_limiter_config,
@@ -515,7 +515,7 @@ mod test {
                         pow_cleanup_interval: Duration::from_secs(1),
                         pow_growth_rate: 1.0,
                         pow_baseline: 12,
-                        pow_base_difficulty_amount: 100_000,
+                        base_amount: 100_000,
                         faucet_account_path: faucet_account_path.clone(),
                         remote_tx_prover_url: None,
                         open_telemetry: false,

@@ -6,8 +6,10 @@ use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::types::AssetAmount;
 use serde::Serialize;
+use tracing::instrument;
 use url::Url;
 
+use crate::COMPONENT;
 use crate::api::Server;
 use crate::api_key::ApiKey;
 
@@ -19,22 +21,24 @@ pub struct Metadata {
     pub max_supply: AssetAmount,
     pub decimals: u8,
     pub explorer_url: Option<Url>,
-    pub pow_base_difficulty_amount: u64,
+    pub base_amount: u64,
 }
 
 // ENDPOINT
 // ================================================================================================
 
+#[instrument(parent = None, target = COMPONENT, name = "server.get_metadata", skip_all)]
 pub async fn get_metadata(State(server): State<Server>) -> Json<GetMetadataResponse> {
     let metadata = server.metadata;
+    let issuance = metadata.issuance.read().base_units();
     Json(GetMetadataResponse {
         id: metadata.id.to_bech32(),
-        issuance: metadata.issuance.read().base_units(),
+        issuance,
         max_supply: metadata.max_supply.base_units(),
         decimals: metadata.decimals,
         explorer_url: metadata.explorer_url,
         pow_load_difficulty: server.rate_limiter.get_load_difficulty(ApiKey::default()),
-        pow_base_difficulty_amount: metadata.pow_base_difficulty_amount,
+        base_amount: metadata.base_amount,
     })
 }
 
@@ -46,5 +50,5 @@ pub struct GetMetadataResponse {
     pub decimals: u8,
     pub explorer_url: Option<Url>,
     pub pow_load_difficulty: u64,
-    pub pow_base_difficulty_amount: u64,
+    pub base_amount: u64,
 }

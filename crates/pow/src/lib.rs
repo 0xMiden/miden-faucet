@@ -36,7 +36,7 @@ type Domain = [u8; 32];
 pub struct PoWRateLimiterConfig {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     pub challenge_lifetime: Duration,
-    /// Determines how much the difficulty increases with the amount of active challenges.
+    /// Determines how much the difficulty increases with the number of active challenges.
     pub growth_rate: f64,
     /// Sets the baseline difficulty bits when there are no active challenges.
     pub baseline: u8,
@@ -94,8 +94,6 @@ impl PoWRateLimiter {
     ///
     /// The load difficulty is computed as:
     /// `2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
-    #[allow(clippy::cast_precision_loss, reason = "num_challenges is smaller than f64::MAX")]
-    #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
     pub fn get_load_difficulty(&self, domain: impl Into<Domain>) -> u64 {
         let num_challenges = self
             .challenges
@@ -103,8 +101,11 @@ impl PoWRateLimiter {
             .expect("challenge cache lock should not be poisoned")
             .num_challenges_for_domain(&domain.into());
 
-        ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64
-            * 2_u64.pow(self.config.baseline.into())
+        #[allow(clippy::cast_precision_loss, reason = "num_challenges is smaller than f64::MAX")]
+        #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
+        let growth_multiplier =
+            ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
+        2_u64.pow(self.config.baseline.into()).saturating_mul(growth_multiplier)
     }
 
     /// Computes the target for a given domain by checking the amount of active challenges in the
@@ -116,8 +117,11 @@ impl PoWRateLimiter {
     /// * `request_difficulty = load_difficulty * request_complexity`
     /// * `load_difficulty = 2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
     fn get_challenge_target(&self, domain: &Domain, request_complexity: u64) -> u64 {
+        if request_complexity == 0 {
+            return u64::MAX;
+        }
         let load_difficulty = self.get_load_difficulty(*domain);
-        let request_difficulty = load_difficulty * request_complexity;
+        let request_difficulty = load_difficulty.saturating_mul(request_complexity);
         u64::MAX / request_difficulty
     }
 
@@ -189,7 +193,7 @@ impl PoWRateLimiter {
 /// `PoW` challenge related errors.
 #[derive(Debug, thiserror::Error)]
 pub enum ChallengeError {
-    #[error("server timestamp expired, received: {0}, current time: {1}")]
+    #[error("challenge timestamp expired, received: {0}, current time: {1}")]
     ExpiredServerTimestamp(u64, u64),
     #[error("invalid PoW solution")]
     InvalidPoW,
@@ -197,8 +201,8 @@ pub enum ChallengeError {
     RateLimited(u64),
     #[error("challenge already used")]
     ChallengeAlreadyUsed,
-    #[error("server signatures do not match")]
-    ServerSignaturesDoNotMatch,
+    #[error("invalid challenge signature")]
+    InvalidSignature,
     #[error("invalid challenge serialization")]
     InvalidSerialization,
     #[error("domain {0} is invalid")]

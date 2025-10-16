@@ -5,14 +5,19 @@ use http::StatusCode;
 use miden_client::account::{AccountId, Address};
 use miden_client::utils::ToHex;
 use serde::{Deserialize, Serialize};
+use tracing::{info_span, instrument};
 
+use crate::COMPONENT;
 use crate::api::{AccountError, Server};
 use crate::api_key::ApiKey;
-use crate::error_report::ErrorReport;
 
 // ENDPOINT
 // ================================================================================================
 
+#[instrument(
+    parent = None, target = COMPONENT, name = "server.get_pow", skip_all,
+    fields(account_id = %params.account_id, api_key = ?params.api_key), err
+)]
 pub async fn get_pow(
     State(server): State<Server>,
     Query(params): Query<RawPowRequest>,
@@ -21,12 +26,19 @@ pub async fn get_pow(
     let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
     let mut requestor = [0u8; 32];
     requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
-    let request_complexity = (request.amount / server.metadata.pow_base_difficulty_amount) + 1;
 
-    let challenge =
-        server
-            .rate_limiter
-            .build_challenge(requestor, request.api_key.clone(), request_complexity);
+    let challenge = {
+        let span =
+            info_span!("server.get_pow.build_challenge", leading_zeros = tracing::field::Empty);
+        let _enter = span.enter();
+        let request_complexity = server.compute_request_complexity(request.amount);
+        let challenge =
+            server
+                .rate_limiter
+                .build_challenge(requestor, request.api_key, request_complexity);
+        span.record("leading_zeros", challenge.target().leading_zeros());
+        challenge
+    };
 
     Ok(Json(GetPowResponse {
         challenge: challenge.to_bytes().to_hex(),
@@ -35,7 +47,7 @@ pub async fn get_pow(
     }))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct GetPowResponse {
     challenge: String,
     target: u64,
@@ -88,9 +100,9 @@ impl RawPowRequest {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PowRequestError {
-    #[error("account error")]
-    AccountError(#[source] AccountError),
-    #[error("API key failed to parse")]
+    #[error(transparent)]
+    AccountError(#[from] AccountError),
+    #[error("API key {0} failed to parse")]
     InvalidApiKey(String),
 }
 
@@ -98,7 +110,7 @@ impl PowRequestError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::AccountError(error) => error.as_report(),
+            Self::AccountError(error) => error.to_string(),
             Self::InvalidApiKey(_) => "Invalid API key".to_owned(),
         }
     }
