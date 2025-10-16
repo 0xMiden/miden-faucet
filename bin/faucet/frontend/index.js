@@ -1,5 +1,6 @@
 import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
 import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
+import { Endpoint, NoteId, RpcClient } from "@demox-labs/miden-sdk";
 
 class MidenFaucet {
     constructor() {
@@ -29,6 +30,7 @@ class MidenFaucet {
         this.tokenSelect.addEventListener('change', () => this.updateTokenHint());
 
         this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
+        this.rpcClient = new RpcClient(new Endpoint('http://localhost:57291'));
 
         this.init();
     }
@@ -61,45 +63,49 @@ class MidenFaucet {
     }
 
     async handleSendTokens(isPrivateNote) {
-        const recipient = this.recipientInput.value.trim();
-        const amount = this.tokenSelect.value;
-        const amountAsTokens = this.tokenSelect[this.tokenSelect.selectedIndex].textContent;
-
-        if (!recipient) {
-            this.showError('Recipient address is required.');
-            return;
-        }
-
-        if (!amount || amount === '0') {
-            this.showError('Amount is required.');
-            return;
-        }
-
-        if (!Utils.validateAddress(recipient)) {
-            this.showError('Please enter a valid recipient address.');
-            return;
-        }
-
-        this.hideMessages();
-        this.showMintingModal(recipient, amountAsTokens, isPrivateNote);
-        this.updateProgressBar(0);
-
-        this.updateMintingTitle('PREPARING THE REQUEST');
-
-        const powData = await this.getPowChallenge(recipient, amount);
-        if (!powData) {
-            this.hideModals();
-            return;
-        }
-        const nonce = await Utils.findValidNonce(powData.challenge, powData.target);
-
-        this.updateMintingTitle('MINTING TOKENS');
-        this.updateProgressBar(50);
-
         try {
-            await this.getTokens(powData.challenge, nonce, recipient, amount, amountAsTokens, isPrivateNote);
+
+            const recipient = this.recipientInput.value.trim();
+            const amount = this.tokenSelect.value;
+            const amountAsTokens = this.tokenSelect[this.tokenSelect.selectedIndex].textContent;
+
+            if (!recipient) {
+                this.showError('Recipient address is required.');
+                return;
+            }
+
+            if (!amount || amount === '0') {
+                this.showError('Amount is required.');
+                return;
+            }
+
+            if (!Utils.validateAddress(recipient)) {
+                this.showError('Please enter a valid recipient address.');
+                return;
+            }
+
+            this.hideMessages();
+            this.showMintingModal(recipient, amountAsTokens, isPrivateNote);
+            this.updateProgressBar(0);
+
+            this.updateMintingTitle('PREPARING THE REQUEST');
+
+            const powData = await this.getPowChallenge(recipient, amount);
+            const nonce = await Utils.findValidNonce(powData.challenge, powData.target);
+
+            this.updateMintingTitle('MINTING TOKENS');
+            this.updateProgressBar(33);
+
+            const getTokensResponse = await this.getTokens(powData.challenge, nonce, recipient, amount, isPrivateNote);
+
+            this.updateMintingTitle('CONFIRMING TRANSACTION');
+            this.updateProgressBar(66);
+
+            await this.pollNote(getTokensResponse.note_id);
+            this.showCompletedModal(recipient, amountAsTokens, isPrivateNote, getTokensResponse.tx_id, getTokensResponse.note_id);
         } catch (error) {
-            this.showError(`Failed to send tokens: ${error.message}`);
+            this.showError(error);
+            return;
         }
     }
 
@@ -152,20 +158,18 @@ class MidenFaucet {
                 method: "GET"
             });
         } catch (error) {
-            this.showError('Connection failed.');
-            return;
+            throw "Connection failed.";
         }
 
         if (!powResponse.ok) {
             const message = await powResponse.text();
-            this.showError(message);
-            return;
+            throw "Failed to get PoW challenge: " + message;
         }
 
         return await powResponse.json();
     }
 
-    async getTokens(challenge, nonce, recipient, amount, amountAsTokens, isPrivateNote) {
+    async getTokens(challenge, nonce, recipient, amount, isPrivateNote) {
         const params = {
             account_id: recipient,
             is_private_note: isPrivateNote,
@@ -179,24 +183,19 @@ class MidenFaucet {
                 method: "GET"
             });
         } catch (error) {
-            this.showError('Connection failed.');
             console.error(error);
-            return;
+            throw "Connection failed.";
         }
 
         if (!response.ok) {
             const message = await response.text();
-            this.showError('Failed to receive tokens: ' + message);
-            return;
+            throw "Failed to receive tokens: " + message;
         }
 
-        let data = await response.json();
-
-        // TODO: this state should wait until note is committed - use web-client for this
-        this.showCompletedModal(recipient, amountAsTokens, isPrivateNote, data);
+        return response.json();
     }
 
-    async requestNote(noteId) {
+    async downloadNote(noteId) {
         this.hidePrivateModalError();
         let response;
         try {
@@ -258,7 +257,7 @@ class MidenFaucet {
         modal.classList.add('active');
     }
 
-    showCompletedModal(recipient, amountAsTokens, isPrivateNote, mintingData) {
+    showCompletedModal(recipient, amountAsTokens, isPrivateNote, txId, noteId) {
         const mintingModal = document.getElementById('minting-modal');
         mintingModal.classList.remove('active');
 
@@ -275,27 +274,14 @@ class MidenFaucet {
 
         if (isPrivateNote) {
             completedPrivateModal.classList.add('active');
-
-            const downloadButton = document.getElementById('download-button');
-            downloadButton.onclick = async () => {
-                await this.requestNote(mintingData.note_id);
-
-                const closeButton = document.getElementById('private-close-button');
-                closeButton.style.display = 'block';
-                closeButton.onclick = () => {
-                    closeButton.style.display = 'none';
-                    this.hideMessages();
-                    this.hideModals();
-                    this.resetForm();
-                };
-            };
+            this.setupDownloadButton(noteId);
         } else {
             completedPublicModal.classList.add('active');
 
             const explorerButton = document.getElementById('explorer-button');
             if (this.explorerUrl) {
                 explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(this.explorerUrl + 'tx/' + mintingData.tx_id, '_blank');
+                explorerButton.onclick = () => window.open(this.explorerUrl + 'tx/' + txId, '_blank');
             } else {
                 explorerButton.style.display = 'none';
             }
@@ -398,6 +384,50 @@ class MidenFaucet {
         }
         this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
     }
+
+    showCloseButton() {
+        const closeButton = document.getElementById('private-close-button');
+        closeButton.style.display = 'block';
+        closeButton.onclick = () => {
+            closeButton.style.display = 'none';
+            this.hideMessages();
+            this.hideModals();
+            this.resetForm();
+        };
+    }
+
+    async setupDownloadButton(noteId) {
+        const downloadButton = document.getElementById('download-button');
+        downloadButton.onclick = async () => {
+            await this.downloadNote(noteId);
+            this.showCloseButton();
+        };
+    }
+
+    pollNote(noteId) {
+        return new Promise((resolve, reject) => {
+            // Poll for the note every 2 seconds
+            const pollInterval = setInterval(async () => {
+                try {
+                    const note = await this.rpcClient.getNotesById([NoteId.fromHex(noteId)]);
+                    if (note && note.length > 0) {
+                        clearInterval(pollInterval);
+                        clearTimeout(timeoutId);
+                        resolve();
+                    }
+                } catch (error) {
+                    console.error('Error polling for note:', error);
+                    reject(error);
+                }
+            }, 2000);
+
+            // Stop polling after 5 minutes if the note has not been committed
+            const timeoutId = setTimeout(() => {
+                clearInterval(pollInterval);
+                reject(new Error('Timeout while waiting for tx to be committed. Please try again later.'));
+            }, 300000);
+        });
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -483,3 +513,14 @@ const Utils = {
         return tokens * (10 ** decimals);
     },
 };
+
+// miden-sdk async import seems to interfere with
+// this event, related mdn:
+// https://developer.mozilla.org/en-US/docs/Web/API/Document/DOMContentLoaded_event#checking_whether_loading_is_already_complete
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+        new MidenFaucet();
+    });
+} else {
+    new MidenFaucet();
+}
