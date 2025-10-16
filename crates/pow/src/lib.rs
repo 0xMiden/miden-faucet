@@ -183,7 +183,7 @@ impl PoWRateLimiter {
 /// `PoW` challenge related errors.
 #[derive(Debug, thiserror::Error)]
 pub enum ChallengeError {
-    #[error("server timestamp expired, received: {0}, current time: {1}")]
+    #[error("challenge timestamp expired, received: {0}, current time: {1}")]
     ExpiredServerTimestamp(u64, u64),
     #[error("invalid PoW solution")]
     InvalidPoW,
@@ -191,8 +191,8 @@ pub enum ChallengeError {
     RateLimited(u64),
     #[error("challenge already used")]
     ChallengeAlreadyUsed,
-    #[error("server signatures do not match")]
-    ServerSignaturesDoNotMatch,
+    #[error("invalid challenge signature")]
+    InvalidSignature,
     #[error("invalid challenge serialization")]
     InvalidSerialization,
     #[error("domain {0} is invalid")]

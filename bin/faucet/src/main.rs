@@ -1,6 +1,5 @@
 mod api_key;
 mod backend;
-mod error_report;
 mod frontend;
 mod logging;
 mod network;
