@@ -5,12 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{
-    AccountFile,
-    AccountId,
-    AccountIdAddress,
-    Address,
-    AddressInterface,
-    NetworkId,
+    AccountFile, AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
@@ -19,10 +14,7 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
 use miden_client::rpc::Endpoint;
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequestBuilder,
     TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
@@ -210,6 +202,17 @@ impl Faucet {
         &mut self,
         requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
     ) -> anyhow::Result<()> {
+        // We sync before creating the transaction to ensure the state is up to date. If the previous
+        // transaction somehow failed to be included in the block, our state would be out of sync.
+        self.client
+            .sync_state()
+            .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
+            .await
+            .context("faucet failed to sync state")
+            .inspect_err(|err| {
+                error!(?err, "failed to sync state");
+            })?;
+
         let span = tracing::Span::current();
 
         let (valid_requests, response_senders) = self.filter_requests_by_supply(requests);
@@ -239,15 +242,6 @@ impl Faucet {
         span.record("tx_id", tx_id.to_string());
 
         Self::send_responses(response_senders, note_ids, tx_id);
-
-        self.client
-            .sync_state()
-            .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
-            .await
-            .context("faucet failed to sync state")
-            .inspect_err(|err| {
-                error!(?err, "failed to sync state");
-            })?;
         Ok(())
     }
 
