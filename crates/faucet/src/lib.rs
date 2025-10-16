@@ -352,6 +352,7 @@ mod tests {
     use miden_client::auth::AuthSecretKey;
     use miden_client::crypto::SecretKey;
     use miden_client::store::sqlite_store::SqliteStore;
+    use miden_client::store::{NoteFilter, Store};
     use miden_client::testing::MockChain;
     use miden_client::testing::mock::{MockClient, MockRpcApi};
     use tokio::sync::{mpsc, oneshot};
@@ -380,10 +381,14 @@ mod tests {
             receivers.push(receiver);
         }
 
-        run_faucet(rx_mint_requests, batch_size);
+        let store =
+            Arc::new(SqliteStore::new(temp_dir().join("batch_requests.sqlite3")).await.unwrap());
+        run_faucet(rx_mint_requests, batch_size, store.clone());
 
         for receiver in receivers {
-            receiver.await.unwrap().unwrap();
+            let response = receiver.await.unwrap().unwrap();
+            let notes = store.get_output_notes(NoteFilter::Unique(response.note_id)).await.unwrap();
+            assert_eq!(notes.len(), 1);
         }
     }
 
@@ -394,6 +399,7 @@ mod tests {
     fn run_faucet(
         rx_mint_requests: mpsc::Receiver<(MintRequest, MintResponseSender)>,
         batch_size: usize,
+        store: Arc<dyn Store>,
     ) {
         let secret = SecretKey::new();
         let symbol = TokenSymbol::new("TEST").unwrap();
@@ -424,9 +430,7 @@ mod tests {
                 let mut client = MockClient::new(
                     Arc::new(MockRpcApi::new(MockChain::new())),
                     Box::new(RpoRandomCoin::new(Word::empty())),
-                    Arc::new(
-                        SqliteStore::new(temp_dir().join("batch_requests.sqlite3")).await.unwrap(),
-                    ),
+                    store,
                     Some(Arc::new(keystore)),
                     ExecutionOptions::new(None, 4096, false, false).unwrap(),
                     None,
