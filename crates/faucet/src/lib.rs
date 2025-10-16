@@ -17,7 +17,7 @@ use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
-use miden_client::rpc::Endpoint;
+use miden_client::rpc::{Endpoint, RpcError};
 use miden_client::transaction::{
     LocalTransactionProver,
     TransactionId,
@@ -194,7 +194,18 @@ impl Faucet {
         let mut buffer = Vec::new();
 
         while requests.recv_many(&mut buffer, batch_size).await > 0 {
-            self.mint(buffer.drain(..)).await?;
+            match self.mint(buffer.drain(..)).await {
+                Ok(()) => (),
+                Err(error) => {
+                    if let Some(ClientError::RpcError(RpcError::ConnectionError(_))) =
+                        error.downcast_ref::<ClientError>()
+                    {
+                        error!(?error, "connection error, discarding batch");
+                    } else {
+                        anyhow::bail!("failed to mint batch: {error}");
+                    }
+                },
+            }
         }
         info!(target = COMPONENT, "Request stream closed, shutting down minter");
 
