@@ -774,6 +774,7 @@ checksum = "65bc07b1a8bc7c85c5f2e110c476c7389b4554ba72af57d8445ea63a576b0876"
 dependencies = [
  "futures-channel",
  "futures-core",
+ "futures-executor",
  "futures-io",
  "futures-sink",
  "futures-task",
@@ -842,6 +843,7 @@ version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81"
 dependencies = [
+ "futures-channel",
  "futures-core",
  "futures-io",
  "futures-macro",
@@ -1697,7 +1699,7 @@ dependencies = [
 [[package]]
 name = "miden-block-prover"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#57f5677410850ab3c36447e10908293d9616f9b7"
+source = "git+https://github.com/0xMiden/miden-base?branch=next#62feca75399d54f0d840f3aa3d5d345fe2f87e85"
 dependencies = [
  "miden-lib",
  "miden-objects",
@@ -1707,15 +1709,17 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#0308c116d4b3e5ed0fd0022d5943a362af03f469"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#ed3d0058545b7eac51c0bd5f4edd17cdf9a6bc67"
 dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "futures",
  "getrandom 0.3.3",
  "hex",
  "miden-lib",
  "miden-node-proto-build",
+ "miden-note-transport-proto-build",
  "miden-objects",
  "miden-remote-prover-client",
  "miden-testing",
@@ -1723,11 +1727,13 @@ dependencies = [
  "miette",
  "prost",
  "prost-build",
+ "prost-types",
  "protox 0.7.2",
  "rand",
  "thiserror 2.0.17",
  "tonic",
  "tonic-build",
+ "tonic-health",
  "tonic-web-wasm-client",
  "tracing",
  "uuid",
@@ -1737,7 +1743,7 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#0308c116d4b3e5ed0fd0022d5943a362af03f469"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#ed3d0058545b7eac51c0bd5f4edd17cdf9a6bc67"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1873,7 +1879,7 @@ dependencies = [
 [[package]]
 name = "miden-lib"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#57f5677410850ab3c36447e10908293d9616f9b7"
+source = "git+https://github.com/0xMiden/miden-base?branch=next#62feca75399d54f0d840f3aa3d5d345fe2f87e85"
 dependencies = [
  "miden-assembly",
  "miden-objects",
@@ -1941,7 +1947,7 @@ dependencies = [
 [[package]]
 name = "miden-node-proto"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#881576e2e3f3e3335c54bfa65f8bad9dfe5602d9"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#56d311a5a0e7b1ebef072a450784f7229a64ab82"
 dependencies = [
  "anyhow",
  "fs-err",
@@ -1963,7 +1969,7 @@ dependencies = [
 [[package]]
 name = "miden-node-proto-build"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#881576e2e3f3e3335c54bfa65f8bad9dfe5602d9"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#56d311a5a0e7b1ebef072a450784f7229a64ab82"
 dependencies = [
  "fs-err",
  "miette",
@@ -1975,7 +1981,7 @@ dependencies = [
 [[package]]
 name = "miden-node-utils"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#881576e2e3f3e3335c54bfa65f8bad9dfe5602d9"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#56d311a5a0e7b1ebef072a450784f7229a64ab82"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1999,9 +2005,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "miden-note-transport-proto-build"
+version = "0.1.0"
+source = "git+https://github.com/0xMiden/miden-note-transport#bb1075155be757601d853deb0e1df8a95a51ff69"
+dependencies = [
+ "fs-err",
+ "miette",
+ "prost",
+ "protox 0.8.0",
+ "tonic-build",
+]
+
+[[package]]
 name = "miden-objects"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#57f5677410850ab3c36447e10908293d9616f9b7"
+source = "git+https://github.com/0xMiden/miden-base?branch=next#62feca75399d54f0d840f3aa3d5d345fe2f87e85"
 dependencies = [
  "bech32",
  "getrandom 0.3.3",
@@ -2064,7 +2082,7 @@ dependencies = [
 [[package]]
 name = "miden-remote-prover-client"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#881576e2e3f3e3335c54bfa65f8bad9dfe5602d9"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#56d311a5a0e7b1ebef072a450784f7229a64ab82"
 dependencies = [
  "getrandom 0.3.3",
  "miden-node-proto-build",
@@ -2098,7 +2116,7 @@ dependencies = [
 [[package]]
 name = "miden-testing"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#57f5677410850ab3c36447e10908293d9616f9b7"
+source = "git+https://github.com/0xMiden/miden-base?branch=next#62feca75399d54f0d840f3aa3d5d345fe2f87e85"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2118,7 +2136,7 @@ dependencies = [
 [[package]]
 name = "miden-tx"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#57f5677410850ab3c36447e10908293d9616f9b7"
+source = "git+https://github.com/0xMiden/miden-base?branch=next#62feca75399d54f0d840f3aa3d5d345fe2f87e85"
 dependencies = [
  "miden-lib",
  "miden-objects",
@@ -2133,7 +2151,7 @@ dependencies = [
 [[package]]
 name = "miden-tx-batch-prover"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#57f5677410850ab3c36447e10908293d9616f9b7"
+source = "git+https://github.com/0xMiden/miden-base?branch=next#62feca75399d54f0d840f3aa3d5d345fe2f87e85"
 dependencies = [
  "miden-objects",
  "miden-tx",
@@ -3713,6 +3731,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -3851,6 +3870,18 @@ dependencies = [
  "prost-types",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tonic-health"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb87334d340313fefa513b6e60794d44a86d5f039b523229c99c323e4e19ca4b"
+dependencies = [
+ "prost",
+ "tokio",
+ "tokio-stream",
+ "tonic",
 ]
 
 [[package]]

@@ -111,7 +111,7 @@ impl Faucet {
         let sqlite_store = SqliteStore::new(store_path).await?;
 
         let mut client = ClientBuilder::new()
-            .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
+            .grpc_client(&endpoint, Some(timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
             .store(Arc::new(sqlite_store))
             .build()
@@ -417,11 +417,11 @@ mod tests {
     use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
     use miden_client::asset::TokenSymbol;
     use miden_client::auth::AuthSecretKey;
-    use miden_client::crypto::SecretKey;
-    use miden_client::store::sqlite_store::SqliteStore;
+    use miden_client::crypto::rpo_falcon512::SecretKey;
     use miden_client::store::{NoteFilter, Store};
     use miden_client::testing::MockChain;
     use miden_client::testing::mock::{MockClient, MockRpcApi};
+    use miden_client_sqlite_store::SqliteStore;
     use tokio::sync::{mpsc, oneshot};
 
     use super::*;
@@ -471,7 +471,7 @@ mod tests {
         let secret = SecretKey::new();
         let symbol = TokenSymbol::new("TEST").unwrap();
         let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
-        let (account, account_seed) = AccountBuilder::new(rand::random())
+        let account = AccountBuilder::new(rand::random())
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
@@ -502,11 +502,12 @@ mod tests {
                     ExecutionOptions::new(None, 4096, false, false).unwrap(),
                     None,
                     None,
+                    None,
                 )
                 .await
                 .unwrap();
                 client.ensure_genesis_in_place().await.unwrap();
-                client.add_account(&account, Some(account_seed), false).await.unwrap();
+                client.add_account(&account, false).await.unwrap();
                 let faucet = Faucet {
                     id: FaucetId::new(account.id(), NetworkId::Testnet),
                     client,
