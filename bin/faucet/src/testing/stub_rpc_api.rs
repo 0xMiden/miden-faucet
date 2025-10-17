@@ -1,4 +1,5 @@
 use anyhow::Context;
+use miden_node_proto::generated::primitives::MmrDelta;
 use miden_node_proto::generated::rpc::api_server;
 use miden_node_proto::generated::{self as proto};
 use miden_testing::MockChain;
@@ -40,10 +41,17 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc_store::SyncStateRequest>,
     ) -> Result<Response<proto::rpc_store::SyncStateResponse>, Status> {
+        let mock_chain = MockChain::new();
+        let block_header = proto::blockchain::BlockHeader::from(mock_chain.latest_block_header());
+        let mmr_delta = mock_chain.blockchain().peaks_at(block_header.block_num.into()).unwrap();
+
         Ok(Response::new(proto::rpc_store::SyncStateResponse {
             chain_tip: 0,
-            block_header: None,
-            mmr_delta: None,
+            block_header: Some(block_header),
+            mmr_delta: Some(MmrDelta {
+                forest: mmr_delta.forest().num_leaves() as u64,
+                data: mmr_delta.peaks().iter().map(proto::primitives::Digest::from).collect(),
+            }),
             accounts: vec![],
             transactions: vec![],
             notes: vec![],
@@ -133,7 +141,10 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc_store::SyncNullifiersRequest>,
     ) -> Result<Response<proto::rpc_store::SyncNullifiersResponse>, Status> {
-        unimplemented!()
+        Ok(Response::new(proto::rpc_store::SyncNullifiersResponse {
+            nullifiers: vec![],
+            pagination_info: None,
+        }))
     }
 }
 

@@ -10,6 +10,7 @@
 - Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
 - Added wallet connection to prefill the recipient address ([#100](https://github.com/0xMiden/miden-faucet/pull/100)).
 - Separated frontend and backend servers ([#119](https://github.com/0xMiden/miden-faucet/pull/119)).
+- Redesigned the frontend ([#110](https://github.com/0xMiden/miden-faucet/pull/110)).
 
 ## 0.11.7 (2025-10-15)
 
