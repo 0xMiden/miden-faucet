@@ -364,11 +364,9 @@ class MidenFaucet {
         if (!this.metadata) return;
 
         const requestComplexity =
-            Math.floor(this.tokenSelect.value / Number(this.metadata.pow_base_difficulty_amount)) + 1;
+            Math.floor(this.tokenSelect.value / Number(this.metadata.base_amount)) + 1;
         const difficulty = requestComplexity * Number(this.metadata.pow_load_difficulty);
-        console.log(Number(this.metadata.pow_load_difficulty), difficulty);
         const difficultyBits = Math.log2(difficulty);
-        console.log(difficultyBits);
 
         let estimatedTime;
         if (difficultyBits <= 17) {
@@ -409,24 +407,24 @@ const Utils = {
                 // Convert nonce to 8-byte big-endian format to match backend
                 const nonceBytes = new ArrayBuffer(8);
                 const nonceView = new DataView(nonceBytes);
-                nonceView.setBigUint64(0, BigInt(nonce), false); // false = big-endian	
+                nonceView.setBigUint64(0, BigInt(nonce), false); // false = big-endian
                 const nonceByteArray = new Uint8Array(nonceBytes);
 
-                // Combine challenge and nonce	
+                // Combine challenge and nonce
                 const combined = new Uint8Array(challengeBytes.length + nonceByteArray.length);
                 combined.set(challengeBytes);
                 combined.set(nonceByteArray, challengeBytes.length);
 
-                // Compute SHA-256 hash using Web Crypto API	
+                // Compute SHA-256 hash using Web Crypto API
                 const hashBuffer = await window.crypto.subtle.digest('SHA-256', combined);
                 const hashArray = new Uint8Array(hashBuffer);
 
-                // Take the first 8 bytes of the hash and parse them as u64 in big-endian	
+                // Take the first 8 bytes of the hash and parse them as u64 in big-endian
                 const first8Bytes = hashArray.slice(0, 8);
                 const dataView = new DataView(first8Bytes.buffer);
-                const digest = dataView.getBigUint64(0, false); // false = big-endian	
+                const digest = dataView.getBigUint64(0, false); // false = big-endian
 
-                // Check if the hash is less than the target	
+                // Check if the hash is less than the target
                 if (digest < targetNum) {
                     return nonce;
                 }
