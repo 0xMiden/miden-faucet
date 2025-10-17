@@ -9,8 +9,7 @@ use axum::routing::get;
 use http::HeaderValue;
 use miden_client::account::{AccountId, AccountIdError, AddressError};
 use miden_client::store::Store;
-use miden_client::utils::{RwLock, hex_to_bytes};
-use miden_faucet_lib::FaucetId;
+use miden_client::utils::hex_to_bytes;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
@@ -23,24 +22,25 @@ use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
-use crate::api::get_metadata::{Metadata, get_metadata};
-use crate::api::get_note::get_note;
-use crate::api::get_pow::get_pow;
-use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::api_key::ApiKey;
+use crate::backend::get_metadata::get_metadata;
+use crate::backend::get_note::get_note;
+use crate::backend::get_pow::get_pow;
+use crate::backend::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 
-mod frontend;
 mod get_metadata;
 mod get_note;
 mod get_pow;
 mod get_tokens;
 
+pub use get_metadata::Metadata;
+
 // FAUCET STATE
 // ================================================================================================
 
-/// Serves the faucet's website and handles token requests.
+/// Serves the faucet's backend API that handles token requests.
 #[derive(Clone)]
-pub struct Server {
+pub struct BackendServer {
     mint_state: GetTokensState,
     metadata: Metadata,
     rate_limiter: PoWRateLimiter,
@@ -48,31 +48,17 @@ pub struct Server {
     store: Arc<dyn Store>,
 }
 
-impl Server {
-    #[allow(clippy::too_many_arguments)]
+impl BackendServer {
     pub fn new(
-        faucet_id: FaucetId,
-        decimals: u8,
-        max_supply: AssetAmount,
-        issuance: Arc<RwLock<AssetAmount>>,
+        metadata: Metadata,
         max_claimable_amount: AssetAmount,
-        base_amount: u64,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
-        explorer_url: Option<Url>,
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
-        let metadata = Metadata {
-            id: faucet_id,
-            issuance,
-            max_supply,
-            decimals,
-            explorer_url,
-            base_amount,
-        };
 
         // Hash the string secret to [u8; 32] for PoW
         let mut hasher = Sha256::new();
@@ -81,7 +67,7 @@ impl Server {
 
         let rate_limiter = PoWRateLimiter::new(secret_bytes, rate_limiter_config);
 
-        Server {
+        BackendServer {
             mint_state,
             metadata,
             rate_limiter,
@@ -90,16 +76,9 @@ impl Server {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
+    /// Serves the backend API endpoints.
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
-            .route("/", get(frontend::get_index_html))
-            .route("/bundle.js", get(frontend::get_bundle_js))
-            .route("/index.css", get(frontend::get_index_css))
-            .route("/background.png", get(frontend::get_background))
-            .route("/wallet-icon.png", get(frontend::get_wallet_icon))
-            .route("/favicon.ico", get(frontend::get_favicon))
-            .fallback(get(frontend::get_not_found_html))
             .route("/get_metadata", get(get_metadata))
             .route("/pow", get(get_pow))
             .route("/get_tokens", get(get_tokens))
@@ -126,7 +105,7 @@ impl Server {
             .await
             .with_context(|| format!("failed to bind TCP listener on {url}"))?;
 
-        tracing::info!(target: COMPONENT, address = %url, "Server started");
+        tracing::info!(target: COMPONENT, address = %url, "Backend server started");
 
         axum::serve(listener, app).await.map_err(Into::into)
     }
@@ -174,20 +153,20 @@ impl Server {
     }
 }
 
-impl FromRef<Server> for Metadata {
-    fn from_ref(input: &Server) -> Self {
+impl FromRef<BackendServer> for Metadata {
+    fn from_ref(input: &BackendServer) -> Self {
         input.metadata.clone()
     }
 }
 
-impl FromRef<Server> for GetTokensState {
-    fn from_ref(input: &Server) -> Self {
+impl FromRef<BackendServer> for GetTokensState {
+    fn from_ref(input: &BackendServer) -> Self {
         input.mint_state.clone()
     }
 }
 
-impl FromRef<Server> for PoWRateLimiter {
-    fn from_ref(input: &Server) -> Self {
+impl FromRef<BackendServer> for PoWRateLimiter {
+    fn from_ref(input: &BackendServer) -> Self {
         // Clone is cheap: only copies a 32-byte array and increments Arc reference counters.
         input.rate_limiter.clone()
     }
