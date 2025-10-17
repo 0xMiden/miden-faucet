@@ -89,7 +89,7 @@ impl Challenge {
         {
             Ok(())
         } else {
-            Err(ChallengeError::ServerSignaturesDoNotMatch)
+            Err(ChallengeError::InvalidSignature)
         }
     }
 

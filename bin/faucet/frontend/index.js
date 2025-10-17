@@ -119,7 +119,6 @@ class MidenFaucet {
             })
             .catch(error => {
                 console.error('Error fetching metadata:', error);
-                this.showError('Failed to load metadata. Please try again.');
             });
     }
 

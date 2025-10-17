@@ -1,6 +1,5 @@
 mod api;
 mod api_key;
-mod error_report;
 mod logging;
 mod network;
 #[cfg(test)]
@@ -447,8 +446,11 @@ fn create_faucet_account(
     Ok((account, AuthSecretKey::RpoFalcon512(secret)))
 }
 
+// INTEGRATION TESTS
+// ================================================================================================
+
 #[cfg(test)]
-mod test {
+mod tests {
     use std::env::temp_dir;
     use std::process::Stdio;
     use std::str::FromStr;
@@ -464,6 +466,7 @@ mod test {
     };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
+    use tokio::net::TcpListener;
     use tokio::time::sleep;
     use url::Url;
 
@@ -472,11 +475,12 @@ mod test {
     use crate::{Cli, ClientConfig, run_faucet_command};
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
-    /// to test the faucet website. It then loads the website and checks that all the requests
-    /// made return status 200.
+    /// to test the faucet website. It then loads the website, mints tokens, and checks that all the
+    /// requests returned status 200.
     #[tokio::test]
-    async fn test_website() {
-        let website_url = Box::pin(start_test_faucet()).await;
+    async fn frontend_mint_tokens() {
+        let stub_node_url = run_stub_node().await;
+        let website_url = run_faucet_server(stub_node_url).await;
         let client = start_fantoccini_client().await;
 
         // Open the website
@@ -543,8 +547,21 @@ mod test {
         client.close().await.unwrap();
     }
 
-    async fn start_test_faucet() -> Url {
-        let stub_node_url = Url::from_str("http://localhost:50051").unwrap();
+    // TESTING HELPERS
+    // ---------------------------------------------------------------------------------------------
+
+    async fn run_stub_node() -> Url {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener_addr = listener.local_addr().unwrap();
+        let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
+        tokio::spawn({
+            let stub_node_url = stub_node_url.clone();
+            async move { serve_stub(&stub_node_url).await.unwrap() }
+        });
+        stub_node_url
+    }
+
+    async fn run_faucet_server(stub_node_url: Url) -> Url {
         let config = ClientConfig {
             node_url: Some(stub_node_url.clone()),
             timeout: Duration::from_millis(5000),
@@ -553,12 +570,6 @@ mod test {
             remote_tx_prover_url: None,
         };
 
-        // Start the stub node
-        tokio::spawn(async move {
-            serve_stub(&stub_node_url).await.expect("failed to start stub node");
-        });
-
-        // Create faucet account and initialize the faucet
         Box::pin(run_faucet_command(Cli {
             command: crate::Command::Init {
                 config: config.clone(),
@@ -572,9 +583,8 @@ mod test {
         .await
         .expect("failed to create faucet account");
 
-        // Start the faucet connected to the stub
         // Use std::thread to launch faucet - avoids Send requirements
-        let endpoint_clone = Url::parse("http://localhost:8080").unwrap();
+        let endpoint = "http://localhost:8080";
         std::thread::spawn(move || {
             // Create a new runtime for this thread
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -587,7 +597,7 @@ mod test {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
                         config,
-                        endpoint: endpoint_clone,
+                        endpoint: Url::parse(endpoint).unwrap(),
                         max_claimable_amount: 1_000_000_000,
                         api_keys: vec![],
                         pow_secret: "test".to_string(),
@@ -607,7 +617,7 @@ mod test {
         });
 
         // Wait for faucet to be up
-        let endpoint = Url::parse("http://localhost:8080").unwrap();
+        let endpoint = Url::parse(endpoint).unwrap();
         let addrs = endpoint.socket_addrs(|| None).unwrap();
         let start = Instant::now();
         let timeout = Duration::from_secs(10);
