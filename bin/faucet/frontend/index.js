@@ -21,13 +21,27 @@ class MidenFaucet {
             console.error("Web Crypto API not available");
             this.showError('Web Crypto API not available. Please use a modern browser.');
         }
-
-        this.startMetadataPolling();
         this.privateButton.addEventListener('click', () => this.handleSendTokens(true));
         this.publicButton.addEventListener('click', () => this.handleSendTokens(false));
         this.walletConnectButton.addEventListener('click', () => this.handleWalletConnect());
 
         this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
+
+        this.init();
+    }
+
+    async init() {
+        this.backendUrl = await this.getBackendUrl();
+        this.startMetadataPolling();
+    }
+
+    async getBackendUrl() {
+        const response = await fetch('/config.json');
+        if (!response.ok) {
+            throw new Error(`Failed to fetch config.json file: ${response.status}`);
+        }
+        const config = JSON.parse(await response.json());
+        return config.backend_url;
     }
 
     async handleWalletConnect() {
@@ -96,7 +110,7 @@ class MidenFaucet {
     }
 
     async fetchMetadata() {
-        fetch(window.location.origin + '/get_metadata')
+        fetch(this.backendUrl + 'get_metadata')
             .then(response => response.json())
             .then(data => {
                 if (!this.metadataInitialized) {
@@ -125,7 +139,7 @@ class MidenFaucet {
     async getPowChallenge(recipient, amount) {
         let powResponse;
         try {
-            powResponse = await fetch(window.location.origin + '/pow?' + new URLSearchParams({
+            powResponse = await fetch(this.backendUrl + 'pow?' + new URLSearchParams({
                 amount: amount,
                 account_id: recipient
             }), {
@@ -155,7 +169,7 @@ class MidenFaucet {
         };
         let response;
         try {
-            response = await fetch(window.location.origin + '/get_tokens?' + new URLSearchParams(params), {
+            response = await fetch(this.backendUrl + 'get_tokens?' + new URLSearchParams(params), {
                 method: "GET"
             });
         } catch (error) {
@@ -180,7 +194,7 @@ class MidenFaucet {
         this.hidePrivateModalError();
         let response;
         try {
-            response = await fetch(window.location.origin + '/get_note?' + new URLSearchParams({
+            response = await fetch(this.backendUrl + 'get_note?' + new URLSearchParams({
                 note_id: noteId
             }));
         } catch (error) {
