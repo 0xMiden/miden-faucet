@@ -415,7 +415,6 @@ body {
 
 .error-message {
     background-color: #f8d7da;
-    position: absolute;
     max-width: 400px;
     color: #721c24;
     padding: 12px 16px;
