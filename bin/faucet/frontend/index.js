@@ -13,8 +13,10 @@ class MidenFaucet {
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountOptions = [100, 500, 1000];
-        this.explorer_url = null;
+        this.tokenAmountHint = document.getElementById('token-amount-hint');
+        this.explorerUrl = null;
         this.metadataInitialized = false;
+        this.metadata = null;
 
         // Check if Web Crypto API is available
         if (!window.crypto || !window.crypto.subtle) {
@@ -24,6 +26,7 @@ class MidenFaucet {
         this.privateButton.addEventListener('click', () => this.handleSendTokens(true));
         this.publicButton.addEventListener('click', () => this.handleSendTokens(false));
         this.walletConnectButton.addEventListener('click', () => this.handleWalletConnect());
+        this.tokenSelect.addEventListener('change', () => this.updateTokenHint());
 
         this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
 
@@ -113,18 +116,21 @@ class MidenFaucet {
         fetch(this.backendUrl + 'get_metadata')
             .then(response => response.json())
             .then(data => {
-                if (!this.metadataInitialized) {
-                    this.faucetAddress.textContent = data.id;
-                    this.explorer_url = data.explorer_url;
+                this.metadata = data;
+                this.faucetAddress.textContent = data.id;
+                this.explorerUrl = data.explorer_url;
 
+                if (!this.metadataInitialized) {
+                    this.metadataInitialized = true;
                     this.tokenSelect.innerHTML = '';
                     for (const amount of this.tokenAmountOptions) {
                         const option = document.createElement('option');
-                        option.value = Utils.tokensToBaseUnits(amount, data.decimals);
+                        const baseUnits = Utils.tokensToBaseUnits(amount, data.decimals);
+                        option.value = baseUnits;
                         option.textContent = amount;
                         this.tokenSelect.appendChild(option);
                     }
-                    this.metadataInitialized = true;
+                    this.updateTokenHint();
                 }
 
                 this.issuance.textContent = Utils.baseUnitsToTokens(data.issuance, data.decimals);
@@ -287,9 +293,9 @@ class MidenFaucet {
             completedPublicModal.classList.add('active');
 
             const explorerButton = document.getElementById('explorer-button');
-            if (this.explorer_url) {
+            if (this.explorerUrl) {
                 explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(this.explorer_url + 'tx/' + mintingData.tx_id, '_blank');
+                explorerButton.onclick = () => window.open(this.explorerUrl + 'tx/' + mintingData.tx_id, '_blank');
             } else {
                 explorerButton.style.display = 'none';
             }
@@ -366,6 +372,31 @@ class MidenFaucet {
         this.updateProgressBar(0);
         const progressBarTotal = document.getElementById('progress-bar-total');
         progressBarTotal.classList.remove('active');
+    }
+
+    updateTokenHint() {
+        if (!this.metadata) return;
+
+        const requestComplexity =
+            Math.floor(this.tokenSelect.value / Number(this.metadata.base_amount)) + 1;
+        const difficulty = requestComplexity * Number(this.metadata.pow_load_difficulty);
+        const difficultyBits = Math.log2(difficulty);
+
+        let estimatedTime;
+        if (difficultyBits <= 17) {
+            estimatedTime = `<5s`;
+        } else if (difficultyBits <= 18) {
+            estimatedTime = `5-15s`;
+        } else if (difficultyBits <= 19) {
+            estimatedTime = `15-30s`;
+        } else if (difficultyBits <= 20) {
+            estimatedTime = `30s-1m`;
+        } else if (difficultyBits <= 21) {
+            estimatedTime = `1-5m`;
+        } else {
+            estimatedTime = `5m+`;
+        }
+        this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
     }
 }
 
@@ -450,5 +481,5 @@ const Utils = {
 
     tokensToBaseUnits: (tokens, decimals) => {
         return tokens * (10 ** decimals);
-    }
+    },
 };
