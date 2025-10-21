@@ -383,18 +383,18 @@ class MidenFaucet {
         const difficultyBits = Math.log2(difficulty);
 
         let estimatedTime;
-        if (difficultyBits <= 17) {
+        if (difficultyBits <= 18) {
             estimatedTime = `<5s`;
-        } else if (difficultyBits <= 18) {
-            estimatedTime = `5-15s`;
         } else if (difficultyBits <= 19) {
-            estimatedTime = `15-30s`;
+            estimatedTime = `5-15s`;
         } else if (difficultyBits <= 20) {
+            estimatedTime = `15-30s`;
+        } else if (difficultyBits <= 20.5) {
             estimatedTime = `30s-1m`;
         } else if (difficultyBits <= 21) {
-            estimatedTime = `1-5m`;
+            estimatedTime = `1-3m`;
         } else {
-            estimatedTime = `5m+`;
+            estimatedTime = `3m+`;
         }
         this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
     }
