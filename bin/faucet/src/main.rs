@@ -409,7 +409,11 @@ mod tests {
 
     use fantoccini::ClientBuilder;
     use miden_client::account::{
-        AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
+        AccountId,
+        AccountIdAddress,
+        Address,
+        AddressInterface,
+        NetworkId,
     };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;

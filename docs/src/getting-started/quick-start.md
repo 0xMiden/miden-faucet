@@ -19,9 +19,9 @@ miden-faucet create-faucet-account \
   --max-supply 100000000000000000
 ```
 
-## Step 2: Start the Faucet Server
+## Step 2: Start the Faucet
 
-Next, start the faucet server by specifying the endpoint it should listen on, the Miden node it will connect to, and the account file to use for distributing tokens. The server will handle incoming token requests and manage the minting process.
+Next, start the faucet by specifying the addresses where the API and the frontend will be served, the Miden node it will connect to, and the account file to use for distributing tokens. The backend server will handle incoming token requests and manage the minting process.
 
 ```bash
 miden-faucet start \
