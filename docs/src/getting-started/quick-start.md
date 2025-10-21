@@ -21,7 +21,7 @@ miden-faucet create-faucet-account \
 
 ## Step 2: Start the Faucet
 
-Next, start the faucet by specifying the addresses where the API and the frontend will be served, the Miden node it will connect to, and the account file to use for distributing tokens. The backend server will handle incoming token requests and manage the minting process.
+Next, start the faucet by specifying the addresses where the API and the frontend will be served, the address of the Miden node, and the account file to use for distributing tokens. The backend server will handle incoming token requests and manage the minting process.
 
 ```bash
 miden-faucet start \

@@ -10,8 +10,8 @@ use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
+use crate::api::ApiServer;
 use crate::api_key::ApiKey;
-use crate::backend::ApiServer;
 
 /// Describes the faucet metadata needed to show on the frontend.
 #[derive(Clone)]

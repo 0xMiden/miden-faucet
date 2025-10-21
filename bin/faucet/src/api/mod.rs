@@ -22,11 +22,11 @@ use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
+use crate::api::get_metadata::get_metadata;
+use crate::api::get_note::get_note;
+use crate::api::get_pow::get_pow;
+use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::api_key::ApiKey;
-use crate::backend::get_metadata::get_metadata;
-use crate::backend::get_note::get_note;
-use crate::backend::get_pow::get_pow;
-use crate::backend::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 
 mod get_metadata;
 mod get_note;

@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{info_span, instrument};
 
 use crate::COMPONENT;
+use crate::api::{AccountError, ApiServer};
 use crate::api_key::ApiKey;
-use crate::backend::{AccountError, ApiServer};
 
 // ENDPOINT
 // ================================================================================================

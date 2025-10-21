@@ -1,5 +1,5 @@
+mod api;
 mod api_key;
-mod backend;
 mod frontend;
 mod logging;
 mod network;
@@ -30,8 +30,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use url::Url;
 
+use crate::api::{ApiServer, Metadata};
 use crate::api_key::ApiKey;
-use crate::backend::{ApiServer, Metadata};
 use crate::frontend::serve_frontend;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
