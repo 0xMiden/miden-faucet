@@ -40,7 +40,7 @@ pub use get_metadata::Metadata;
 
 /// Serves the faucet's backend API that handles token requests.
 #[derive(Clone)]
-pub struct BackendServer {
+pub struct ApiServer {
     mint_state: GetTokensState,
     metadata: Metadata,
     rate_limiter: PoWRateLimiter,
@@ -48,7 +48,7 @@ pub struct BackendServer {
     store: Arc<dyn Store>,
 }
 
-impl BackendServer {
+impl ApiServer {
     pub fn new(
         metadata: Metadata,
         max_claimable_amount: AssetAmount,
@@ -67,7 +67,7 @@ impl BackendServer {
 
         let rate_limiter = PoWRateLimiter::new(secret_bytes, rate_limiter_config);
 
-        BackendServer {
+        ApiServer {
             mint_state,
             metadata,
             rate_limiter,
@@ -153,20 +153,20 @@ impl BackendServer {
     }
 }
 
-impl FromRef<BackendServer> for Metadata {
-    fn from_ref(input: &BackendServer) -> Self {
+impl FromRef<ApiServer> for Metadata {
+    fn from_ref(input: &ApiServer) -> Self {
         input.metadata.clone()
     }
 }
 
-impl FromRef<BackendServer> for GetTokensState {
-    fn from_ref(input: &BackendServer) -> Self {
+impl FromRef<ApiServer> for GetTokensState {
+    fn from_ref(input: &ApiServer) -> Self {
         input.mint_state.clone()
     }
 }
 
-impl FromRef<BackendServer> for PoWRateLimiter {
-    fn from_ref(input: &BackendServer) -> Self {
+impl FromRef<ApiServer> for PoWRateLimiter {
+    fn from_ref(input: &ApiServer) -> Self {
         // Clone is cheap: only copies a 32-byte array and increments Arc reference counters.
         input.rate_limiter.clone()
     }

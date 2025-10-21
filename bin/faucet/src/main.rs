@@ -31,7 +31,7 @@ use tokio::task::JoinSet;
 use url::Url;
 
 use crate::api_key::ApiKey;
-use crate::backend::{BackendServer, Metadata};
+use crate::backend::{ApiServer, Metadata};
 use crate::frontend::serve_frontend;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
@@ -298,7 +298,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.
             let tx_mint_requests_clone = tx_mint_requests.clone();
-            let backend_server = BackendServer::new(
+            let backend_server = ApiServer::new(
                 metadata,
                 max_claimable_amount,
                 tx_mint_requests_clone,
@@ -409,11 +409,7 @@ mod tests {
 
     use fantoccini::ClientBuilder;
     use miden_client::account::{
-        AccountId,
-        AccountIdAddress,
-        Address,
-        AddressInterface,
-        NetworkId,
+        AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
     };
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;

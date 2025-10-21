@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::COMPONENT;
 use crate::api_key::ApiKey;
-use crate::backend::BackendServer;
+use crate::backend::ApiServer;
 
 /// Describes the faucet metadata needed to show on the frontend.
 #[derive(Clone)]
@@ -28,7 +28,7 @@ pub struct Metadata {
 // ================================================================================================
 
 #[instrument(parent = None, target = COMPONENT, name = "server.get_metadata", skip_all)]
-pub async fn get_metadata(State(server): State<BackendServer>) -> Json<GetMetadataResponse> {
+pub async fn get_metadata(State(server): State<ApiServer>) -> Json<GetMetadataResponse> {
     let metadata = server.metadata;
     let issuance = metadata.issuance.read().base_units();
     Json(GetMetadataResponse {

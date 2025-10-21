@@ -9,7 +9,7 @@ use tracing::{info_span, instrument};
 
 use crate::COMPONENT;
 use crate::api_key::ApiKey;
-use crate::backend::{AccountError, BackendServer};
+use crate::backend::{AccountError, ApiServer};
 
 // ENDPOINT
 // ================================================================================================
@@ -19,7 +19,7 @@ use crate::backend::{AccountError, BackendServer};
     fields(account_id = %params.account_id, api_key = ?params.api_key), err
 )]
 pub async fn get_pow(
-    State(server): State<BackendServer>,
+    State(server): State<ApiServer>,
     Query(params): Query<RawPowRequest>,
 ) -> Result<Json<GetPowResponse>, PowRequestError> {
     let request = params.validate()?;

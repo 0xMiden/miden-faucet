@@ -25,20 +25,19 @@ Next, start the faucet server by specifying the endpoint it should listen on, th
 
 ```bash
 miden-faucet start \
-  --endpoint http://localhost:8080 \
+  --frontend-url http://localhost:8080 \
+  --backend-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
   --account ./faucet.mac
 ```
 
-## Step 3: Access the Web Interface
-
-The faucet provides a web interface for easy token requests. Open `http://localhost:8080` in your browser to access it.
-
-## Step 4: Request Test Tokens
+## Step 3: Request Test Tokens
 
 Once the faucet is running, you can request test tokens through either the web interface or the REST API.
 
-### Via Web Interface
+### Via Web Interface (if frontend is enabled)
+
+Open `http://localhost:8080` in your browser to access the web interface for generating token requests. Then:
 
 1. Enter your Miden account ID or account bech32 address.
 2. Select token amount
@@ -47,7 +46,7 @@ Once the faucet is running, you can request test tokens through either the web i
 
 ### Via API
 
-You can also programmatically interact with the REST API to mint tokens. Check out the complete working examples below. Make sure the faucet is running at `http://localhost:8080` before using them.
+You can also programmatically interact with the REST API to mint tokens. Check out the complete working examples below. Make sure the faucet REST API is running at `http://localhost:8000` before using them.
 - [Rust](../examples/rust/request_tokens.rs)
 - [TypeScript](../examples/typescript/request_tokens.ts)
 
@@ -59,7 +58,8 @@ If you have a Miden Node running locally, you can run the faucet against that no
 
 ```bash
 miden-faucet start \
-  --endpoint http://localhost:8080 \
+  --frontend-url http://localhost:8080 \
+  --backend-url http://localhost:8000 \
   --node-url http://localhost:57291 \
   --account ./faucet.mac \
   --network localhost
@@ -71,7 +71,8 @@ Connect to the node deployed in Miden Devnet.
 
 ```bash
 miden-faucet start \
-  --endpoint http://localhost:8080 \
+  --frontend-url http://localhost:8080 \
+  --backend-url http://localhost:8000 \
   --node-url https://rpc.devnet.miden.io \
   --account ./faucet.mac \
   --network devnet
@@ -83,9 +84,21 @@ Connect to the node deployed in Miden Testnet.
 
 ```bash
 miden-faucet start \
-  --endpoint http://localhost:8080 \
+  --frontend-url http://localhost:8080 \
+  --backend-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
   --account ./faucet.mac \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ``` 
+
+### Backend Only (No Frontend)
+
+If you only need the API and don't want to serve the web interface:
+
+```bash
+miden-faucet start \
+  --backend-url http://localhost:8000 \
+  --node-url https://rpc.testnet.miden.io \
+  --account ./faucet.mac
+```
