@@ -406,26 +406,49 @@ class MidenFaucet {
 
     pollNote(noteId) {
         return new Promise((resolve, reject) => {
-            // Poll for the note every 2 seconds
-            const pollInterval = setInterval(async () => {
+            // Poll every 500ms for the first 10 seconds, then every 1s for the next 30 seconds, then every 5s.
+            let currentInterval = 500;
+            let pollInterval;
+            let elapsedTime = 0;
+            // Timeout after 5 minutes
+            const timeout = 30000;
+            let timeoutId;
+
+            const poll = async () => {
                 try {
                     const note = await this.rpcClient.getNotesById([NoteId.fromHex(noteId)]);
                     if (note && note.length > 0) {
                         clearInterval(pollInterval);
                         clearTimeout(timeoutId);
                         resolve();
+                        return;
                     }
+
+                    elapsedTime += currentInterval;
+
+                    if (elapsedTime <= 10000) {
+                        currentInterval = 500;
+                    } else if (elapsedTime <= 40000) {
+                        currentInterval = 1000;
+                    } else {
+                        currentInterval = 5000;
+                    }
+
+                    // Update the interval
+                    clearInterval(pollInterval);
+                    pollInterval = setInterval(poll, currentInterval);
                 } catch (error) {
                     console.error('Error polling for note:', error);
+                    clearInterval(pollInterval);
+                    clearTimeout(timeoutId);
                     reject(error);
                 }
-            }, 2000);
-
-            // Stop polling after 5 minutes if the note has not been committed
-            const timeoutId = setTimeout(() => {
+            };
+            pollInterval = setInterval(poll, currentInterval);
+            timeoutId = setTimeout(() => {
                 clearInterval(pollInterval);
                 reject(new Error('Timeout while waiting for tx to be committed. Please try again later.'));
-            }, 300000);
+            }, timeout);
         });
     }
 }
