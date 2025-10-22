@@ -30,23 +30,23 @@ class MidenFaucet {
         this.tokenSelect.addEventListener('change', () => this.updateTokenHint());
 
         this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
-        this.rpcClient = new RpcClient(new Endpoint('http://localhost:57291'));
 
         this.init();
     }
 
     async init() {
-        this.backendUrl = await this.getBackendUrl();
+        let config = await this.getConfigValues();
+        this.backendUrl = config.backend_url;
+        this.rpcClient = new RpcClient(new Endpoint(config.node_url));
         this.startMetadataPolling();
     }
 
-    async getBackendUrl() {
+    async getConfigValues() {
         const response = await fetch('/config.json');
         if (!response.ok) {
             throw new Error(`Failed to fetch config.json file: ${response.status}`);
         }
-        const config = JSON.parse(await response.json());
-        return config.backend_url;
+        return JSON.parse(await response.json());
     }
 
     async handleWalletConnect() {
@@ -119,7 +119,7 @@ class MidenFaucet {
     }
 
     async fetchMetadata() {
-        fetch(this.backendUrl + 'get_metadata')
+        fetch(this.backendUrl + '/get_metadata')
             .then(response => response.json())
             .then(data => {
                 this.metadata = data;
@@ -151,7 +151,7 @@ class MidenFaucet {
     async getPowChallenge(recipient, amount) {
         let powResponse;
         try {
-            powResponse = await fetch(this.backendUrl + 'pow?' + new URLSearchParams({
+            powResponse = await fetch(this.backendUrl + '/pow?' + new URLSearchParams({
                 amount: amount,
                 account_id: recipient
             }), {
@@ -179,7 +179,7 @@ class MidenFaucet {
         };
         let response;
         try {
-            response = await fetch(this.backendUrl + 'get_tokens?' + new URLSearchParams(params), {
+            response = await fetch(this.backendUrl + '/get_tokens?' + new URLSearchParams(params), {
                 method: "GET"
             });
         } catch (error) {
@@ -199,7 +199,7 @@ class MidenFaucet {
         this.hidePrivateModalError();
         let response;
         try {
-            response = await fetch(this.backendUrl + 'get_note?' + new URLSearchParams({
+            response = await fetch(this.backendUrl + '/get_note?' + new URLSearchParams({
                 note_id: noteId
             }));
         } catch (error) {
@@ -441,7 +441,7 @@ class MidenFaucet {
                     console.error('Error polling for note:', error);
                     clearInterval(pollInterval);
                     clearTimeout(timeoutId);
-                    reject(error);
+                    reject('Error fetching note confirmation.');
                 }
             };
             pollInterval = setInterval(poll, currentInterval);
