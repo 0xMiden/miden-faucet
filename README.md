@@ -28,7 +28,8 @@ miden-faucet create-faucet-account \
 3. Start the faucet server:
 ```bash
 miden-faucet start \
-  --endpoint http://localhost:8080 \
+  --frontend-url http://localhost:8080 \
+  --backend-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io:443 \
   --network testnet \
   --account <path to faucet.mac>

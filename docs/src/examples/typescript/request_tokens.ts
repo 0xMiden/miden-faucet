@@ -81,7 +81,7 @@ async function downloadNote(baseUrl: string, noteId: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-    const baseUrl = 'http://localhost:8080';
+    const baseUrl = 'http://localhost:8000';
     const accountId = '0xca8203e8e58cf72049b061afca78ce';
 
     let { challenge, target } = await sendPowRequest(baseUrl, accountId);
