@@ -38,7 +38,14 @@ pub async fn get_note(
         })?
         .pop()
         .ok_or(NoteRequestError::NoteNotFound)?;
-    let note_file = note.clone().into_note_file(&NoteExportType::NoteDetails).unwrap();
+    let note_file = note
+        .clone()
+        .into_note_file(&NoteExportType::NoteWithProof)
+        .or_else(|_| note.into_note_file(&NoteExportType::NoteDetails))
+        .map_err(|e| {
+            tracing::error!(?e, "failed to convert note to note file");
+            NoteRequestError::NoteNotFound
+        })?;
     let encoded_note = general_purpose::STANDARD.encode(note_file.to_bytes());
     let note_json = serde_json::json!({
         "note_id": request.note_id.to_string(),
