@@ -1,5 +1,5 @@
+mod api;
 mod api_key;
-mod backend;
 mod frontend;
 mod logging;
 mod network;
@@ -30,8 +30,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use url::Url;
 
+use crate::api::{ApiServer, Metadata};
 use crate::api_key::ApiKey;
-use crate::backend::{BackendServer, Metadata};
 use crate::frontend::serve_frontend;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
@@ -298,7 +298,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.
             let tx_mint_requests_clone = tx_mint_requests.clone();
-            let backend_server = BackendServer::new(
+            let backend_server = ApiServer::new(
                 metadata,
                 max_claimable_amount,
                 tx_mint_requests_clone,
