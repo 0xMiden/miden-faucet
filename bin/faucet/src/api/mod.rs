@@ -38,7 +38,7 @@ pub use get_metadata::Metadata;
 // FAUCET STATE
 // ================================================================================================
 
-/// Serves the faucet's backend API that handles token requests.
+/// Serves the faucet's API server that handles token requests.
 #[derive(Clone)]
 pub struct ApiServer {
     mint_state: GetTokensState,
@@ -76,7 +76,7 @@ impl ApiServer {
         }
     }
 
-    /// Serves the backend API endpoints.
+    /// Serves the faucet API endpoints.
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
             .route("/get_metadata", get(get_metadata))
@@ -105,7 +105,7 @@ impl ApiServer {
             .await
             .with_context(|| format!("failed to bind TCP listener on {url}"))?;
 
-        tracing::info!(target: COMPONENT, address = %url, "Backend server started");
+        tracing::info!(target: COMPONENT, address = %url, "API server started");
 
         axum::serve(listener, app).await.map_err(Into::into)
     }
