@@ -13,10 +13,10 @@ use url::Url;
 use crate::COMPONENT;
 
 /// Serves the frontend API endpoints.
-pub async fn serve_frontend(url: Url, backend_url: Url) -> anyhow::Result<()> {
+pub async fn serve_frontend(url: Url, api_url: Url) -> anyhow::Result<()> {
     let config_json = Json(
         serde_json::json!({
-            "backend_url": backend_url
+            "api_url": api_url
         })
         .to_string(),
     );
