@@ -1,25 +1,63 @@
+import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
+import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
+
 class MidenFaucet {
     constructor() {
         this.recipientInput = document.getElementById('recipient-address');
         this.tokenSelect = document.getElementById('token-amount');
         this.privateButton = document.getElementById('send-private-button');
         this.publicButton = document.getElementById('send-public-button');
+        this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
         this.progressFill = document.getElementById('progress-fill');
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountOptions = [100, 500, 1000];
-        this.explorer_url = null;
+        this.tokenAmountHint = document.getElementById('token-amount-hint');
+        this.explorerUrl = null;
+        this.metadataInitialized = false;
+        this.metadata = null;
 
-        // Check if SHA3 is available right from the start
-        if (typeof sha3_256 === 'undefined') {
-            console.error("SHA3 library not loaded initially");
-            this.showError('Cryptographic library not loaded. Please refresh the page.');
+        // Check if Web Crypto API is available
+        if (!window.crypto || !window.crypto.subtle) {
+            console.error("Web Crypto API not available");
+            this.showError('Web Crypto API not available. Please use a modern browser.');
         }
-
-        this.fetchMetadata();
         this.privateButton.addEventListener('click', () => this.handleSendTokens(true));
         this.publicButton.addEventListener('click', () => this.handleSendTokens(false));
+        this.walletConnectButton.addEventListener('click', () => this.handleWalletConnect());
+        this.tokenSelect.addEventListener('change', () => this.updateTokenHint());
+
+        this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
+
+        this.init();
+    }
+
+    async init() {
+        this.apiUrl = await this.getApiUrl();
+        this.startMetadataPolling();
+    }
+
+    async getApiUrl() {
+        const response = await fetch('/config.json');
+        if (!response.ok) {
+            throw new Error(`Failed to fetch config.json file: ${response.status}`);
+        }
+        const config = JSON.parse(await response.json());
+        return config.api_url;
+    }
+
+    async handleWalletConnect() {
+        try {
+            await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
+
+            if (this.walletAdapter.accountId) {
+                this.recipientInput.value = this.walletAdapter.accountId;
+            }
+        } catch (error) {
+            console.error("WalletConnectionError:", error);
+            this.showError("Failed to connect wallet.");
+        }
     }
 
     async handleSendTokens(isPrivateNote) {
@@ -48,7 +86,7 @@ class MidenFaucet {
 
         this.updateMintingTitle('PREPARING THE REQUEST');
 
-        const powData = await this.getPowChallenge(recipient);
+        const powData = await this.getPowChallenge(recipient, amount);
         if (!powData) {
             this.hideModals();
             return;
@@ -65,17 +103,34 @@ class MidenFaucet {
         }
     }
 
+    startMetadataPolling() {
+        this.fetchMetadata();
+
+        // Poll every 2 seconds
+        this.metadataInterval = setInterval(() => {
+            this.fetchMetadata();
+        }, 2000);
+    }
+
     async fetchMetadata() {
-        fetch(window.location.origin + '/get_metadata')
+        fetch(this.apiUrl + 'get_metadata')
             .then(response => response.json())
             .then(data => {
+                this.metadata = data;
                 this.faucetAddress.textContent = data.id;
-                this.explorer_url = data.explorer_url;
-                for (const amount of this.tokenAmountOptions) {
-                    const option = document.createElement('option');
-                    option.value = Utils.tokensToBaseUnits(amount, data.decimals);
-                    option.textContent = amount;
-                    this.tokenSelect.appendChild(option);
+                this.explorerUrl = data.explorer_url;
+
+                if (!this.metadataInitialized) {
+                    this.metadataInitialized = true;
+                    this.tokenSelect.innerHTML = '';
+                    for (const amount of this.tokenAmountOptions) {
+                        const option = document.createElement('option');
+                        const baseUnits = Utils.tokensToBaseUnits(amount, data.decimals);
+                        option.value = baseUnits;
+                        option.textContent = amount;
+                        this.tokenSelect.appendChild(option);
+                    }
+                    this.updateTokenHint();
                 }
 
                 this.issuance.textContent = Utils.baseUnitsToTokens(data.issuance, data.decimals);
@@ -84,14 +139,14 @@ class MidenFaucet {
             })
             .catch(error => {
                 console.error('Error fetching metadata:', error);
-                this.showError('Failed to load metadata. Please try again.');
             });
     }
 
-    async getPowChallenge(recipient) {
+    async getPowChallenge(recipient, amount) {
         let powResponse;
         try {
-            powResponse = await fetch(window.location.origin + '/pow?' + new URLSearchParams({
+            powResponse = await fetch(this.apiUrl + 'pow?' + new URLSearchParams({
+                amount: amount,
                 account_id: recipient
             }), {
                 method: "GET"
@@ -120,7 +175,7 @@ class MidenFaucet {
         };
         let response;
         try {
-            response = await fetch(window.location.origin + '/get_tokens?' + new URLSearchParams(params), {
+            response = await fetch(this.apiUrl + 'get_tokens?' + new URLSearchParams(params), {
                 method: "GET"
             });
         } catch (error) {
@@ -145,7 +200,7 @@ class MidenFaucet {
         this.hidePrivateModalError();
         let response;
         try {
-            response = await fetch(window.location.origin + '/get_note?' + new URLSearchParams({
+            response = await fetch(this.apiUrl + 'get_note?' + new URLSearchParams({
                 note_id: noteId
             }));
         } catch (error) {
@@ -238,9 +293,9 @@ class MidenFaucet {
             completedPublicModal.classList.add('active');
 
             const explorerButton = document.getElementById('explorer-button');
-            if (this.explorer_url) {
+            if (this.explorerUrl) {
                 explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(this.explorer_url + 'tx/' + mintingData.tx_id, '_blank');
+                explorerButton.onclick = () => window.open(this.explorerUrl + 'tx/' + mintingData.tx_id, '_blank');
             } else {
                 explorerButton.style.display = 'none';
             }
@@ -318,6 +373,31 @@ class MidenFaucet {
         const progressBarTotal = document.getElementById('progress-bar-total');
         progressBarTotal.classList.remove('active');
     }
+
+    updateTokenHint() {
+        if (!this.metadata) return;
+
+        const requestComplexity =
+            Math.floor(this.tokenSelect.value / Number(this.metadata.base_amount)) + 1;
+        const difficulty = requestComplexity * Number(this.metadata.pow_load_difficulty);
+        const difficultyBits = Math.log2(difficulty);
+
+        let estimatedTime;
+        if (difficultyBits <= 18) {
+            estimatedTime = `<5s`;
+        } else if (difficultyBits <= 19) {
+            estimatedTime = `5-15s`;
+        } else if (difficultyBits <= 20) {
+            estimatedTime = `15-30s`;
+        } else if (difficultyBits <= 20.5) {
+            estimatedTime = `30s-1m`;
+        } else if (difficultyBits <= 21) {
+            estimatedTime = `1-3m`;
+        } else {
+            estimatedTime = `3m+`;
+        }
+        this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -330,32 +410,33 @@ const Utils = {
     },
 
     findValidNonce: async (challenge, target) => {
-        // Check again if SHA3 is available
-        if (typeof sha3_256 === 'undefined') {
-            console.error("SHA3 library not properly loaded. SHA3 object:", sha3_256);
-            throw new Error('SHA3 library not properly loaded. Please refresh the page.');
-        }
-
         let nonce = 0;
         let targetNum = BigInt(target);
+        const challengeBytes = Uint8Array.fromHex(challenge);
 
         while (true) {
             nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
             try {
-                // Compute hash using SHA3 with the challenge and nonce
-                let hash = sha3_256.create();
-                hash.update(challenge); // Use the hex-encoded challenge string directly
-
                 // Convert nonce to 8-byte big-endian format to match backend
                 const nonceBytes = new ArrayBuffer(8);
                 const nonceView = new DataView(nonceBytes);
                 nonceView.setBigUint64(0, BigInt(nonce), false); // false = big-endian
                 const nonceByteArray = new Uint8Array(nonceBytes);
-                hash.update(nonceByteArray);
+
+                // Combine challenge and nonce
+                const combined = new Uint8Array(challengeBytes.length + nonceByteArray.length);
+                combined.set(challengeBytes);
+                combined.set(nonceByteArray, challengeBytes.length);
+
+                // Compute SHA-256 hash using Web Crypto API
+                const hashBuffer = await window.crypto.subtle.digest('SHA-256', combined);
+                const hashArray = new Uint8Array(hashBuffer);
 
                 // Take the first 8 bytes of the hash and parse them as u64 in big-endian
-                let digest = BigInt("0x" + hash.hex().slice(0, 16));
+                const first8Bytes = hashArray.slice(0, 8);
+                const dataView = new DataView(first8Bytes.buffer);
+                const digest = dataView.getBigUint64(0, false); // false = big-endian
 
                 // Check if the hash is less than the target
                 if (digest < targetNum) {
@@ -400,5 +481,5 @@ const Utils = {
 
     tokensToBaseUnits: (tokens, decimals) => {
         return tokens * (10 ** decimals);
-    }
+    },
 };

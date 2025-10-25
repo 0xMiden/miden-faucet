@@ -24,7 +24,8 @@ The Miden Faucet can be configured using:
 
 ```bash
 miden-faucet start \
-  --endpoint <URL> \
+  --api-url <URL> \
+  --frontend-url <URL> \
   --node-url <URL> \
   --account <PATH> \
   --network <NETWORK>
@@ -34,7 +35,8 @@ miden-faucet start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--endpoint` | Faucet endpoint | - | Yes |
+| `--api-url` | URL to serve the faucet API | - | Yes |
+| `--frontend-url` | URL to serve the Frontend API | - | No |
 | `--node-url` | Miden node RPC endpoint | - | Yes |
 | `--account` | Path to faucet account file | - | Yes |
 | `--network` | Network configuration | `localhost` | No |
@@ -42,6 +44,7 @@ miden-faucet start \
 | `--max-claimable-amount` | Max claimable base units per request | `1000000000` | No |
 | `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
 | `--explorer-url` | Midenscan URL | - | No |
+| `--base-amount` | Token amount (in base units) at which the difficulty of the challenge starts to increase. | `100000000` | No |
 
 ### Proof of Work Configuration
 
@@ -51,7 +54,7 @@ miden-faucet start \
 | `--pow-baseline` | Base PoW difficulty (0-32). It's the starting difficulty when no requests are pending | `12` | No |
 | `--pow-challenge-lifetime` | Challenge validity duration, i.e. how long challenges remain valid. This affects the rate limiting, since it works by rejecting new submissions while the previous submitted challenge is still valid | `30s` | No |
 | `--pow-cleanup-interval` | Cache cleanup interval, i.e. how often expired challenges are removed | `2s` | No |
-| `--pow-growth-rate` | Difficulty growth rate, i.e. how quickly difficulty increases with load. When set to 1, the difficulty will roughly double when the number of requests doubles. | `1` | No |
+| `--pow-growth-rate` | Difficulty growth rate, i.e. how quickly difficulty increases with load. | `0.1` | No |
 
 ### Advanced Configuration
 
@@ -60,6 +63,7 @@ miden-faucet start \
 | `--remote-tx-prover-url` | Remote transaction prover | - | No |
 | `--api-keys` | Comma-separated API keys | - | No |
 | `--enable-otel` | Enable OpenTelemetry | `false` | No |
+| `--batch-size` | Maximum number of P2ID notes to create per transaction | `32` | No |
 
 ## Environment Variables
 
@@ -67,23 +71,27 @@ All configuration options can be set using environment variables:
 
 ```bash
 # Basic configuration
-export MIDEN_FAUCET_ENDPOINT=http://localhost:8080
+export MIDEN_FAUCET_FRONTEND_URL=http://localhost:8080
+export MIDEN_FAUCET_API_URL=http://localhost:8000
 export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io
 export MIDEN_FAUCET_ACCOUNT_PATH=./faucet.mac
 export MIDEN_FAUCET_NETWORK=testnet
 export MIDEN_FAUCET_EXPLORER_URL=https://testnet.midenscan.com
+export MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT=1000000000
+export MIDEN_FAUCET_BASE_AMOUNT=100000000
 
 # Proof of Work
 export MIDEN_FAUCET_POW_SECRET=your-secret-here
 export MIDEN_FAUCET_POW_BASELINE=12
 export MIDEN_FAUCET_POW_CHALLENGE_LIFETIME=30s
-export MIDEN_FAUCET_POW_GROWTH_RATE=1
+export MIDEN_FAUCET_POW_CLEANUP_INTERVAL=2s
+export MIDEN_FAUCET_POW_GROWTH_RATE=0.1
 
 # Advanced
-export MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT=1000
 export MIDEN_FAUCET_TIMEOUT=10s
 export MIDEN_FAUCET_ENABLE_OTEL=true
 export MIDEN_FAUCET_API_KEYS=key1,key2,key3
+export MIDEN_FAUCET_BATCH_SIZE=32
 ```
 
 ## Network Configurations
@@ -162,7 +170,8 @@ Enable OpenTelemetry for production monitoring:
 
 ```bash
 miden-faucet start \
-  --endpoint http://localhost:8080 \
+  --frontend-url http://localhost:8080 \
+  --api-url http://localhost:8000 \
   --node-url http://localhost:57291 \
   --account ./faucet.mac \
   --network localhost \

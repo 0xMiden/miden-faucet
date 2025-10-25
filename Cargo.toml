@@ -11,18 +11,20 @@ homepage     = "https://miden.xyz"
 license      = "MIT"
 readme       = "README.md"
 repository   = "https://github.com/0xMiden/miden-faucet"
-rust-version = "1.88"
-version      = "0.11.7"
+rust-version = "1.89"
+version      = "0.12.0"
 
 # Optimize the cryptography for faster tests involving account creation.
 [profile.test.package.miden-crypto]
 opt-level = 2
 
 [workspace.dependencies]
-miden-faucet-lib = { path = "crates/faucet", version = "0.11" }
+miden-faucet-lib       = { path = "crates/faucet", version = "0.12" }
+miden-pow-rate-limiter = { path = "crates/pow", version = "0.12" }
 
-# miden-client dependencies.
-miden-client = { version = "0.11" }
+# Miden dependencies.
+miden-client              = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
+miden-client-sqlite-store = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
@@ -32,6 +34,9 @@ opentelemetry         = { version = "0.30" }
 opentelemetry-otlp    = { default-features = false, features = ["grpc-tonic", "tls-roots", "trace"], version = "0.30" }
 opentelemetry_sdk     = { features = ["rt-tokio", "testing"], version = "0.30" }
 rand                  = { version = "0.9" }
+serde                 = { features = ["derive"], version = "1.0" }
+serde_json            = { version = "1.0" }
+sha2                  = { version = "0.10" }
 thiserror             = { default-features = false, version = "2.0" }
 tokio                 = { features = ["rt-multi-thread"], version = "1.46" }
 tokio-stream          = { version = "0.1" }

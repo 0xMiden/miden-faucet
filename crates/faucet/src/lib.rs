@@ -14,19 +14,20 @@ use miden_client::account::{
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
-use miden_client::crypto::RpoRandomCoin;
+use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
-use miden_client::note::{NoteError, create_p2id_note};
-use miden_client::rpc::Endpoint;
+use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
+use miden_client::rpc::{Endpoint, RpcError};
 use miden_client::transaction::{
     LocalTransactionProver,
-    OutputNote,
     TransactionId,
     TransactionProver,
     TransactionRequestBuilder,
+    TransactionScript,
 };
-use miden_client::utils::RwLock;
+use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
+use miden_client_sqlite_store::SqliteStore;
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
@@ -39,8 +40,8 @@ pub mod types;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
-const BATCH_SIZE: usize = 64;
 const COMPONENT: &str = "miden-faucet-client";
+const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -49,7 +50,7 @@ const COMPONENT: &str = "miden-faucet-client";
 ///
 /// Used as a type safety mechanism to avoid confusion with user account IDs, and allows us to
 /// implement traits.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct FaucetId {
     pub account_id: AccountId,
     pub network_id: NetworkId,
@@ -62,7 +63,7 @@ impl FaucetId {
 
     pub fn to_bech32(&self) -> String {
         let address = AccountIdAddress::new(self.account_id, AddressInterface::Unspecified);
-        Address::from(address).to_bech32(self.network_id)
+        Address::from(address).to_bech32(self.network_id.clone())
     }
 }
 
@@ -73,6 +74,7 @@ pub struct Faucet {
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<RwLock<AssetAmount>>,
     max_supply: AssetAmount,
+    script: TransactionScript,
 }
 
 impl Faucet {
@@ -106,12 +108,25 @@ impl Faucet {
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("failed to parse node url: {node_url}"))?;
 
+        let sqlite_store = SqliteStore::new(store_path).await?;
+
         let mut client = ClientBuilder::new()
-            .tonic_rpc_client(&endpoint, Some(timeout.as_millis() as u64))
+            .grpc_client(&endpoint, Some(timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
-            .sqlite_store(store_path.to_str().context("invalid store path")?)
+            .store(Arc::new(sqlite_store))
             .build()
             .await?;
+
+        // We sync to the chain tip before importing the account to avoid matching too many notes
+        // tags from the genesis block (in case this is a fresh store).
+        client
+            .sync_state()
+            .instrument(info_span!(target: COMPONENT, "faucet.load.sync_state"))
+            .await
+            .context("faucet failed to sync state")
+            .inspect_err(|err| {
+                error!(?err, "failed to sync state");
+            })?;
 
         info!("Fetching faucet state from node");
 
@@ -126,7 +141,7 @@ impl Faucet {
                 );
                 record.account().get_token_issuance()?
             },
-            Err(_) => match client.add_account(&account, account_file.account_seed, false).await {
+            Err(_) => match client.add_account(&account, false).await {
                 Ok(()) => {
                     info!(
                         commitment = %account.commitment(),
@@ -160,12 +175,15 @@ impl Faucet {
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
 
+        let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
+
         Ok(Self {
             id,
             client,
             tx_prover,
             issuance,
             max_supply,
+            script,
         })
     }
 
@@ -182,22 +200,50 @@ impl Faucet {
     pub async fn run(
         mut self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
+        batch_size: usize,
     ) -> anyhow::Result<()> {
         let mut buffer = Vec::new();
 
-        while requests.recv_many(&mut buffer, BATCH_SIZE).await > 0 {
-            self.mint(buffer.drain(..)).await?;
+        while requests.recv_many(&mut buffer, batch_size).await > 0 {
+            match self.mint(buffer.drain(..)).await {
+                Ok(()) => (),
+                Err(error) => {
+                    if let Some(ClientError::RpcError(RpcError::ConnectionError(_))) =
+                        error.downcast_ref::<ClientError>()
+                    {
+                        error!(?error, "connection error, discarding batch");
+                    } else {
+                        anyhow::bail!("failed to mint batch: {error}");
+                    }
+                },
+            }
         }
         info!(target = COMPONENT, "Request stream closed, shutting down minter");
 
         Ok(())
     }
 
+    /// Mints a batch of requests.
+    ///
+    /// The requests size is guaranteed to be smaller or equal to the batch size set in
+    /// `Faucet::run`.
     #[instrument(parent = None, target = COMPONENT, name = "faucet.mint", skip_all, fields(num_requests, tx_id), err)]
     async fn mint(
         &mut self,
         requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
     ) -> anyhow::Result<()> {
+        // We sync before creating the transaction to ensure the state is up to date. If the
+        // previous transaction somehow failed to be included in the block, our state would
+        // be out of sync.
+        self.client
+            .sync_state()
+            .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
+            .await
+            .context("faucet failed to sync state")
+            .inspect_err(|err| {
+                error!(?err, "failed to sync state");
+            })?;
+
         let span = tracing::Span::current();
 
         let (valid_requests, response_senders) = self.filter_requests_by_supply(requests);
@@ -208,17 +254,13 @@ impl Faucet {
         }
 
         // Build notes
-        let build_span = info_span!(target: COMPONENT, "faucet.mint.build_notes");
-        let notes = {
-            let _enter = build_span.enter();
-            let mut rng = {
-                let auth_seed: [u64; 4] = rng().random();
-                let rng_seed = Word::from(auth_seed.map(Felt::new));
-                RpoRandomCoin::new(rng_seed)
-            };
-            build_p2id_notes(self.id, &valid_requests, &mut rng)?
+        let mut rng = {
+            let auth_seed: [u64; 4] = rng().random();
+            let rng_seed = Word::from(auth_seed.map(Felt::new));
+            RpoRandomCoin::new(rng_seed)
         };
-        let note_ids = notes.iter().map(OutputNote::id).collect::<Vec<_>>();
+        let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
+        let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
 
         // Create the transaction
         let tx_id = self
@@ -230,25 +272,22 @@ impl Faucet {
             })?;
         span.record("tx_id", tx_id.to_string());
 
-        // Send the responses
-        let send_response_span = info_span!(target: COMPONENT, "faucet.mint.send_responses");
-        {
-            let _enter = send_response_span.enter();
-            for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
-                // Ignore errors if the request was dropped.
-                let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
-            }
-        }
-        // Sync state
-        self.client
-            .sync_state()
-            .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
-            .await
-            .context("faucet failed to sync state")
-            .inspect_err(|err| {
-                error!(?err, "failed to sync state");
-            })?;
+        Self::send_responses(response_senders, note_ids, tx_id);
         Ok(())
+    }
+
+    /// Sends a `MintResponse` with the transaction id and note id through each of the response
+    /// senders. Any errors while sending the response are ignored.
+    #[instrument(target = COMPONENT, name = "faucet.mint.send_responses", skip_all)]
+    fn send_responses(
+        response_senders: Vec<MintResponseSender>,
+        note_ids: Vec<NoteId>,
+        tx_id: TransactionId,
+    ) {
+        for (sender, note_id) in response_senders.into_iter().zip(note_ids) {
+            // Ignore errors if the request was dropped.
+            let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
+        }
     }
 
     /// Updates the issuance counter for the requested amounts and filters the requests that exceed
@@ -256,7 +295,8 @@ impl Faucet {
     /// error.
     ///
     /// Returns a tuple of valid requests and response senders.
-    pub fn filter_requests_by_supply(
+    #[instrument(target = COMPONENT, name = "faucet.mint.filter_requests_by_supply", skip_all)]
+    fn filter_requests_by_supply(
         &self,
         requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
     ) -> (Vec<MintRequest>, Vec<MintResponseSender>) {
@@ -292,15 +332,32 @@ impl Faucet {
     /// local miden-client. This results in submitting the transaction to the node and updating the
     /// local db to track the created notes.
     #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all)]
-    async fn create_transaction(
-        &mut self,
-        notes: Vec<OutputNote>,
-    ) -> Result<TransactionId, ClientError> {
+    async fn create_transaction(&mut self, notes: Vec<Note>) -> Result<TransactionId, ClientError> {
         // Build the transaction
-        let tx = TransactionRequestBuilder::new().own_output_notes(notes).build()?;
+        let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
+        let n = notes.len() as u64;
+        let mut note_data = vec![Felt::new(n)];
+        for note in notes {
+            // SAFETY: these are p2id notes with only one fungible asset
+            let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
+
+            note_data.extend(note.recipient().digest().iter());
+            note_data.push(Felt::from(note.metadata().note_type()));
+            note_data.push(Felt::from(note.metadata().tag()));
+            note_data.push(Felt::new(amount));
+        }
+        let note_data_commitment = Rpo256::hash_elements(&note_data);
+        let advice_map = [(note_data_commitment, note_data)];
+
+        let tx_request = TransactionRequestBuilder::new()
+            .custom_script(self.script.clone())
+            .extend_advice_map(advice_map)
+            .expected_output_recipients(expected_output_recipients)
+            .script_arg(note_data_commitment)
+            .build()?;
 
         // Execute the transaction
-        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx))
+        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx_request))
             .instrument(info_span!(target: COMPONENT, "faucet.mint.execute"))
             .await?;
         let tx_id = tx_result.executed_transaction().id();
@@ -325,7 +382,7 @@ impl Faucet {
 
     /// Returns the id of the faucet account.
     pub fn faucet_id(&self) -> FaucetId {
-        self.id
+        self.id.clone()
     }
 
     /// Returns the available supply of the faucet.
@@ -347,11 +404,12 @@ impl Faucet {
 /// # Errors
 ///
 /// Returns an error if creating any p2id note fails.
+#[instrument(target = COMPONENT, name = "faucet.mint.build_notes", skip_all)]
 fn build_p2id_notes(
-    source: FaucetId,
+    source: &FaucetId,
     requests: &[MintRequest],
     rng: &mut RpoRandomCoin,
-) -> Result<Vec<OutputNote>, NoteError> {
+) -> Result<Vec<Note>, NoteError> {
     // If building a note fails, we discard the whole batch. Should never happen, since account
     // ids are validated on the request level.
     let mut notes = Vec::new();
@@ -370,7 +428,121 @@ fn build_p2id_notes(
         .inspect_err(
             |err| error!(request.account_id=%request.account_id, ?err, "failed to build note"),
         )?;
-        notes.push(OutputNote::Full(note));
+        notes.push(note);
     }
     Ok(notes)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env::temp_dir;
+
+    use miden_client::ExecutionOptions;
+    use miden_client::account::component::AuthRpoFalcon512;
+    use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
+    use miden_client::asset::TokenSymbol;
+    use miden_client::auth::AuthSecretKey;
+    use miden_client::crypto::rpo_falcon512::SecretKey;
+    use miden_client::store::{NoteFilter, Store};
+    use miden_client::testing::MockChain;
+    use miden_client::testing::mock::{MockClient, MockRpcApi};
+    use miden_client_sqlite_store::SqliteStore;
+    use tokio::sync::{mpsc, oneshot};
+
+    use super::*;
+    use crate::types::NoteType;
+
+    #[tokio::test]
+    async fn batch_requests() {
+        let batch_size = 32;
+
+        let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1000);
+        let mut receivers = vec![];
+        for i in 0..batch_size {
+            let (sender, receiver) = oneshot::channel();
+            let mint_request = MintRequest {
+                account_id: AccountId::try_from(1).unwrap(),
+                note_type: if i % 2 == 0 {
+                    NoteType::Public
+                } else {
+                    NoteType::Private
+                },
+                asset_amount: AssetAmount::new(100_000_000).unwrap(),
+            };
+            tx_mint_requests.send((mint_request, sender)).await.unwrap();
+            receivers.push(receiver);
+        }
+
+        let store =
+            Arc::new(SqliteStore::new(temp_dir().join("batch_requests.sqlite3")).await.unwrap());
+        run_faucet(rx_mint_requests, batch_size, store.clone());
+
+        for receiver in receivers {
+            let response = receiver.await.unwrap().unwrap();
+            let notes = store.get_output_notes(NoteFilter::Unique(response.note_id)).await.unwrap();
+            assert_eq!(notes.len(), 1);
+        }
+    }
+
+    // TESTING HELPERS
+    // ---------------------------------------------------------------------------------------------
+
+    /// Runs a faucet on a separate thread using a mock client.
+    fn run_faucet(
+        rx_mint_requests: mpsc::Receiver<(MintRequest, MintResponseSender)>,
+        batch_size: usize,
+        store: Arc<dyn Store>,
+    ) {
+        let secret = SecretKey::new();
+        let symbol = TokenSymbol::new("TEST").unwrap();
+        let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
+        let account = AccountBuilder::new(rand::random())
+            .account_type(AccountType::FungibleFaucet)
+            .storage_mode(AccountStorageMode::Public)
+            .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
+            .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
+            .build()
+            .unwrap();
+        let key = AuthSecretKey::RpoFalcon512(secret);
+
+        std::thread::spawn(move || {
+            // Create a new runtime for this thread
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .enable_io()
+                .build()
+                .expect("Failed to build runtime");
+
+            // Run the faucet on this thread's runtime
+            rt.block_on(async {
+                let keystore =
+                    FilesystemKeyStore::<StdRng>::new(PathBuf::from("keystore")).unwrap();
+                keystore.add_key(&key).unwrap();
+
+                let mut client = MockClient::new(
+                    Arc::new(MockRpcApi::new(MockChain::new())),
+                    Box::new(RpoRandomCoin::new(Word::empty())),
+                    store,
+                    Some(Arc::new(keystore)),
+                    ExecutionOptions::new(None, 4096, false, false).unwrap(),
+                    None,
+                    None,
+                    None,
+                )
+                .await
+                .unwrap();
+                client.ensure_genesis_in_place().await.unwrap();
+                client.add_account(&account, false).await.unwrap();
+                let faucet = Faucet {
+                    id: FaucetId::new(account.id(), NetworkId::Testnet),
+                    client,
+                    tx_prover: Arc::new(LocalTransactionProver::default()),
+                    issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
+                    max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
+                    script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
+                };
+                faucet.run(rx_mint_requests, batch_size).await.unwrap();
+            });
+        });
+    }
 }

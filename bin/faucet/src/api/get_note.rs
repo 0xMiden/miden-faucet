@@ -11,7 +11,7 @@ use serde::Deserialize;
 use tracing::{Instrument, info_span, instrument};
 
 use crate::COMPONENT;
-use crate::api::Server;
+use crate::api::ApiServer;
 
 // ENDPOINT
 // ================================================================================================
@@ -23,7 +23,7 @@ use crate::api::Server;
     )
 )]
 pub async fn get_note(
-    State(server): State<Server>,
+    State(server): State<ApiServer>,
     Query(request): Query<RawNoteRequest>,
 ) -> Result<impl IntoResponse, NoteRequestError> {
     let request = request.validate()?;

@@ -1,4 +1,5 @@
 use anyhow::Context;
+use miden_node_proto::generated::primitives::MmrDelta;
 use miden_node_proto::generated::rpc::api_server;
 use miden_node_proto::generated::{self as proto};
 use miden_testing::MockChain;
@@ -17,13 +18,6 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc_store::NullifierList>,
     ) -> Result<Response<proto::rpc_store::CheckNullifiersResponse>, Status> {
-        unimplemented!();
-    }
-
-    async fn check_nullifiers_by_prefix(
-        &self,
-        _request: Request<proto::rpc_store::CheckNullifiersByPrefixRequest>,
-    ) -> Result<Response<proto::rpc_store::CheckNullifiersByPrefixResponse>, Status> {
         unimplemented!();
     }
 
@@ -47,10 +41,17 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc_store::SyncStateRequest>,
     ) -> Result<Response<proto::rpc_store::SyncStateResponse>, Status> {
+        let mock_chain = MockChain::new();
+        let block_header = proto::blockchain::BlockHeader::from(mock_chain.latest_block_header());
+        let mmr_delta = mock_chain.blockchain().peaks_at(block_header.block_num.into()).unwrap();
+
         Ok(Response::new(proto::rpc_store::SyncStateResponse {
             chain_tip: 0,
-            block_header: None,
-            mmr_delta: None,
+            block_header: Some(block_header),
+            mmr_delta: Some(MmrDelta {
+                forest: mmr_delta.forest().num_leaves() as u64,
+                data: mmr_delta.peaks().iter().map(proto::primitives::Digest::from).collect(),
+            }),
             accounts: vec![],
             transactions: vec![],
             notes: vec![],
@@ -101,13 +102,6 @@ impl api_server::Api for StubRpcApi {
         unimplemented!()
     }
 
-    async fn get_account_proofs(
-        &self,
-        _request: Request<proto::rpc_store::AccountProofsRequest>,
-    ) -> Result<Response<proto::rpc_store::AccountProofs>, Status> {
-        unimplemented!()
-    }
-
     async fn status(
         &self,
         _request: Request<()>,
@@ -127,6 +121,30 @@ impl api_server::Api for StubRpcApi {
         _request: Request<proto::rpc_store::SyncStorageMapsRequest>,
     ) -> Result<Response<proto::rpc_store::SyncStorageMapsResponse>, Status> {
         unimplemented!()
+    }
+
+    async fn get_account_proof(
+        &self,
+        _request: Request<proto::rpc_store::AccountProofRequest>,
+    ) -> Result<Response<proto::rpc_store::AccountProof>, Status> {
+        unimplemented!()
+    }
+
+    async fn get_note_script_by_root(
+        &self,
+        _request: Request<proto::note::NoteRoot>,
+    ) -> Result<Response<proto::rpc_store::MaybeNoteScript>, Status> {
+        unimplemented!()
+    }
+
+    async fn sync_nullifiers(
+        &self,
+        _request: Request<proto::rpc_store::SyncNullifiersRequest>,
+    ) -> Result<Response<proto::rpc_store::SyncNullifiersResponse>, Status> {
+        Ok(Response::new(proto::rpc_store::SyncNullifiersResponse {
+            nullifiers: vec![],
+            pagination_info: None,
+        }))
     }
 }
 

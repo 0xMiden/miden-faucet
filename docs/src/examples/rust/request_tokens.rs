@@ -1,6 +1,6 @@
 use base64::Engine;
 use base64::engine::general_purpose;
-use sha3::{Digest, Sha3_256};
+use sha2::{Digest, Sha256};
 
 async fn request_challenge(
     base_url: &str,
@@ -15,10 +15,12 @@ async fn request_challenge(
 
 fn solve_challenge(challenge: &str, target: u64) -> u64 {
     let mut found_nonce = None;
+    let challenge_bytes = hex::decode(challenge).unwrap();
+
     for nonce in 0..u64::MAX {
-        // Create SHA3-256 hash
-        let mut hasher = Sha3_256::new();
-        hasher.update(challenge.as_bytes());
+        // Create SHA-256 hash
+        let mut hasher = Sha256::new();
+        hasher.update(challenge_bytes);
         hasher.update(nonce.to_be_bytes());
         let hash = hasher.finalize();
 
@@ -74,11 +76,11 @@ async fn request_note(base_url: &str, note_id: &str) -> anyhow::Result<Vec<u8>> 
 
 #[tokio::main]
 async fn main() {
-    // This example assumes you have the faucet running on http://localhost:8080
-    let account_address = "mlcl1qq8mcy8pdvl0cgqfkjzf8efjjsnlzf7q";
+    // This example assumes you have the faucet running on http://localhost:8000
+    let account_address = "0xca8203e8e58cf72049b061afca78ce";
     let asset_amount = 100;
     let is_private_note = true;
-    let url = "http://localhost:8080";
+    let url = "http://localhost:8000";
 
     // Step 1: request challenge
     let challenge_response = request_challenge(url, account_address).await.unwrap();
@@ -96,7 +98,6 @@ async fn main() {
     println!("Token minted successfully:");
     println!("* Transaction ID: {}", result["tx_id"]);
     println!("* Note ID: {}", result["note_id"]);
-    println!("* Explorer URL: {:?}", result["explorer_url"]);
 
     // Step 4: request note - only necessary for private notes
     let note_data = request_note(url, result["note_id"].as_str().unwrap()).await.unwrap();
