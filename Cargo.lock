@@ -1858,8 +1858,10 @@ name = "miden-faucet-lib"
 version = "0.12.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "miden-client",
  "miden-client-sqlite-store",
+ "miden-objects",
  "rand",
  "thiserror 2.0.17",
  "tokio",
