@@ -562,7 +562,7 @@ mod tests {
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
-            .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
+            .with_auth_component(AuthRpoFalcon512::new(secret.public_key().to_commitment().into()))
             .build()
             .unwrap();
         let key = AuthSecretKey::RpoFalcon512(secret);

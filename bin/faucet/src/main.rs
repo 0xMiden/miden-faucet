@@ -365,12 +365,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let max_supply = Felt::try_from(max_supply)
                 .map_err(anyhow::Error::msg)
                 .context("max supply value is greater than or equal to the field modulus")?;
+            let auth_component = AuthRpoFalcon512::new(secret.public_key().to_commitment().into());
 
             let account = AccountBuilder::new(rng.random())
                 .account_type(AccountType::FungibleFaucet)
                 .storage_mode(AccountStorageMode::Public)
                 .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
-                .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
+                .with_auth_component(auth_component)
                 .build()
                 .context("failed to create basic fungible faucet account")?;
 
