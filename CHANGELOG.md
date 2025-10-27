@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.8 (TBD)
+
+- Sync state before creating transactions to avoid desync errors (#[132](https://github.com/0xMiden/miden-faucet/pull/132)).
+
 ## 0.11.7 (2025-10-15)
 
 - Patched miden-client to 0.11.10 ([#121](https://github.com/0xMiden/miden-faucet/pull/121)).

@@ -198,6 +198,18 @@ impl Faucet {
         &mut self,
         requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
     ) -> anyhow::Result<()> {
+        // We sync before creating the transaction to ensure the state is up to date. If the
+        // previous transaction somehow failed to be included in the block, our state would
+        // be out of sync.
+        self.client
+            .sync_state()
+            .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
+            .await
+            .context("faucet failed to sync state")
+            .inspect_err(|err| {
+                error!(?err, "failed to sync state");
+            })?;
+
         let span = tracing::Span::current();
 
         let (valid_requests, response_senders) = self.filter_requests_by_supply(requests);
@@ -239,15 +251,6 @@ impl Faucet {
                 let _ = sender.send(Ok(MintResponse { tx_id, note_id }));
             }
         }
-        // Sync state
-        self.client
-            .sync_state()
-            .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
-            .await
-            .context("faucet failed to sync state")
-            .inspect_err(|err| {
-                error!(?err, "failed to sync state");
-            })?;
         Ok(())
     }
 

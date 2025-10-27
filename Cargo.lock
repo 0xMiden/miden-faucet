@@ -1779,7 +1779,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet"
-version = "0.11.7"
+version = "0.11.8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1818,7 +1818,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-lib"
-version = "0.11.7"
+version = "0.11.8"
 dependencies = [
  "anyhow",
  "miden-client",
