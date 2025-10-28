@@ -32,7 +32,9 @@ end
 #! - RECIPIENT is the recipient of the asset, i.e.,
 #!   hash(hash(hash(serial_num, [0; 4]), script_root), input_commitment).
 begin
-    # Set transaction expiration delta
+    # Set transaction expiration delta to 10 blocks
+    # This ensures the transaction expires if not included within 10 blocks
+    # after the reference block, preventing stale transactions from being processed
     push.EXPIRATION_DELTA
     exec.::miden::tx::update_expiration_block_delta
     
