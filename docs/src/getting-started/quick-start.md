@@ -21,12 +21,12 @@ miden-faucet create-faucet-account \
 
 ## Step 2: Start the Faucet
 
-Next, start the faucet by specifying the addresses where the API and the frontend will be served, the address of the Miden node, and the account file to use for distributing tokens. The backend server will handle incoming token requests and manage the minting process.
+Next, start the faucet by specifying the addresses where the API and the frontend will be served, the address of the Miden node, and the account file to use for distributing tokens. The API server will handle incoming token requests and manage the minting process.
 
 ```bash
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --backend-url http://localhost:8000 \
+  --api-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
   --account ./faucet.mac
 ```
@@ -59,7 +59,7 @@ If you have a Miden Node running locally, you can run the faucet against that no
 ```bash
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --backend-url http://localhost:8000 \
+  --api-url http://localhost:8000 \
   --node-url http://localhost:57291 \
   --account ./faucet.mac \
   --network localhost
@@ -72,7 +72,7 @@ Connect to the node deployed in Miden Devnet.
 ```bash
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --backend-url http://localhost:8000 \
+  --api-url http://localhost:8000 \
   --node-url https://rpc.devnet.miden.io \
   --account ./faucet.mac \
   --network devnet
@@ -85,20 +85,20 @@ Connect to the node deployed in Miden Testnet.
 ```bash
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --backend-url http://localhost:8000 \
+  --api-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
   --account ./faucet.mac \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ``` 
 
-### Backend Only (No Frontend)
+### Faucet API Only (No Frontend)
 
 If you only need the API and don't want to serve the web interface:
 
 ```bash
 miden-faucet start \
-  --backend-url http://localhost:8000 \
+  --api-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
   --account ./faucet.mac
 ```

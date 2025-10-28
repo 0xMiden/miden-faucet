@@ -12,6 +12,7 @@
 - Separated frontend and backend servers ([#119](https://github.com/0xMiden/miden-faucet/pull/119)).
 - Redesigned the frontend ([#110](https://github.com/0xMiden/miden-faucet/pull/110)).
 - Frontend now awaits for the transaction to be committed ([#127](https://github.com/0xMiden/miden-faucet/pull/127)).
+- Added 10-block expiration delta to faucet minting transactions ([#136](https://github.com/0xMiden/miden-faucet/pull/136)).
 
 ## 0.11.7 (2025-10-15)
 

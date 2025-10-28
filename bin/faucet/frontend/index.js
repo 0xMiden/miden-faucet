@@ -36,7 +36,7 @@ class MidenFaucet {
 
     async init() {
         let config = await this.getConfigValues();
-        this.backendUrl = config.backend_url;
+        this.apiUrl = config.api_url;
         this.rpcClient = new RpcClient(new Endpoint(config.node_url));
         this.startMetadataPolling();
     }
@@ -119,7 +119,7 @@ class MidenFaucet {
     }
 
     async fetchMetadata() {
-        fetch(this.backendUrl + '/get_metadata')
+        fetch(this.apiUrl + '/get_metadata')
             .then(response => response.json())
             .then(data => {
                 this.metadata = data;
@@ -151,7 +151,7 @@ class MidenFaucet {
     async getPowChallenge(recipient, amount) {
         let powResponse;
         try {
-            powResponse = await fetch(this.backendUrl + '/pow?' + new URLSearchParams({
+            powResponse = await fetch(this.apiUrl + '/pow?' + new URLSearchParams({
                 amount: amount,
                 account_id: recipient
             }), {
@@ -179,7 +179,7 @@ class MidenFaucet {
         };
         let response;
         try {
-            response = await fetch(this.backendUrl + '/get_tokens?' + new URLSearchParams(params), {
+            response = await fetch(this.apiUrl + '/get_tokens?' + new URLSearchParams(params), {
                 method: "GET"
             });
         } catch (error) {
@@ -199,7 +199,7 @@ class MidenFaucet {
         this.hidePrivateModalError();
         let response;
         try {
-            response = await fetch(this.backendUrl + '/get_note?' + new URLSearchParams({
+            response = await fetch(this.apiUrl + '/get_note?' + new URLSearchParams({
                 note_id: noteId
             }));
         } catch (error) {

@@ -24,7 +24,7 @@ The Miden Faucet can be configured using:
 
 ```bash
 miden-faucet start \
-  --backend-url <URL> \
+  --api-url <URL> \
   --frontend-url <URL> \
   --node-url <URL> \
   --account <PATH> \
@@ -35,7 +35,7 @@ miden-faucet start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--backend-url` | URL to serve the Backend API | - | Yes |
+| `--api-url` | URL to serve the faucet API | - | Yes |
 | `--frontend-url` | URL to serve the Frontend API | - | No |
 | `--node-url` | Miden node RPC endpoint | - | Yes |
 | `--account` | Path to faucet account file | - | Yes |
@@ -72,7 +72,7 @@ All configuration options can be set using environment variables:
 ```bash
 # Basic configuration
 export MIDEN_FAUCET_FRONTEND_URL=http://localhost:8080
-export MIDEN_FAUCET_BACKEND_URL=http://localhost:8000
+export MIDEN_FAUCET_API_URL=http://localhost:8000
 export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io
 export MIDEN_FAUCET_ACCOUNT_PATH=./faucet.mac
 export MIDEN_FAUCET_NETWORK=testnet
@@ -171,7 +171,7 @@ Enable OpenTelemetry for production monitoring:
 ```bash
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --backend-url http://localhost:8000 \
+  --api-url http://localhost:8000 \
   --node-url http://localhost:57291 \
   --account ./faucet.mac \
   --network localhost \
