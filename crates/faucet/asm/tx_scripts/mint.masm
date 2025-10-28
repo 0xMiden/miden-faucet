@@ -1,5 +1,6 @@
 const.AUX=0
 const.EXECUTION_HINT=1
+const.EXPIRATION_DELTA=10
 
 #! Returns a boolean indicating if the notes counter `i` has reached `n`
 #!
@@ -31,6 +32,11 @@ end
 #! - RECIPIENT is the recipient of the asset, i.e.,
 #!   hash(hash(hash(serial_num, [0; 4]), script_root), input_commitment).
 begin
+    # Set the transaction expiration delta (10 blocks)
+    push.EXPIRATION_DELTA
+    exec.::miden::tx::update_expiration_block_delta
+    # OS => []
+
     adv.push_mapval dropw
     # OS => []
     # AS => [n, RECIPIENT_1, note_type_1, tag_1, amount_1, ...]
