@@ -22,11 +22,11 @@ use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
+use crate::api::get_metadata::get_metadata;
+use crate::api::get_note::get_note;
+use crate::api::get_pow::get_pow;
+use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::api_key::ApiKey;
-use crate::backend::get_metadata::get_metadata;
-use crate::backend::get_note::get_note;
-use crate::backend::get_pow::get_pow;
-use crate::backend::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 
 mod get_metadata;
 mod get_note;
@@ -38,9 +38,9 @@ pub use get_metadata::Metadata;
 // FAUCET STATE
 // ================================================================================================
 
-/// Serves the faucet's backend API that handles token requests.
+/// Serves the faucet's API server that handles token requests.
 #[derive(Clone)]
-pub struct BackendServer {
+pub struct ApiServer {
     mint_state: GetTokensState,
     metadata: Metadata,
     rate_limiter: PoWRateLimiter,
@@ -48,7 +48,7 @@ pub struct BackendServer {
     store: Arc<dyn Store>,
 }
 
-impl BackendServer {
+impl ApiServer {
     pub fn new(
         metadata: Metadata,
         max_claimable_amount: AssetAmount,
@@ -67,7 +67,7 @@ impl BackendServer {
 
         let rate_limiter = PoWRateLimiter::new(secret_bytes, rate_limiter_config);
 
-        BackendServer {
+        ApiServer {
             mint_state,
             metadata,
             rate_limiter,
@@ -76,7 +76,7 @@ impl BackendServer {
         }
     }
 
-    /// Serves the backend API endpoints.
+    /// Serves the faucet API endpoints.
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
             .route("/get_metadata", get(get_metadata))
@@ -105,7 +105,7 @@ impl BackendServer {
             .await
             .with_context(|| format!("failed to bind TCP listener on {url}"))?;
 
-        tracing::info!(target: COMPONENT, address = %url, "Backend server started");
+        tracing::info!(target: COMPONENT, address = %url, "API server started");
 
         axum::serve(listener, app).await.map_err(Into::into)
     }
@@ -153,20 +153,20 @@ impl BackendServer {
     }
 }
 
-impl FromRef<BackendServer> for Metadata {
-    fn from_ref(input: &BackendServer) -> Self {
+impl FromRef<ApiServer> for Metadata {
+    fn from_ref(input: &ApiServer) -> Self {
         input.metadata.clone()
     }
 }
 
-impl FromRef<BackendServer> for GetTokensState {
-    fn from_ref(input: &BackendServer) -> Self {
+impl FromRef<ApiServer> for GetTokensState {
+    fn from_ref(input: &ApiServer) -> Self {
         input.mint_state.clone()
     }
 }
 
-impl FromRef<BackendServer> for PoWRateLimiter {
-    fn from_ref(input: &BackendServer) -> Self {
+impl FromRef<ApiServer> for PoWRateLimiter {
+    fn from_ref(input: &ApiServer) -> Self {
         // Clone is cheap: only copies a 32-byte array and increments Arc reference counters.
         input.rate_limiter.clone()
     }

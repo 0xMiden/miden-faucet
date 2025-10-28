@@ -10,7 +10,7 @@ export class MidenFaucetApp {
         this.ui = new UIController();
         this.tokenAmountOptions = [100, 500, 1000];
         this.metadataInitialized = false;
-        this.backendUrl = null;
+        this.apiUrl = null;
         this.rpcClient = null;
         this.baseAmount = null;
         this.powLoadDifficulty = null;
@@ -29,7 +29,7 @@ export class MidenFaucetApp {
     async init() {
         try {
             let config = await getConfig();
-            this.backendUrl = config.backend_url;
+            this.apiUrl = config.api_url;
             this.rpcClient = new RpcClient(new Endpoint(config.node_url));
             this.setupEventListeners();
             this.startMetadataPolling();
@@ -82,13 +82,13 @@ export class MidenFaucetApp {
             this.ui.updateMintingTitle('PREPARING THE REQUEST');
             this.ui.updateProgressBar(0);
 
-            const powData = await getPowChallenge(this.backendUrl, recipient, amount);
+            const powData = await getPowChallenge(this.apiUrl, recipient, amount);
             const nonce = await this.findValidNonce(powData.challenge, powData.target);
 
             this.ui.updateMintingTitle('MINTING TOKENS');
             this.ui.updateProgressBar(33);
 
-            const getTokensResponse = await getTokens(this.backendUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
+            const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
 
             this.ui.updateMintingTitle('CONFIRMING TRANSACTION');
             this.ui.updateProgressBar(66);
@@ -124,7 +124,7 @@ export class MidenFaucetApp {
 
     async fetchMetadata() {
         try {
-            const data = await getMetadata(this.backendUrl);
+            const data = await getMetadata(this.apiUrl);
 
             this.ui.setIssuanceAndSupply(data.issuance, data.max_supply, data.decimals);
             this.powLoadDifficulty = data.pow_load_difficulty;
@@ -174,7 +174,7 @@ export class MidenFaucetApp {
     async downloadNote(noteId) {
         this.ui.hidePrivateModalError();
         try {
-            const data = await get_note(this.backendUrl, noteId);
+            const data = await get_note(this.apiUrl, noteId);
 
             // Decode base64
             const binaryString = atob(data.data_base64);

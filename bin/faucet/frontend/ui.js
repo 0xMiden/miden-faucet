@@ -89,7 +89,7 @@ export class UIController {
             const explorerButton = document.getElementById('explorer-button');
             if (this.explorerUrl) {
                 explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(`${this.explorerUrl}tx/${txId}`, '_blank');
+                explorerButton.onclick = () => window.open(`${this.explorerUrl}/tx/${txId}`, '_blank');
             } else {
                 explorerButton.style.display = 'none';
             }
