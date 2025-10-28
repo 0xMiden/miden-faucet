@@ -7,7 +7,7 @@ use miden_client::rpc::domain::note::CommittedNote;
 use miden_client::store::{InputNoteRecord, NoteFilter, Store};
 use miden_client::sync::{NoteUpdateAction, OnNoteReceived};
 
-/// Provides functionality for testing whether a note is relevant to the faucet.
+/// Provides functionality for checking whether a note is relevant to the faucet.
 ///
 /// Relevance is based on whether the note is a tracked output note.
 pub struct NoteScreener {

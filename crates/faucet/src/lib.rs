@@ -18,7 +18,7 @@ use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
 use miden_client::rpc::{Endpoint, RpcError};
-use miden_client::sync::{OnNoteReceived, SyncSummary};
+use miden_client::sync::SyncSummary;
 use miden_client::transaction::{
     LocalTransactionProver,
     TransactionId,
@@ -74,7 +74,7 @@ impl FaucetId {
 pub struct Faucet {
     id: FaucetId,
     client: Client<FilesystemKeyStore<StdRng>>,
-    note_screener: Arc<dyn OnNoteReceived>,
+    note_screener: Arc<NoteScreener>,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<RwLock<AssetAmount>>,
     max_supply: AssetAmount,
