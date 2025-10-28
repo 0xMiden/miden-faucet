@@ -19,7 +19,7 @@ workspace = true
 async-trait               = { version = "0.1" }
 miden-client              = { features = ["tonic"], workspace = true }
 miden-client-sqlite-store = { workspace = true }
-miden-objects             = { branch = "next", git = "https://github.com/0xMiden/miden-base" }
+
 # External dependencies.
 anyhow    = { workspace = true }
 rand      = { features = ["thread_rng"], workspace = true }
