@@ -28,17 +28,19 @@ impl OnNoteReceived for NoteScreener {
         &self,
         committed_note: CommittedNote,
         _public_note: Option<InputNoteRecord>,
-    ) -> Result<NoteUpdateAction, ClientError> {
+    ) -> Result<(NoteUpdateAction, bool), ClientError> {
         let note_id = *committed_note.note_id();
 
         let output_note_present =
             !self.store.get_output_notes(NoteFilter::Unique(note_id)).await?.is_empty();
 
-        if output_note_present {
+        let action = if output_note_present {
             // The note is being tracked by the client so it is relevant
-            Ok(NoteUpdateAction::Commit(committed_note))
+            NoteUpdateAction::Commit(committed_note)
         } else {
-            Ok(NoteUpdateAction::Discard)
-        }
+            NoteUpdateAction::Discard
+        };
+
+        Ok((action, false))
     }
 }
