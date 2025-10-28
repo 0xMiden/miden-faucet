@@ -5,12 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{
-    AccountFile,
-    AccountId,
-    AccountIdAddress,
-    Address,
-    AddressInterface,
-    NetworkId,
+    AccountFile, AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
@@ -20,10 +15,7 @@ use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
 use miden_client::rpc::{Endpoint, RpcError};
 use miden_client::sync::{OnNoteReceived, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequestBuilder,
     TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
@@ -124,7 +116,14 @@ impl Faucet {
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
         let note_screener = Arc::new(NoteScreener::new(sqlite_store.clone()));
-        client.sync_state_custom(note_screener.clone()).await?;
+        client
+            .sync_state_custom(note_screener.clone())
+            .instrument(info_span!(target: COMPONENT, "faucet.load.sync_state"))
+            .await
+            .context("failed to sync state")
+            .inspect_err(|err| {
+                error!(?err, "failed to sync state");
+            })?;
 
         let issuance = match client.import_account_by_id(account.id()).await {
             Ok(()) => {
@@ -236,7 +235,7 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        self.sync_state().await?;
+        self.sync_state().await.context("failed to sync state")?;
 
         let span = tracing::Span::current();
 
