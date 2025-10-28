@@ -6,12 +6,7 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{
-    AccountFile,
-    AccountId,
-    AccountIdAddress,
-    Address,
-    AddressInterface,
-    NetworkId,
+    AccountFile, AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
@@ -22,10 +17,7 @@ use miden_client::rpc::{Endpoint, GrpcClient, NodeRpcClient, RpcError};
 use miden_client::store::{NoteFilter, Store, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequestBuilder,
     TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
@@ -126,6 +118,8 @@ impl Faucet {
             .await?;
 
         let grpc_client = Arc::new(GrpcClient::new(&endpoint, timeout.as_millis() as u64));
+
+        client.ensure_genesis_in_place().await?;
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
         Self::sync_state(sqlite_store.clone(), grpc_client.clone()).await?;
@@ -163,8 +157,6 @@ impl Faucet {
                 Err(err) => anyhow::bail!("failed to add account from file: {err}"),
             },
         };
-
-        client.ensure_genesis_in_place().await?;
 
         let faucet = BasicFungibleFaucet::try_from(&account)?;
         let tx_prover: Arc<dyn TransactionProver> = match remote_tx_prover_url {
@@ -208,7 +200,8 @@ impl Faucet {
 
         let note_tags: BTreeSet<NoteTag> = store.get_unique_note_tags().await?;
 
-        let unspent_input_notes = store.get_input_notes(NoteFilter::Unspent).await?;
+        let unspent_input_notes = vec![]; // Faucet will not consume input notes
+        // TODO: output notes?
         let unspent_output_notes = store.get_output_notes(NoteFilter::Unspent).await?;
 
         let uncommitted_transactions =
@@ -217,19 +210,22 @@ impl Faucet {
         // Build current partial MMR
         let current_partial_mmr = store.get_current_partial_mmr().await?;
 
-        let all_block_numbers = (0..current_partial_mmr.forest().num_leaves())
-            .filter_map(|block_num| {
-                current_partial_mmr.is_tracked(block_num).then_some(BlockNumber::from(
-                    u32::try_from(block_num).expect("block number should be less than u32::MAX"),
-                ))
-            })
-            .collect::<BTreeSet<_>>();
-
-        let block_headers = store
-            .get_block_headers(&all_block_numbers)
-            .await?
-            .into_iter()
-            .map(|(header, _has_notes)| header);
+        // TODO: will be removed
+        let block_headers = {
+            let all_block_numbers = (0..current_partial_mmr.forest().num_leaves())
+                .filter_map(|block_num| {
+                    current_partial_mmr.is_tracked(block_num).then_some(BlockNumber::from(
+                        u32::try_from(block_num)
+                            .expect("block number should be less than u32::MAX"),
+                    ))
+                })
+                .collect::<BTreeSet<_>>();
+            store
+                .get_block_headers(&all_block_numbers)
+                .await?
+                .into_iter()
+                .map(|(header, _has_notes)| header)
+        };
 
         // Get the sync update from the network
         let state_sync_update = state_sync
@@ -242,8 +238,8 @@ impl Faucet {
                 uncommitted_transactions,
             )
             .await?;
-
         let sync_summary: SyncSummary = (&state_sync_update).into();
+        info!("Applying changes to the store.");
 
         // Apply received and computed updates to the store
         store
@@ -253,6 +249,7 @@ impl Faucet {
 
         // Remove irrelevant block headers
         store.prune_irrelevant_blocks().await?;
+
         Ok(sync_summary)
     }
 
