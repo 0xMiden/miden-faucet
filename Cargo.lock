@@ -1931,7 +1931,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-custom-sync#f437016e4cece8e7c79d56f809eaefda84196b70"
+source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-custom-sync#7827cf99428fc612074fa8c1af0f60d4e1dde3e5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1965,14 +1965,13 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-custom-sync#f437016e4cece8e7c79d56f809eaefda84196b70"
+source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-custom-sync#7827cf99428fc612074fa8c1af0f60d4e1dde3e5"
 dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
  "deadpool",
  "deadpool-sync",
- "hex",
  "miden-client",
  "miden-objects",
  "rusqlite",
