@@ -130,7 +130,6 @@ impl Faucet {
             .inspect_err(|err| {
                 error!(?err, "failed to sync state");
             })?;
-        client.ensure_genesis_in_place().await?;
 
         client.add_account(&account, false).await?;
         client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
@@ -150,7 +149,7 @@ impl Faucet {
     #[instrument(target = COMPONENT, name = "faucet.load", fields(account_id), skip_all, err)]
     pub async fn load(config: &FaucetConfig) -> anyhow::Result<Self> {
         let span = tracing::Span::current();
-        let client = ClientBuilder::new()
+        let mut client = ClientBuilder::new()
             .grpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .filesystem_keystore(KEYSTORE_PATH)
             .store(Arc::new(SqliteStore::new(config.store_path.clone()).await?))
@@ -163,6 +162,12 @@ impl Faucet {
             .await?
             .context("no default account id found")?;
         span.record("account_id", account_id.to_hex());
+
+        // Try to update the account state with the node.
+        let _ = client.import_account_by_id(account_id).await.inspect(|_| {
+            info!("Received faucet account state from the node");
+        });
+
         let record = client.get_account(account_id).await?.context("no account found")?;
         let account = record.account();
 
