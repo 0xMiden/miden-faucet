@@ -30,6 +30,7 @@ pub async fn serve_frontend(url: Url, api_url: Url, node_url: Url) -> anyhow::Re
         .route("/wallet-icon.png", get(get_wallet_icon))
         .route("/favicon.ico", get(get_favicon))
         .route("/config.json", get(config_json))
+        // TODO: this is a hacky way of making the web-client work. Ideally the wasm file should be included in the bundle.
         .route("/assets/miden_client_web.wasm", get(get_miden_client_web_wasm))
         .fallback(get(get_not_found_html));
 
