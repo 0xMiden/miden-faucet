@@ -13,8 +13,10 @@ class MidenFaucet {
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountOptions = [100, 500, 1000];
-        this.explorer_url = null;
+        this.tokenAmountHint = document.getElementById('token-amount-hint');
+        this.explorerUrl = null;
         this.metadataInitialized = false;
+        this.metadata = null;
 
         // Check if Web Crypto API is available
         if (!window.crypto || !window.crypto.subtle) {
@@ -24,6 +26,7 @@ class MidenFaucet {
         this.privateButton.addEventListener('click', () => this.handleSendTokens(true));
         this.publicButton.addEventListener('click', () => this.handleSendTokens(false));
         this.walletConnectButton.addEventListener('click', () => this.handleWalletConnect());
+        this.tokenSelect.addEventListener('change', () => this.updateTokenHint());
 
         this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
 
@@ -31,17 +34,17 @@ class MidenFaucet {
     }
 
     async init() {
-        this.backendUrl = await this.getBackendUrl();
+        this.apiUrl = await this.getApiUrl();
         this.startMetadataPolling();
     }
 
-    async getBackendUrl() {
+    async getApiUrl() {
         const response = await fetch('/config.json');
         if (!response.ok) {
             throw new Error(`Failed to fetch config.json file: ${response.status}`);
         }
         const config = JSON.parse(await response.json());
-        return config.backend_url;
+        return config.api_url;
     }
 
     async handleWalletConnect() {
@@ -110,21 +113,24 @@ class MidenFaucet {
     }
 
     async fetchMetadata() {
-        fetch(this.backendUrl + 'get_metadata')
+        fetch(this.apiUrl + 'get_metadata')
             .then(response => response.json())
             .then(data => {
-                if (!this.metadataInitialized) {
-                    this.faucetAddress.textContent = data.id;
-                    this.explorer_url = data.explorer_url;
+                this.metadata = data;
+                this.faucetAddress.textContent = data.id;
+                this.explorerUrl = data.explorer_url;
 
+                if (!this.metadataInitialized) {
+                    this.metadataInitialized = true;
                     this.tokenSelect.innerHTML = '';
                     for (const amount of this.tokenAmountOptions) {
                         const option = document.createElement('option');
-                        option.value = Utils.tokensToBaseUnits(amount, data.decimals);
+                        const baseUnits = Utils.tokensToBaseUnits(amount, data.decimals);
+                        option.value = baseUnits;
                         option.textContent = amount;
                         this.tokenSelect.appendChild(option);
                     }
-                    this.metadataInitialized = true;
+                    this.updateTokenHint();
                 }
 
                 this.issuance.textContent = Utils.baseUnitsToTokens(data.issuance, data.decimals);
@@ -139,7 +145,7 @@ class MidenFaucet {
     async getPowChallenge(recipient, amount) {
         let powResponse;
         try {
-            powResponse = await fetch(this.backendUrl + 'pow?' + new URLSearchParams({
+            powResponse = await fetch(this.apiUrl + 'pow?' + new URLSearchParams({
                 amount: amount,
                 account_id: recipient
             }), {
@@ -169,7 +175,7 @@ class MidenFaucet {
         };
         let response;
         try {
-            response = await fetch(this.backendUrl + 'get_tokens?' + new URLSearchParams(params), {
+            response = await fetch(this.apiUrl + 'get_tokens?' + new URLSearchParams(params), {
                 method: "GET"
             });
         } catch (error) {
@@ -194,7 +200,7 @@ class MidenFaucet {
         this.hidePrivateModalError();
         let response;
         try {
-            response = await fetch(this.backendUrl + 'get_note?' + new URLSearchParams({
+            response = await fetch(this.apiUrl + 'get_note?' + new URLSearchParams({
                 note_id: noteId
             }));
         } catch (error) {
@@ -287,9 +293,9 @@ class MidenFaucet {
             completedPublicModal.classList.add('active');
 
             const explorerButton = document.getElementById('explorer-button');
-            if (this.explorer_url) {
+            if (this.explorerUrl) {
                 explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(this.explorer_url + 'tx/' + mintingData.tx_id, '_blank');
+                explorerButton.onclick = () => window.open(this.explorerUrl + 'tx/' + mintingData.tx_id, '_blank');
             } else {
                 explorerButton.style.display = 'none';
             }
@@ -366,6 +372,31 @@ class MidenFaucet {
         this.updateProgressBar(0);
         const progressBarTotal = document.getElementById('progress-bar-total');
         progressBarTotal.classList.remove('active');
+    }
+
+    updateTokenHint() {
+        if (!this.metadata) return;
+
+        const requestComplexity =
+            Math.floor(this.tokenSelect.value / Number(this.metadata.base_amount)) + 1;
+        const difficulty = requestComplexity * Number(this.metadata.pow_load_difficulty);
+        const difficultyBits = Math.log2(difficulty);
+
+        let estimatedTime;
+        if (difficultyBits <= 18) {
+            estimatedTime = `<5s`;
+        } else if (difficultyBits <= 19) {
+            estimatedTime = `5-15s`;
+        } else if (difficultyBits <= 20) {
+            estimatedTime = `15-30s`;
+        } else if (difficultyBits <= 20.5) {
+            estimatedTime = `30s-1m`;
+        } else if (difficultyBits <= 21) {
+            estimatedTime = `1-3m`;
+        } else {
+            estimatedTime = `3m+`;
+        }
+        this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
     }
 }
 
@@ -450,5 +481,5 @@ const Utils = {
 
     tokensToBaseUnits: (tokens, decimals) => {
         return tokens * (10 ** decimals);
-    }
+    },
 };

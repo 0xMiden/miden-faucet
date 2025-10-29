@@ -120,6 +120,14 @@ body {
     border-color: #ff5500;
 }
 
+.token-amount-hint {
+    font-size: 11px;
+    font-style: italic;
+    font-weight: 400;
+    margin-top: 8px;
+    color: rgba(0, 0, 0, 0.4);
+}
+
 .button-group {
     margin-top: 34px;
     display: flex;
@@ -415,7 +423,6 @@ body {
 
 .error-message {
     background-color: #f8d7da;
-    position: absolute;
     max-width: 400px;
     color: #721c24;
     padding: 12px 16px;

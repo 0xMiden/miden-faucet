@@ -1,5 +1,5 @@
+mod api;
 mod api_key;
-mod backend;
 mod frontend;
 mod logging;
 mod network;
@@ -37,8 +37,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use url::Url;
 
+use crate::api::{ApiServer, Metadata};
 use crate::api_key::ApiKey;
-use crate::backend::{BackendServer, Metadata};
 use crate::frontend::serve_frontend;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
@@ -49,7 +49,7 @@ use crate::network::FaucetNetwork;
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
 
-const ENV_BACKEND_URL: &str = "MIDEN_FAUCET_BACKEND_URL";
+const ENV_API_URL: &str = "MIDEN_FAUCET_API_URL";
 const ENV_FRONTEND_URL: &str = "MIDEN_FAUCET_FRONTEND_URL";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";
@@ -123,9 +123,9 @@ pub enum Command {
         #[clap(flatten)]
         config: ClientConfig,
 
-        /// Backend API URL, in the format `<ip>:<port>`.
-        #[arg(long = "backend-url", value_name = "URL", env = ENV_BACKEND_URL)]
-        backend_url: Url,
+        /// API URL, in the format `<ip>:<port>`.
+        #[arg(long = "api-url", value_name = "URL", env = ENV_API_URL)]
+        api_url: Url,
 
         /// Frontend API URL, in the format `<ip>:<port>`. If not set, the frontend will not be
         /// served.
@@ -318,7 +318,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     network,
                     store_path,
                 },
-            backend_url,
+            api_url,
             frontend_url,
             max_claimable_amount,
             pow_secret,
@@ -377,7 +377,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.
             let tx_mint_requests_clone = tx_mint_requests.clone();
-            let backend_server = BackendServer::new(
+            let api_server = ApiServer::new(
                 metadata,
                 max_claimable_amount,
                 tx_mint_requests_clone,
@@ -389,18 +389,18 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             // Use select to concurrently:
             // - Run and wait for the faucet (on current thread)
-            // - Run and wait for backend server (in a spawned task)
+            // - Run and wait for API server (in a spawned task)
             // - Run and wait for frontend server (in a spawned task, only if set)
             let faucet_future = faucet.run(rx_mint_requests, batch_size);
 
             let mut tasks = JoinSet::new();
             let mut tasks_ids = HashMap::new();
 
-            let backend_id = tasks.spawn(backend_server.serve(backend_url.clone())).id();
-            tasks_ids.insert(backend_id, "backend");
+            let api_id = tasks.spawn(api_server.serve(api_url.clone())).id();
+            tasks_ids.insert(api_id, "api");
 
             if let Some(frontend_url) = frontend_url {
-                let frontend_id = tasks.spawn(serve_frontend(frontend_url, backend_url)).id();
+                let frontend_id = tasks.spawn(serve_frontend(frontend_url, api_url)).id();
                 tasks_ids.insert(frontend_id, "frontend");
             }
 
@@ -610,7 +610,7 @@ mod tests {
         .await
         .expect("failed to create faucet account");
 
-        let backend_url = "http://localhost:8000";
+        let api_url = "http://localhost:8000";
         let frontend_url = "http://localhost:8080";
 
         // Use std::thread to launch faucet - avoids Send requirements
@@ -626,7 +626,7 @@ mod tests {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
                         config,
-                        backend_url: Url::try_from(backend_url).unwrap(),
+                        api_url: Url::try_from(api_url).unwrap(),
                         frontend_url: Some(Url::parse(frontend_url).unwrap()),
                         max_claimable_amount: 1_000_000_000,
                         api_keys: vec![],
@@ -647,8 +647,8 @@ mod tests {
         });
 
         // Wait for faucet to be up
-        let backend_url = Url::parse(backend_url).unwrap();
-        let addrs = backend_url.socket_addrs(|| None).unwrap();
+        let api_url = Url::parse(api_url).unwrap();
+        let addrs = api_url.socket_addrs(|| None).unwrap();
         let start = Instant::now();
         let timeout = Duration::from_secs(10);
         loop {
