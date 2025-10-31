@@ -17,9 +17,9 @@ use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
-use miden_client::note::{Note, NoteError, NoteId, NoteTag, create_p2id_note};
+use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
 use miden_client::rpc::{Endpoint, GrpcClient, NodeRpcClient, RpcError};
-use miden_client::store::{Store, TransactionFilter};
+use miden_client::store::{NoteFilter, Store, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
     LocalTransactionProver,
@@ -205,10 +205,10 @@ impl Faucet {
             .await?
             .map(|(header, _)| vec![header])
             .unwrap_or_default();
-        let note_tags: BTreeSet<NoteTag> = store.get_unique_note_tags().await?;
 
-        let unspent_input_notes = vec![];
-        let unspent_output_notes = vec![];
+        let note_tags = BTreeSet::new();
+        let input_notes = vec![];
+        let expected_output_notes = store.get_output_notes(NoteFilter::Expected).await?;
 
         let uncommitted_transactions =
             store.get_transactions(TransactionFilter::Uncommitted).await?;
@@ -222,8 +222,8 @@ impl Faucet {
                 current_partial_mmr,
                 accounts,
                 note_tags.clone(),
-                unspent_input_notes,
-                unspent_output_notes,
+                input_notes,
+                expected_output_notes,
                 uncommitted_transactions,
             )
             .await?;
