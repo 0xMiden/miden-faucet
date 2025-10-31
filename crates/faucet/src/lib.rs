@@ -18,6 +18,7 @@ use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
 use miden_client::rpc::{Endpoint, RpcError};
+use miden_client::sync::SyncSummary;
 use miden_client::transaction::{
     LocalTransactionProver,
     TransactionId,
@@ -34,9 +35,11 @@ use tokio::sync::mpsc::Receiver;
 use tracing::{Instrument, error, info, info_span, instrument, warn};
 use url::Url;
 
+mod note_screener;
 pub mod requests;
 pub mod types;
 
+use crate::note_screener::NoteScreener;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
@@ -71,6 +74,7 @@ impl FaucetId {
 pub struct Faucet {
     id: FaucetId,
     client: Client<FilesystemKeyStore<StdRng>>,
+    note_screener: Arc<NoteScreener>,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<RwLock<AssetAmount>>,
     max_supply: AssetAmount,
@@ -108,27 +112,26 @@ impl Faucet {
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("failed to parse node url: {node_url}"))?;
 
-        let sqlite_store = SqliteStore::new(store_path).await?;
+        let sqlite_store = Arc::new(SqliteStore::new(store_path).await?);
 
         let mut client = ClientBuilder::new()
             .grpc_client(&endpoint, Some(timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
-            .store(Arc::new(sqlite_store))
+            .store(sqlite_store.clone())
             .build()
             .await?;
 
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
+        let note_screener = Arc::new(NoteScreener::new(sqlite_store.clone()));
         client
-            .sync_state()
+            .sync_state_custom(note_screener.clone())
             .instrument(info_span!(target: COMPONENT, "faucet.load.sync_state"))
             .await
-            .context("faucet failed to sync state")
+            .context("failed to sync state")
             .inspect_err(|err| {
                 error!(?err, "failed to sync state");
             })?;
-
-        info!("Fetching faucet state from node");
 
         let issuance = match client.import_account_by_id(account.id()).await {
             Ok(()) => {
@@ -164,8 +167,6 @@ impl Faucet {
             },
         };
 
-        client.ensure_genesis_in_place().await?;
-
         let faucet = BasicFungibleFaucet::try_from(&account)?;
         let tx_prover: Arc<dyn TransactionProver> = match remote_tx_prover_url {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
@@ -180,11 +181,18 @@ impl Faucet {
         Ok(Self {
             id,
             client,
+            note_screener,
             tx_prover,
             issuance,
             max_supply,
             script,
         })
+    }
+
+    /// Syncs the state of the client.
+    #[instrument(target = COMPONENT, name = "faucet.sync_state", skip_all, err)]
+    async fn sync_state(&mut self) -> Result<SyncSummary, ClientError> {
+        self.client.sync_state_custom(self.note_screener.clone()).await
     }
 
     /// Runs the faucet minting process until the request source is closed, or it encounters a fatal
@@ -235,14 +243,7 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        self.client
-            .sync_state()
-            .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
-            .await
-            .context("faucet failed to sync state")
-            .inspect_err(|err| {
-                error!(?err, "failed to sync state");
-            })?;
+        self.sync_state().await.context("failed to sync state")?;
 
         let span = tracing::Span::current();
 
@@ -500,7 +501,7 @@ mod tests {
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
-            .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
+            .with_auth_component(AuthRpoFalcon512::new(secret.public_key().to_commitment().into()))
             .build()
             .unwrap();
         let key = AuthSecretKey::RpoFalcon512(secret);
@@ -522,7 +523,7 @@ mod tests {
                 let mut client = MockClient::new(
                     Arc::new(MockRpcApi::new(MockChain::new())),
                     Box::new(RpoRandomCoin::new(Word::empty())),
-                    store,
+                    store.clone(),
                     Some(Arc::new(keystore)),
                     ExecutionOptions::new(None, 4096, false, false).unwrap(),
                     None,
@@ -536,6 +537,7 @@ mod tests {
                 let faucet = Faucet {
                     id: FaucetId::new(account.id(), NetworkId::Testnet),
                     client,
+                    note_screener: Arc::new(NoteScreener::new(store.clone())),
                     tx_prover: Arc::new(LocalTransactionProver::default()),
                     issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
                     max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
