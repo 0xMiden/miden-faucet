@@ -6,7 +6,12 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{
-    AccountFile, AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
+    AccountFile,
+    AccountId,
+    AccountIdAddress,
+    Address,
+    AddressInterface,
+    NetworkId,
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
@@ -14,16 +19,19 @@ use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, NoteTag, create_p2id_note};
 use miden_client::rpc::{Endpoint, GrpcClient, NodeRpcClient, RpcError};
-use miden_client::store::{NoteFilter, Store, TransactionFilter};
+use miden_client::store::{Store, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequestBuilder,
+    LocalTransactionProver,
+    TransactionId,
+    TransactionProver,
+    TransactionRequestBuilder,
     TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
-use miden_client::{BlockNumber, Client, ClientError, Felt, RemoteTransactionProver, Word};
+use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
-use miden_objects::transaction::PartialBlockchain; // TODO: reexport from client
+// TODO: reexport from client
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
@@ -122,7 +130,7 @@ impl Faucet {
         client.ensure_genesis_in_place().await?;
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
-        Self::sync_state(sqlite_store.clone(), grpc_client.clone()).await?;
+        Self::sync_state(account.id(), sqlite_store.clone(), grpc_client.clone()).await?;
 
         let issuance = match client.import_account_by_id(account.id()).await {
             Ok(()) => {
@@ -184,6 +192,7 @@ impl Faucet {
     /// Syncs the state of the client.
     #[instrument(target = COMPONENT, name = "faucet.sync_state", skip_all, err)]
     async fn sync_state(
+        account_id: AccountId,
         store: Arc<dyn Store>,
         grpc_client: Arc<dyn NodeRpcClient>,
     ) -> anyhow::Result<SyncSummary> {
@@ -192,17 +201,14 @@ impl Faucet {
 
         // Get current state of the client
         let accounts = store
-            .get_account_headers()
+            .get_account_header(account_id)
             .await?
-            .into_iter()
-            .map(|(acc_header, _)| acc_header)
-            .collect();
-
+            .map(|(header, _)| vec![header])
+            .unwrap_or_default();
         let note_tags: BTreeSet<NoteTag> = store.get_unique_note_tags().await?;
 
-        let unspent_input_notes = vec![]; // Faucet will not consume input notes
-        // TODO: output notes?
-        let unspent_output_notes = store.get_output_notes(NoteFilter::Unspent).await?;
+        let unspent_input_notes = vec![];
+        let unspent_output_notes = vec![];
 
         let uncommitted_transactions =
             store.get_transactions(TransactionFilter::Uncommitted).await?;
@@ -210,27 +216,10 @@ impl Faucet {
         // Build current partial MMR
         let current_partial_mmr = store.get_current_partial_mmr().await?;
 
-        // TODO: will be removed
-        let block_headers = {
-            let all_block_numbers = (0..current_partial_mmr.forest().num_leaves())
-                .filter_map(|block_num| {
-                    current_partial_mmr.is_tracked(block_num).then_some(BlockNumber::from(
-                        u32::try_from(block_num)
-                            .expect("block number should be less than u32::MAX"),
-                    ))
-                })
-                .collect::<BTreeSet<_>>();
-            store
-                .get_block_headers(&all_block_numbers)
-                .await?
-                .into_iter()
-                .map(|(header, _has_notes)| header)
-        };
-
         // Get the sync update from the network
         let state_sync_update = state_sync
             .sync_state(
-                PartialBlockchain::new(current_partial_mmr, block_headers)?,
+                current_partial_mmr,
                 accounts,
                 note_tags.clone(),
                 unspent_input_notes,
@@ -301,7 +290,7 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        Self::sync_state(self.store.clone(), self.grpc_client.clone()).await?;
+        Self::sync_state(self.id.account_id, self.store.clone(), self.grpc_client.clone()).await?;
 
         let span = tracing::Span::current();
 

@@ -1931,7 +1931,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#97208c0b0dc651431f482ade7d60388d19ecfbc1"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#b9d347f35fd1e10b06e41b2e3378ab09141a19dd"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1965,14 +1965,13 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#97208c0b0dc651431f482ade7d60388d19ecfbc1"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#b9d347f35fd1e10b06e41b2e3378ab09141a19dd"
 dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
  "deadpool",
  "deadpool-sync",
- "hex",
  "miden-client",
  "miden-objects",
  "rusqlite",
@@ -2092,7 +2091,6 @@ dependencies = [
  "async-trait",
  "miden-client",
  "miden-client-sqlite-store",
- "miden-objects",
  "rand",
  "thiserror 2.0.17",
  "tokio",
