@@ -126,7 +126,7 @@ impl api_server::Api for StubRpcApi {
     async fn get_account_proof(
         &self,
         _request: Request<proto::rpc_store::AccountProofRequest>,
-    ) -> Result<Response<proto::rpc_store::AccountProof>, Status> {
+    ) -> Result<Response<proto::rpc_store::AccountProofResponse>, Status> {
         unimplemented!()
     }
 
@@ -145,6 +145,13 @@ impl api_server::Api for StubRpcApi {
             nullifiers: vec![],
             pagination_info: None,
         }))
+    }
+
+    async fn sync_transactions(
+        &self,
+        _request: Request<proto::rpc_store::SyncTransactionsRequest>,
+    ) -> Result<Response<proto::rpc_store::SyncTransactionsResponse>, Status> {
+        unimplemented!()
     }
 }
 
