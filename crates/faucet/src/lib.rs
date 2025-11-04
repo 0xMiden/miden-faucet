@@ -415,10 +415,13 @@ impl Faucet {
             }
         };
 
-        self.client
+        let submission_height = self
+            .client
             .submit_proven_transaction(proven_transaction, &tx_result)
             .instrument(info_span!(target: COMPONENT, "faucet.mint.submit_transaction"))
             .await?;
+
+        self.client.apply_transaction(&tx_result, submission_height).await?;
 
         Ok(tx_id)
     }
