@@ -335,7 +335,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
             let config = FaucetConfig {
                 store_path: store_path.clone(),
-                node_endpoint,
+                node_endpoint: node_endpoint.clone(),
                 network_id: network.to_network_id()?,
                 timeout,
                 remote_tx_prover_url,
@@ -400,7 +400,9 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             tasks_ids.insert(api_id, "api");
 
             if let Some(frontend_url) = frontend_url {
-                let frontend_id = tasks.spawn(serve_frontend(frontend_url, api_url)).id();
+                let frontend_id = tasks
+                    .spawn(serve_frontend(frontend_url, api_url, node_endpoint.to_string()))
+                    .id();
                 tasks_ids.insert(frontend_id, "frontend");
             }
 
