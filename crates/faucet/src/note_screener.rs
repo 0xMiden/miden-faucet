@@ -10,6 +10,7 @@ use miden_client::sync::{NoteUpdateAction, OnNoteReceived};
 /// Provides functionality for testing whether a note is relevant to the faucet.
 ///
 /// Relevance is based on whether the note is a tracked output note.
+#[derive(Clone)]
 pub struct NoteScreener {
     /// A reference to the faucet's store, used to fetch tracked output notes.
     store: Arc<dyn Store>,

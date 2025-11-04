@@ -6,32 +6,23 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
 use miden_client::account::{
-    AccountFile,
-    AccountId,
-    AccountIdAddress,
-    Address,
-    AddressInterface,
-    NetworkId,
+    AccountFile, AccountId, AccountIdAddress, Address, AddressInterface, NetworkId,
 };
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
-use miden_client::rpc::{Endpoint, GrpcClient, NodeRpcClient, RpcError};
-use miden_client::store::{NoteFilter, Store, TransactionFilter};
+use miden_client::rpc::{Endpoint, GrpcClient, RpcError};
+use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequestBuilder,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequestBuilder,
     TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
-// TODO: reexport from client
 use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
@@ -77,8 +68,7 @@ impl FaucetId {
 pub struct Faucet {
     id: FaucetId,
     client: Client<FilesystemKeyStore<StdRng>>,
-    store: Arc<dyn Store>,
-    grpc_client: Arc<dyn NodeRpcClient>,
+    state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<RwLock<AssetAmount>>,
     max_supply: AssetAmount,
@@ -128,9 +118,13 @@ impl Faucet {
         let grpc_client = Arc::new(GrpcClient::new(&endpoint, timeout.as_millis() as u64));
 
         client.ensure_genesis_in_place().await?;
+
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
-        Self::sync_state(account.id(), sqlite_store.clone(), grpc_client.clone()).await?;
+        let note_screener = NoteScreener::new(sqlite_store.clone());
+        let state_sync_component =
+            StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
+        Self::sync_state(account.id(), &mut client, state_sync_component.clone()).await?;
 
         let issuance = match client.import_account_by_id(account.id()).await {
             Ok(()) => {
@@ -180,8 +174,7 @@ impl Faucet {
         Ok(Self {
             id,
             client,
-            store: sqlite_store,
-            grpc_client,
+            state_sync_component,
             tx_prover,
             issuance,
             max_supply,
@@ -193,28 +186,23 @@ impl Faucet {
     #[instrument(target = COMPONENT, name = "faucet.sync_state", skip_all, err)]
     async fn sync_state(
         account_id: AccountId,
-        store: Arc<dyn Store>,
-        grpc_client: Arc<dyn NodeRpcClient>,
+        client: &mut Client<FilesystemKeyStore<StdRng>>,
+        state_sync: StateSync,
     ) -> anyhow::Result<SyncSummary> {
-        let note_screener = NoteScreener::new(store.clone());
-        let state_sync = StateSync::new(grpc_client, Arc::new(note_screener), None);
-
         // Get current state of the client
-        let accounts = store
-            .get_account_header(account_id)
+        let accounts = client
+            .get_account_header_by_id(account_id)
             .await?
             .map(|(header, _)| vec![header])
             .unwrap_or_default();
-
         let note_tags = BTreeSet::new();
         let input_notes = vec![];
-        let expected_output_notes = store.get_output_notes(NoteFilter::Expected).await?;
-
+        let expected_output_notes = client.get_output_notes(NoteFilter::Expected).await?;
         let uncommitted_transactions =
-            store.get_transactions(TransactionFilter::Uncommitted).await?;
+            client.get_transactions(TransactionFilter::Uncommitted).await?;
 
         // Build current partial MMR
-        let current_partial_mmr = store.get_current_partial_mmr().await?;
+        let current_partial_mmr = client.get_current_partial_mmr().await?;
 
         // Get the sync update from the network
         let state_sync_update = state_sync
@@ -226,18 +214,15 @@ impl Faucet {
                 expected_output_notes,
                 uncommitted_transactions,
             )
-            .await?;
+            .await
+            .context("failed to sync state")?;
         let sync_summary: SyncSummary = (&state_sync_update).into();
-        info!("Applying changes to the store.");
 
         // Apply received and computed updates to the store
-        store
+        client
             .apply_state_sync(state_sync_update)
             .await
-            .map_err(ClientError::StoreError)?;
-
-        // Remove irrelevant block headers
-        store.prune_irrelevant_blocks().await?;
+            .context("failed to apply state sync")?;
 
         Ok(sync_summary)
     }
@@ -290,7 +275,8 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        Self::sync_state(self.id.account_id, self.store.clone(), self.grpc_client.clone()).await?;
+        Self::sync_state(self.id.account_id, &mut self.client, self.state_sync_component.clone())
+            .await?;
 
         let span = tracing::Span::current();
 
@@ -404,26 +390,35 @@ impl Faucet {
             .script_arg(note_data_commitment)
             .build()?;
 
-        // Execute the transaction
-        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx_request))
+        let tx_result = self
+            .client
+            .execute_transaction(self.id.account_id, tx_request)
             .instrument(info_span!(target: COMPONENT, "faucet.mint.execute"))
             .await?;
         let tx_id = tx_result.executed_transaction().id();
 
-        // Prove and submit the transaction
-        let prover_failed = Box::pin(
-            self.client
-                .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
-        )
-        .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_remote"))
-        .await
-        .is_err();
-        if prover_failed {
-            warn!("Failed to prove transaction with remote prover, falling back to local prover");
-            Box::pin(self.client.submit_transaction(tx_result))
-                .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_local_and_submit"))
-                .await?;
-        }
+        let proven_transaction = {
+            let remote_proven_transaction = self
+                .client
+                .prove_transaction_with(&tx_result, self.tx_prover.clone())
+                .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_remote"))
+                .await;
+            match remote_proven_transaction {
+                Ok(proven_transaction) => proven_transaction,
+                Err(error) => {
+                    error!(?error, "Failed to prove transaction with remote prover");
+                    self.client
+                        .prove_transaction(&tx_result)
+                        .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_local"))
+                        .await?
+                },
+            }
+        };
+
+        self.client
+            .submit_proven_transaction(proven_transaction, &tx_result)
+            .instrument(info_span!(target: COMPONENT, "faucet.mint.submit_transaction"))
+            .await?;
 
         Ok(tx_id)
     }
@@ -584,8 +579,11 @@ mod tests {
                 let faucet = Faucet {
                     id: FaucetId::new(account.id(), NetworkId::Testnet),
                     client,
-                    store,
-                    grpc_client: Arc::new(MockRpcApi::new(MockChain::new())),
+                    state_sync_component: StateSync::new(
+                        Arc::new(MockRpcApi::new(MockChain::new())),
+                        Arc::new(NoteScreener::new(store.clone())),
+                        None,
+                    ),
                     tx_prover: Arc::new(LocalTransactionProver::default()),
                     issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
                     max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
