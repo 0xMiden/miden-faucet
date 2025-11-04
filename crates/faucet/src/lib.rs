@@ -137,7 +137,7 @@ impl Faucet {
         if deploy {
             let mut faucet = Self::load(config).await?;
             let empty_tx_request = TransactionRequestBuilder::new().build()?;
-            faucet.submit_transaction(empty_tx_request).await?;
+            faucet.submit_new_transaction(empty_tx_request).await?;
         }
 
         Ok(())
@@ -272,7 +272,7 @@ impl Faucet {
         let tx_request =
             self.create_transaction(notes).context("faucet failed to create transaction")?;
         let tx_id = self
-            .submit_transaction(tx_request)
+            .submit_new_transaction(tx_request)
             .await
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
@@ -366,8 +366,8 @@ impl Faucet {
     /// Executes, proves, and then submits a transaction using the local miden-client.
     /// This results in submitting the transaction to the node and updating the local db to track
     /// the created notes.
-    #[instrument(target = COMPONENT, name = "faucet.mint.submit_transaction", skip_all, err)]
-    async fn submit_transaction(
+    #[instrument(target = COMPONENT, name = "faucet.mint.submit_new_transaction", skip_all, err)]
+    async fn submit_new_transaction(
         &mut self,
         tx_request: TransactionRequest,
     ) -> Result<TransactionId, ClientError> {
