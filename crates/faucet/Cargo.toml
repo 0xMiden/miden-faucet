@@ -16,7 +16,6 @@ workspace = true
 
 [dependencies]
 # Miden dependencies.
-async-trait               = { version = "0.1" }
 miden-client              = { features = ["tonic"], workspace = true }
 miden-client-sqlite-store = { workspace = true }
 

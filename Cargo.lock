@@ -1931,7 +1931,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#bf61c232cf13e82b54ac1d0bd82c6a89f6d0fca1"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#c8fd8174318c1654e6244ea829b1765f9d08bbb3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1965,7 +1965,7 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#bf61c232cf13e82b54ac1d0bd82c6a89f6d0fca1"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#c8fd8174318c1654e6244ea829b1765f9d08bbb3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2088,7 +2088,6 @@ name = "miden-faucet-lib"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "miden-client",
  "miden-client-sqlite-store",
  "rand",

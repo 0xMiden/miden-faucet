@@ -2,10 +2,10 @@
 // discards all other notes.
 use std::sync::Arc;
 
-use miden_client::ClientError;
 use miden_client::rpc::domain::note::CommittedNote;
 use miden_client::store::{InputNoteRecord, NoteFilter, Store};
 use miden_client::sync::{NoteUpdateAction, OnNoteReceived};
+use miden_client::{ClientError, async_trait};
 
 /// Provides functionality for testing whether a note is relevant to the faucet.
 ///
@@ -22,7 +22,7 @@ impl NoteScreener {
     }
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait(?Send)]
 impl OnNoteReceived for NoteScreener {
     /// Queries the store for the committed note to check if it's a tracked output note.
     async fn on_note_received(
