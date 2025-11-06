@@ -1931,7 +1931,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#c8fd8174318c1654e6244ea829b1765f9d08bbb3"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#1afe11504eb1a1b2541f94d7006d8d07cca96e88"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1965,7 +1965,7 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#c8fd8174318c1654e6244ea829b1765f9d08bbb3"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#1afe11504eb1a1b2541f94d7006d8d07cca96e88"
 dependencies = [
  "anyhow",
  "async-trait",
