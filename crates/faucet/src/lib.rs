@@ -12,7 +12,10 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
 use miden_client::rpc::{Endpoint, RpcError};
 use miden_client::transaction::{
-    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequestBuilder,
+    LocalTransactionProver,
+    TransactionId,
+    TransactionProver,
+    TransactionRequestBuilder,
     TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
