@@ -7,28 +7,28 @@ Get the Miden Faucet running in minutes.
 - Miden Faucet installed (see [Installation](./installation.md))
 - Access to a Miden node (testnet, devnet, or local)
 
-## Step 1: Create a Faucet Account
+## Step 1: Initialize the Faucet
 
-First, we need to create a faucet account that will hold the tokens to be distributed. This command generates a new account with the specified token configuration and saves the account data to a local file (`faucet.mac`). The account is not yet deployed to the network - that will happen when the faucet is running and the first transaction is sent to the node.
+First, we need to initialize the faucet with a new account that will hold the tokens to be distributed. This command generates a new account with the specified token configuration and saves the account data to a local SQLite store. The account is not yet deployed to the network - that will happen when the faucet is running and the first transaction is sent to the node.
 
 ```bash
-miden-faucet create-faucet-account \
-  --output-path ./faucet.mac \
+miden-faucet init \
   --token-symbol MIDEN \
   --decimals 6 \
-  --max-supply 100000000000000000
+  --max-supply 100000000000000000 \
+  --node-url https://rpc.testnet.miden.io
 ```
 
 ## Step 2: Start the Faucet
 
-Next, start the faucet by specifying the addresses where the API and the frontend will be served, the address of the Miden node, and the account file to use for distributing tokens. The API server will handle incoming token requests and manage the minting process.
+Next, start the faucet by specifying the addresses where the API and the frontend will be served, the address of the Miden node, and the network configuration. The API server will handle incoming token requests and manage the minting process.
 
 ```bash
 miden-faucet start \
   --frontend-url http://localhost:8080 \
   --api-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
-  --account ./faucet.mac
+  --network testnet
 ```
 
 ## Step 3: Request Test Tokens
@@ -57,11 +57,16 @@ You can also programmatically interact with the REST API to mint tokens. Check o
 If you have a Miden Node running locally, you can run the faucet against that node.
 
 ```bash
+miden-faucet init \
+  --token-symbol MIDEN \
+  --decimals 6 \
+  --max-supply 100000000000000000 \
+  --node-url http://localhost:57291
+
 miden-faucet start \
   --frontend-url http://localhost:8080 \
   --api-url http://localhost:8000 \
   --node-url http://localhost:57291 \
-  --account ./faucet.mac \
   --network localhost
 ```
 
@@ -70,11 +75,16 @@ miden-faucet start \
 Connect to the node deployed in Miden Devnet.
 
 ```bash
+miden-faucet init \
+  --token-symbol MIDEN \
+  --decimals 6 \
+  --max-supply 100000000000000000 \
+  --node-url https://rpc.devnet.miden.io
+
 miden-faucet start \
   --frontend-url http://localhost:8080 \
   --api-url http://localhost:8000 \
   --node-url https://rpc.devnet.miden.io \
-  --account ./faucet.mac \
   --network devnet
 ```
 
@@ -83,11 +93,16 @@ miden-faucet start \
 Connect to the node deployed in Miden Testnet.
 
 ```bash
+miden-faucet init \
+  --token-symbol MIDEN \
+  --decimals 6 \
+  --max-supply 100000000000000000 \
+  --node-url https://rpc.testnet.miden.io
+
 miden-faucet start \
   --frontend-url http://localhost:8080 \
   --api-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
-  --account ./faucet.mac \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ``` 
@@ -100,5 +115,5 @@ If you only need the API and don't want to serve the web interface:
 miden-faucet start \
   --api-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
-  --account ./faucet.mac
+  --network testnet
 ```
