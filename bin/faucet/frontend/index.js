@@ -406,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const Utils = {
     validateAddress: (address) => {
-        return /^(0x[0-9a-fA-F]{30}|[a-z]{1,4}1[a-z0-9]{35})$/i.test(address);
+        return /^(0x[0-9a-fA-F]{30}|[a-z]{1,4}1[a-z0-9]{32})(?:_[a-z0-9]+)?$/i.test(address);
     },
 
     findValidNonce: async (challenge, target) => {
