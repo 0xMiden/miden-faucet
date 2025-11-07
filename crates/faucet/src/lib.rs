@@ -132,7 +132,7 @@ impl Faucet {
         let note_screener = NoteScreener::new(sqlite_store.clone());
         let state_sync_component =
             StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
-        Self::sync_state(account.id(), &mut client, state_sync_component.clone()).await?;
+        Self::sync_state(account.id(), &mut client, &state_sync_component).await?;
 
         let issuance = match client.import_account_by_id(account.id()).await {
             Ok(()) => {
@@ -195,7 +195,7 @@ impl Faucet {
     async fn sync_state(
         account_id: AccountId,
         client: &mut Client<FilesystemKeyStore<StdRng>>,
-        state_sync: StateSync,
+        state_sync: &StateSync,
     ) -> anyhow::Result<SyncSummary> {
         // Get current state of the client
         let accounts = client
@@ -283,8 +283,7 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        Self::sync_state(self.id.account_id, &mut self.client, self.state_sync_component.clone())
-            .await?;
+        Self::sync_state(self.id.account_id, &mut self.client, &self.state_sync_component).await?;
 
         let span = tracing::Span::current();
 
