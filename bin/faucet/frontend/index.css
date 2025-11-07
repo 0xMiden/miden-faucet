@@ -556,6 +556,12 @@ body {
     cursor: pointer;
 }
 
+.download-button:disabled {
+    background-color: #cccccc;
+    cursor: wait;
+    opacity: 0.7;
+}
+
 .next-steps {
     font-size: 10px;
     letter-spacing: 0.0em;

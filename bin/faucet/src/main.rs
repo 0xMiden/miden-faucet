@@ -321,7 +321,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             tasks_ids.insert(api_id, "api");
 
             if let Some(frontend_url) = frontend_url {
-                let frontend_id = tasks.spawn(serve_frontend(frontend_url, api_url)).id();
+                let frontend_id = tasks.spawn(serve_frontend(frontend_url, api_url, node_url)).id();
                 tasks_ids.insert(frontend_id, "frontend");
             }
 
