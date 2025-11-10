@@ -209,7 +209,7 @@ impl Faucet {
             .sync_state(
                 current_partial_mmr,
                 accounts,
-                note_tags.clone(),
+                note_tags,
                 input_notes,
                 expected_output_notes,
                 uncommitted_transactions,

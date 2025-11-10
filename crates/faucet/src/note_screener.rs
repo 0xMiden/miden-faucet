@@ -1,5 +1,5 @@
-//! Implements a custom note screener that only marks notes as relevant if they are tagged. It
-//! discards all other notes.
+//! Implements a custom note screener that only marks notes as relevant if they are tracked output
+//! notes. It discards all other notes.
 use std::sync::Arc;
 
 use miden_client::rpc::domain::note::CommittedNote;
