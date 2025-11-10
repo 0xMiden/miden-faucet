@@ -67,6 +67,11 @@ const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
+const ENV_IMPORT_ACCOUNT_PATH: &str = "MIDEN_FAUCET_IMPORT_ACCOUNT_PATH";
+const ENV_DEPLOY: &str = "MIDEN_FAUCET_DEPLOY";
+const ENV_TOKEN_SYMBOL: &str = "MIDEN_FAUCET_TOKEN_SYMBOL";
+const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
+const ENV_MAX_SUPPLY: &str = "MIDEN_FAUCET_MAX_SUPPLY";
 
 // COMMANDS
 // ================================================================================================
@@ -91,24 +96,25 @@ pub enum Command {
             short,
             long,
             value_name = "STRING",
-            required_unless_present = "import_account_path"
+            required_unless_present = "import_account_path", 
+            env = ENV_TOKEN_SYMBOL
         )]
         token_symbol: Option<String>,
 
         /// Decimals of the new token.
-        #[arg(short, long, value_name = "U8", required_unless_present = "import_account_path")]
+        #[arg(short, long, value_name = "U8", required_unless_present = "import_account_path", env = ENV_DECIMALS)]
         decimals: Option<u8>,
 
         /// Max supply of the new token (in base units).
-        #[arg(short, long, value_name = "U64", required_unless_present = "import_account_path")]
+        #[arg(short, long, value_name = "U64", required_unless_present = "import_account_path", env = ENV_MAX_SUPPLY)]
         max_supply: Option<u64>,
 
         /// Set an existing faucet account file to use, instead of creating a new account.
-        #[arg(long = "import", value_name = "FILE", conflicts_with_all = ["token_symbol", "decimals", "max_supply"])]
+        #[arg(long = "import", value_name = "FILE", conflicts_with_all = ["token_symbol", "decimals", "max_supply"], env = ENV_IMPORT_ACCOUNT_PATH)]
         import_account_path: Option<PathBuf>,
 
         /// Whether to deploy the faucet account to the node.
-        #[arg(long, value_name = "BOOL", default_value_t = false)]
+        #[arg(long, value_name = "BOOL", default_value_t = false, env = ENV_DEPLOY)]
         deploy: bool,
     },
 
