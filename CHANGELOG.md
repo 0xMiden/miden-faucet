@@ -1,20 +1,21 @@
 # Changelog
 
-## 0.12.0 (TBD)
+## 0.12.0 (2025-11-10)
 
-### Changes
-
-- Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
-- Refactored CLI commands into `init` and `start` ([#84](https://github.com/0xMiden/miden-faucet/pull/84), [#145](https://github.com/0xMiden/miden-faucet/pull/145)).
-- Refactored CLI commands into `init` and `start` ([#84](https://github.com/0xMiden/miden-faucet/pull/84)).
 - Added requested `amount` to PoW Challenge ([#68](https://github.com/0xMiden/miden-faucet/pull/68)).
 - Added `pow_base_difficulty_amount` CLI param and updated default values ([#68](https://github.com/0xMiden/miden-faucet/pull/68)).
 - Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
+- Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
+- Refactored CLI commands into `init` and `start` ([#84](https://github.com/0xMiden/miden-faucet/pull/84), [#145](https://github.com/0xMiden/miden-faucet/pull/145)).
 - Added wallet connection to prefill the recipient address ([#100](https://github.com/0xMiden/miden-faucet/pull/100)).
-- Separated frontend and backend servers ([#119](https://github.com/0xMiden/miden-faucet/pull/119)).
 - Redesigned the frontend ([#110](https://github.com/0xMiden/miden-faucet/pull/110)).
+- Separated frontend and backend servers ([#119](https://github.com/0xMiden/miden-faucet/pull/119)).
 - Frontend now awaits for the transaction to be committed ([#127](https://github.com/0xMiden/miden-faucet/pull/127)).
 - Added 10-block expiration delta to faucet minting transactions ([#136](https://github.com/0xMiden/miden-faucet/pull/136)).
+- 
+## 0.11.8 (2025-10-27)
+
+- Sync state before creating transactions to avoid desync errors (#[132](https://github.com/0xMiden/miden-faucet/pull/132)).
 
 ## 0.11.7 (2025-10-15)
 
