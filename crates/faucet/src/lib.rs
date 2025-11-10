@@ -4,14 +4,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{
-    Account,
-    AccountId,
-    AccountIdAddress,
-    Address,
-    AddressInterface,
-    NetworkId,
-};
+use miden_client::account::{Account, AccountId, Address, NetworkId};
 use miden_client::asset::FungibleAsset;
 use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
@@ -68,8 +61,7 @@ impl FaucetId {
     }
 
     pub fn to_bech32(&self) -> String {
-        let address = AccountIdAddress::new(self.account_id, AddressInterface::Unspecified);
-        Address::from(address).to_bech32(self.network_id.clone())
+        Address::new(self.account_id).encode(self.network_id.clone())
     }
 }
 
@@ -372,25 +364,38 @@ impl Faucet {
         tx_request: TransactionRequest,
     ) -> Result<TransactionId, ClientError> {
         // Execute the transaction
-        let tx_result = Box::pin(self.client.new_transaction(self.id.account_id, tx_request))
+        let tx_result = self
+            .client
+            .execute_transaction(self.id.account_id, tx_request)
             .instrument(info_span!(target: COMPONENT, "faucet.mint.execute"))
             .await?;
         let tx_id = tx_result.executed_transaction().id();
 
-        // Prove and submit the transaction
-        let prover_failed = Box::pin(
-            self.client
-                .submit_transaction_with_prover(tx_result.clone(), self.tx_prover.clone()),
-        )
-        .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_remote"))
-        .await
-        .is_err();
-        if prover_failed {
-            warn!("Failed to prove transaction with remote prover, falling back to local prover");
-            Box::pin(self.client.submit_transaction(tx_result))
-                .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_local_and_submit"))
-                .await?;
-        }
+        let proven_transaction = {
+            let remote_proven_transaction = self
+                .client
+                .prove_transaction_with(&tx_result, self.tx_prover.clone())
+                .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_remote"))
+                .await;
+            match remote_proven_transaction {
+                Ok(proven_transaction) => proven_transaction,
+                Err(error) => {
+                    error!(?error, "Failed to prove transaction with remote prover");
+                    self.client
+                        .prove_transaction(&tx_result)
+                        .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_local"))
+                        .await?
+                },
+            }
+        };
+
+        let submission_height = self
+            .client
+            .submit_proven_transaction(proven_transaction, &tx_result)
+            .instrument(info_span!(target: COMPONENT, "faucet.mint.submit_transaction"))
+            .await?;
+
+        self.client.apply_transaction(&tx_result, submission_height).await?;
 
         Ok(tx_id)
     }
@@ -526,7 +531,7 @@ mod tests {
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
-            .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
+            .with_auth_component(AuthRpoFalcon512::new(secret.public_key().to_commitment().into()))
             .build()
             .unwrap();
         let key = AuthSecretKey::RpoFalcon512(secret);
