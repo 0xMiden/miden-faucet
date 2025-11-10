@@ -32,3 +32,4 @@ miden-client = { workspace = true }
 
 [dev-dependencies]
 miden-client = { features = ["testing", "tonic"], workspace = true }
+uuid         = { features = ["v4"], version = "1.10" }

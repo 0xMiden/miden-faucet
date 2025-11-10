@@ -479,6 +479,7 @@ mod tests {
     use miden_client::testing::mock::{MockClient, MockRpcApi};
     use miden_client_sqlite_store::SqliteStore;
     use tokio::sync::{mpsc, oneshot};
+    use uuid::Uuid;
 
     use super::*;
     use crate::types::NoteType;
@@ -504,8 +505,11 @@ mod tests {
             receivers.push(receiver);
         }
 
-        let store =
-            Arc::new(SqliteStore::new(temp_dir().join("batch_requests.sqlite3")).await.unwrap());
+        let store = Arc::new(
+            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
+                .await
+                .unwrap(),
+        );
         run_faucet(rx_mint_requests, batch_size, store.clone());
 
         for receiver in receivers {
