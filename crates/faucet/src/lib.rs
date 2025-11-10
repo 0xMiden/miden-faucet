@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,7 +11,9 @@ use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
-use miden_client::rpc::{Endpoint, RpcError};
+use miden_client::rpc::{Endpoint, GrpcClient, RpcError};
+use miden_client::store::{NoteFilter, TransactionFilter};
+use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
     LocalTransactionProver,
     TransactionId,
@@ -27,9 +30,11 @@ use tokio::sync::mpsc::Receiver;
 use tracing::{Instrument, error, info, info_span, instrument, warn};
 use url::Url;
 
+mod note_screener;
 pub mod requests;
 pub mod types;
 
+use crate::note_screener::NoteScreener;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
@@ -63,6 +68,7 @@ impl FaucetId {
 pub struct Faucet {
     id: FaucetId,
     client: Client<FilesystemKeyStore<StdRng>>,
+    state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<RwLock<AssetAmount>>,
     max_supply: AssetAmount,
@@ -100,27 +106,25 @@ impl Faucet {
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("failed to parse node url: {node_url}"))?;
 
-        let sqlite_store = SqliteStore::new(store_path).await?;
+        let sqlite_store = Arc::new(SqliteStore::new(store_path).await?);
 
         let mut client = ClientBuilder::new()
             .grpc_client(&endpoint, Some(timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
-            .store(Arc::new(sqlite_store))
+            .store(sqlite_store.clone())
             .build()
             .await?;
 
+        let grpc_client = Arc::new(GrpcClient::new(&endpoint, timeout.as_millis() as u64));
+
+        client.ensure_genesis_in_place().await?;
+
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
-        client
-            .sync_state()
-            .instrument(info_span!(target: COMPONENT, "faucet.load.sync_state"))
-            .await
-            .context("faucet failed to sync state")
-            .inspect_err(|err| {
-                error!(?err, "failed to sync state");
-            })?;
-
-        info!("Fetching faucet state from node");
+        let note_screener = NoteScreener::new(sqlite_store.clone());
+        let state_sync_component =
+            StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
+        Self::sync_state(account.id(), &mut client, &state_sync_component).await?;
 
         let issuance = match client.import_account_by_id(account.id()).await {
             Ok(()) => {
@@ -170,11 +174,57 @@ impl Faucet {
         Ok(Self {
             id,
             client,
+            state_sync_component,
             tx_prover,
             issuance,
             max_supply,
             script,
         })
+    }
+
+    /// Syncs the state of the client.
+    #[instrument(target = COMPONENT, name = "faucet.sync_state", skip_all, err)]
+    async fn sync_state(
+        account_id: AccountId,
+        client: &mut Client<FilesystemKeyStore<StdRng>>,
+        state_sync: &StateSync,
+    ) -> anyhow::Result<SyncSummary> {
+        // Get current state of the client
+        let accounts = client
+            .get_account_header_by_id(account_id)
+            .await?
+            .map(|(header, _)| vec![header])
+            .unwrap_or_default();
+        let note_tags = BTreeSet::new();
+        let input_notes = vec![];
+        let expected_output_notes = client.get_output_notes(NoteFilter::Expected).await?;
+        let uncommitted_transactions =
+            client.get_transactions(TransactionFilter::Uncommitted).await?;
+
+        // Build current partial MMR
+        let current_partial_mmr = client.get_current_partial_mmr().await?;
+
+        // Get the sync update from the network
+        let state_sync_update = state_sync
+            .sync_state(
+                current_partial_mmr,
+                accounts,
+                note_tags,
+                input_notes,
+                expected_output_notes,
+                uncommitted_transactions,
+            )
+            .await
+            .context("failed to sync state")?;
+        let sync_summary: SyncSummary = (&state_sync_update).into();
+
+        // Apply received and computed updates to the store
+        client
+            .apply_state_sync(state_sync_update)
+            .await
+            .context("failed to apply state sync")?;
+
+        Ok(sync_summary)
     }
 
     /// Runs the faucet minting process until the request source is closed, or it encounters a fatal
@@ -225,14 +275,7 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        self.client
-            .sync_state()
-            .instrument(info_span!(target: COMPONENT, "faucet.mint.sync_state"))
-            .await
-            .context("faucet failed to sync state")
-            .inspect_err(|err| {
-                error!(?err, "failed to sync state");
-            })?;
+        Self::sync_state(self.id.account_id, &mut self.client, &self.state_sync_component).await?;
 
         let span = tracing::Span::current();
 
@@ -524,7 +567,7 @@ mod tests {
                 let mut client = MockClient::new(
                     Arc::new(MockRpcApi::new(MockChain::new())),
                     Box::new(RpoRandomCoin::new(Word::empty())),
-                    store,
+                    store.clone(),
                     Some(Arc::new(keystore)),
                     ExecutionOptions::new(None, 4096, false, false).unwrap(),
                     None,
@@ -538,6 +581,11 @@ mod tests {
                 let faucet = Faucet {
                     id: FaucetId::new(account.id(), NetworkId::Testnet),
                     client,
+                    state_sync_component: StateSync::new(
+                        Arc::new(MockRpcApi::new(MockChain::new())),
+                        Arc::new(NoteScreener::new(store.clone())),
+                        None,
+                    ),
                     tx_prover: Arc::new(LocalTransactionProver::default()),
                     issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
                     max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
