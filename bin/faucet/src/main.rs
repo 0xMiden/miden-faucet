@@ -108,7 +108,7 @@ pub enum Command {
         import_account_path: Option<PathBuf>,
 
         /// Whether to deploy the faucet account to the node.
-        #[arg(short, long, value_name = "BOOL", default_value_t = false)]
+        #[arg(long, value_name = "BOOL", default_value_t = false)]
         deploy: bool,
     },
 
@@ -463,12 +463,13 @@ fn create_faucet_account(
     let max_supply = Felt::try_from(max_supply)
         .map_err(anyhow::Error::msg)
         .context("max supply value is greater than or equal to the field modulus")?;
+    let auth_component = AuthRpoFalcon512::new(secret.public_key().to_commitment().into());
 
     let account = AccountBuilder::new(rng.random())
         .account_type(AccountType::FungibleFaucet)
         .storage_mode(AccountStorageMode::Public)
         .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
-        .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
+        .with_auth_component(auth_component)
         .build()
         .context("failed to create basic fungible faucet account")?;
 
@@ -486,13 +487,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use fantoccini::ClientBuilder;
-    use miden_client::account::{
-        AccountId,
-        AccountIdAddress,
-        Address,
-        AddressInterface,
-        NetworkId,
-    };
+    use miden_client::account::{AccountId, Address, NetworkId};
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
@@ -520,9 +515,8 @@ mod tests {
 
         let network_id = NetworkId::Testnet;
         let account_id = AccountId::try_from(0).unwrap();
-        let address =
-            Address::from(AccountIdAddress::new(account_id, AddressInterface::BasicWallet));
-        let address_bech32 = address.to_bech32(network_id);
+        let address = Address::new(account_id);
+        let address_bech32 = address.encode(network_id);
 
         // Fill in the account address
         client
