@@ -47,6 +47,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocator-api2"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -600,6 +606,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "curve25519-dalek"
+version = "4.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97fb8b7c4503de7d6ae7b42ab72a5a59857b4c937ec27a3d4539dba95b5ab2be"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "curve25519-dalek-derive",
+ "digest",
+ "fiat-crypto",
+ "rustc_version 0.4.1",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "curve25519-dalek-derive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "deadpool"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -709,6 +742,30 @@ dependencies = [
  "rfc6979",
  "signature",
  "spki",
+]
+
+[[package]]
+name = "ed25519"
+version = "2.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
+dependencies = [
+ "pkcs8",
+ "signature",
+]
+
+[[package]]
+name = "ed25519-dalek"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
+dependencies = [
+ "curve25519-dalek",
+ "ed25519",
+ "serde",
+ "sha2",
+ "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -850,6 +907,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fiat-crypto"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
+
+[[package]]
 name = "figment"
 version = "0.10.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -898,6 +961,12 @@ name = "foldhash"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
+
+[[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "foreign-types"
@@ -1121,7 +1190,7 @@ version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
- "foldhash",
+ "foldhash 0.1.5",
 ]
 
 [[package]]
@@ -1129,6 +1198,13 @@ name = "hashbrown"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5419bdc4f6a9207fbeba6d11b604d481addf78ecd10c11ad51e76c2f6482748d"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
+ "rayon",
+ "serde",
+]
 
 [[package]]
 name = "hashlink"
@@ -1308,7 +1384,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.0",
+ "socket2",
  "tokio",
  "tower-service",
  "tracing",
@@ -1548,17 +1624,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "io-uring"
-version = "0.7.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "046fa2d4d00aea763528b4950358d0ead425372445dc8ff86312b3c69ff7727b"
-dependencies = [
- "bitflags",
- "cfg-if",
- "libc",
 ]
 
 [[package]]
@@ -1872,11 +1937,12 @@ checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
 
 [[package]]
 name = "miden-air"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28b72121bacf147becf7eadcfc7bcd62d41c1e97c0d2cfdc1fd5dba2531721a8"
+checksum = "02cfe0ccecbd2e7a8a2cd97544d4cef438cb495e84e1a5769371dc822ff67268"
 dependencies = [
  "miden-core",
+ "miden-utils-indexing",
  "thiserror 2.0.17",
  "winter-air",
  "winter-prover",
@@ -1884,9 +1950,9 @@ dependencies = [
 
 [[package]]
 name = "miden-assembly"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc57c069054e1f34052e60b55e7c7e066c09fe6f23fc6ca747b25b9afa9b6abd"
+checksum = "95978901bbe5cfc5632a85776d122ae3376a0728e5a4b4211c478d0a87c9e715"
 dependencies = [
  "log",
  "miden-assembly-syntax",
@@ -1898,9 +1964,9 @@ dependencies = [
 
 [[package]]
 name = "miden-assembly-syntax"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b73b2c264d5f65a3f62f49a6c4dfedf37152454d6d963330bd0c5b183b2e2e6c"
+checksum = "f6e4ae33c9801102e32e04d51917333b0576d245e996f5ff43b0e2820f156876"
 dependencies = [
  "aho-corasick",
  "lalrpop",
@@ -1920,8 +1986,9 @@ dependencies = [
 
 [[package]]
 name = "miden-block-prover"
-version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#f60406e92410fd993c4fda86342f5cd4dca994c9"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b2f53a1c58ced1659a622b784daa5773f70b2aa7f9c4ad1c19b6d74baf2aeb3"
 dependencies = [
  "miden-lib",
  "miden-objects",
@@ -1931,7 +1998,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#1afe11504eb1a1b2541f94d7006d8d07cca96e88"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#c39bf551b3fb7b5c6adee9f39d6b10bb60698d5c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1947,15 +2014,17 @@ dependencies = [
  "miden-testing",
  "miden-tx",
  "miette",
- "prost",
+ "prost 0.14.1",
  "prost-build",
- "prost-types",
+ "prost-types 0.14.1",
  "protox 0.7.2",
  "rand",
  "thiserror 2.0.17",
  "tonic",
  "tonic-build",
  "tonic-health",
+ "tonic-prost",
+ "tonic-prost-build",
  "tonic-web-wasm-client",
  "tracing",
  "uuid",
@@ -1965,7 +2034,7 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#1afe11504eb1a1b2541f94d7006d8d07cca96e88"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#c39bf551b3fb7b5c6adee9f39d6b10bb60698d5c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1982,14 +2051,15 @@ dependencies = [
 
 [[package]]
 name = "miden-core"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "996f8d8e2a4dd4eef54225f6f116c73b14f03256bc23ea5d4260fe803dd103e2"
+checksum = "6806a8fd613e996b6d818a973ca40c484787848f14bea0a0c7aa1158ba9b26c2"
 dependencies = [
  "enum_dispatch",
  "miden-crypto",
  "miden-debug-types",
  "miden-formatting",
+ "miden-utils-indexing",
  "num-derive",
  "num-traits",
  "thiserror 2.0.17",
@@ -1999,42 +2069,57 @@ dependencies = [
 
 [[package]]
 name = "miden-crypto"
-version = "0.17.1"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87b287c7a76b95be7ef5588e98a9dbe1973395dbb19eb59dd34d82b06e47f02a"
+checksum = "ffd4233803234f287596d9a60c67c4e5762f792eb0dd20969a41c8db093d6126"
 dependencies = [
  "blake3",
  "cc",
  "chacha20poly1305",
+ "ed25519-dalek",
  "flume",
- "getrandom 0.2.16",
  "glob",
+ "hashbrown 0.16.0",
  "hkdf",
  "k256",
+ "miden-crypto-derive",
  "num",
  "num-complex",
  "rand",
  "rand_chacha",
  "rand_core 0.9.3",
  "rand_hc",
+ "rayon",
  "sha3",
+ "subtle",
  "thiserror 2.0.17",
  "winter-crypto",
  "winter-math",
  "winter-utils",
- "zeroize",
+ "x25519-dalek",
+]
+
+[[package]]
+name = "miden-crypto-derive"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f70dccd82a2b2787b9bfc64687cd224dfe0adc0d21ae9b241b0c6edc4a23335"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
 name = "miden-debug-types"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c24f4040fd3a5b714f2492c723b91dffe29b1af591d15f393dd102063725cd0"
+checksum = "43b37453feb8f4392af5eef29a11ac099b76cbcc47ffc034944a573d06a1cc1e"
 dependencies = [
  "memchr",
  "miden-crypto",
  "miden-formatting",
  "miden-miette",
+ "miden-utils-indexing",
  "miden-utils-sync",
  "paste",
  "serde",
@@ -2108,8 +2193,9 @@ dependencies = [
 
 [[package]]
 name = "miden-lib"
-version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#f60406e92410fd993c4fda86342f5cd4dca994c9"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44abeb7f67252547fa54605e61e89256fa546e2f25de382ccac78a1ced07ff88"
 dependencies = [
  "Inflector",
  "fs-err",
@@ -2126,9 +2212,9 @@ dependencies = [
 
 [[package]]
 name = "miden-mast-package"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c25726075ff6b7262fbb12d4914672ae6999fbeaa6e3883c9cff69348ad1c09c"
+checksum = "bb106cd425958cb2f6fab03741d4d8905b31dca48c0942dfd61adfe6970c695f"
 dependencies = [
  "derive_more",
  "miden-assembly-syntax",
@@ -2181,7 +2267,7 @@ dependencies = [
 [[package]]
 name = "miden-node-grpc-error-macro"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#80cb4a078997001ec0e6c1076992fc90967819dc"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#9ef1dc2540173a9f72ea0d518e31991e42eddeea"
 dependencies = [
  "quote",
  "syn",
@@ -2190,7 +2276,7 @@ dependencies = [
 [[package]]
 name = "miden-node-proto"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#80cb4a078997001ec0e6c1076992fc90967819dc"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#9ef1dc2540173a9f72ea0d518e31991e42eddeea"
 dependencies = [
  "anyhow",
  "fs-err",
@@ -2201,31 +2287,29 @@ dependencies = [
  "miden-node-utils",
  "miden-objects",
  "miette",
- "prost",
- "prost-build",
- "protox 0.8.0",
+ "prost 0.14.1",
  "thiserror 2.0.17",
  "tonic",
- "tonic-build",
+ "tonic-prost",
+ "tonic-prost-build",
  "url",
 ]
 
 [[package]]
 name = "miden-node-proto-build"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#80cb4a078997001ec0e6c1076992fc90967819dc"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#9ef1dc2540173a9f72ea0d518e31991e42eddeea"
 dependencies = [
  "fs-err",
  "miette",
- "prost",
- "protox 0.8.0",
- "tonic-build",
+ "protox 0.9.0",
+ "tonic-prost-build",
 ]
 
 [[package]]
 name = "miden-node-utils"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#80cb4a078997001ec0e6c1076992fc90967819dc"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#9ef1dc2540173a9f72ea0d518e31991e42eddeea"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2251,19 +2335,19 @@ dependencies = [
 [[package]]
 name = "miden-note-transport-proto-build"
 version = "0.1.0"
-source = "git+https://github.com/0xMiden/miden-note-transport#bb1075155be757601d853deb0e1df8a95a51ff69"
+source = "git+https://github.com/lambdaclass/miden-note-transport?branch=tomasarrachea-update-deps#a4cf0c84d962a6a7c94c34926eaabd3d4632a7f3"
 dependencies = [
  "fs-err",
  "miette",
- "prost",
- "protox 0.8.0",
- "tonic-build",
+ "protox 0.9.0",
+ "tonic-prost-build",
 ]
 
 [[package]]
 name = "miden-objects"
-version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#f60406e92410fd993c4fda86342f5cd4dca994c9"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ef49472012d00be68f68dcbb13b4f28867fb6271c76c014bc555ef6e8e0958a"
 dependencies = [
  "bech32",
  "getrandom 0.3.3",
@@ -2296,15 +2380,18 @@ dependencies = [
 
 [[package]]
 name = "miden-processor"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "943b22d826ce116cbaf8633c699e45eece83dc4c2facb1677e067b42f433aba8"
+checksum = "e97fbbc6911627d1fd25ad6f598a7ccd79721e9c89c4890a105f0a906ea3baf7"
 dependencies = [
+ "itertools",
  "miden-air",
  "miden-core",
  "miden-debug-types",
  "miden-utils-diagnostics",
+ "miden-utils-indexing",
  "paste",
+ "rayon",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -2313,9 +2400,9 @@ dependencies = [
 
 [[package]]
 name = "miden-prover"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "743e27899f2a56e92da93efc287fe76a635446251dbecc2138e8b85ecdcfd0bd"
+checksum = "3e07a8cb521312c8454544453b212b6dee3e7a983467f18ef8e296754ed7fe79"
 dependencies = [
  "miden-air",
  "miden-debug-types",
@@ -2328,28 +2415,27 @@ dependencies = [
 [[package]]
 name = "miden-remote-prover-client"
 version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#80cb4a078997001ec0e6c1076992fc90967819dc"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#9ef1dc2540173a9f72ea0d518e31991e42eddeea"
 dependencies = [
  "getrandom 0.3.3",
  "miden-node-proto-build",
  "miden-objects",
  "miden-tx",
  "miette",
- "prost",
- "prost-build",
- "protox 0.8.0",
+ "prost 0.14.1",
  "thiserror 2.0.17",
  "tokio",
  "tonic",
- "tonic-build",
+ "tonic-prost",
+ "tonic-prost-build",
  "tonic-web-wasm-client",
 ]
 
 [[package]]
 name = "miden-stdlib"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cebf10ea08fc7e015e4391953e8953ed689104973084e1c4f057473017e6518"
+checksum = "79bafb0b8715b8323eecef2b118a1dfa7112cc6cc247df742ccb8f8026c4da37"
 dependencies = [
  "env_logger",
  "fs-err",
@@ -2363,8 +2449,9 @@ dependencies = [
 
 [[package]]
 name = "miden-testing"
-version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#f60406e92410fd993c4fda86342f5cd4dca994c9"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e64b086dfad33bc235d847cde20959d7b88d46d1da50d48ad2192321dbc2bcf"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2382,8 +2469,9 @@ dependencies = [
 
 [[package]]
 name = "miden-tx"
-version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#f60406e92410fd993c4fda86342f5cd4dca994c9"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8d0ddcbaaa1002b954525212ebfa7ee097e6af9d26847b3d977b3ffa9f3edeb"
 dependencies = [
  "miden-lib",
  "miden-objects",
@@ -2397,8 +2485,9 @@ dependencies = [
 
 [[package]]
 name = "miden-tx-batch-prover"
-version = "0.12.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#f60406e92410fd993c4fda86342f5cd4dca994c9"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3aab74fe8a2227aede2513f8a9dcde5268d3ae4debd5a904cf05992418bbd62d"
 dependencies = [
  "miden-objects",
  "miden-tx",
@@ -2406,9 +2495,9 @@ dependencies = [
 
 [[package]]
 name = "miden-utils-diagnostics"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9da59c10824c85d585145aff6ef760f0baaaf6c4576c8ad241c281ce2e345b79"
+checksum = "a7d2d3d0909fa09ba58c6965f0dfafefeb299822dc417893786c119211cac89c"
 dependencies = [
  "miden-crypto",
  "miden-debug-types",
@@ -2418,10 +2507,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "miden-utils-sync"
-version = "0.18.2"
+name = "miden-utils-indexing"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "498138c030b4bf3808e2ef87ba1170b22d5572a8ef6a0acd5a5f10d2bfc91e72"
+checksum = "5f35669a21d99c0d5f96720ba80205438f5e63a4132dfa4d1089bc95efce7760"
+dependencies = [
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "miden-utils-sync"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d9f2e82680ceff6618373c61d5947eda6eaf95f3503cf8310d3fb12a1dbdf9f"
 dependencies = [
  "lock_api",
  "loom",
@@ -2430,9 +2528,9 @@ dependencies = [
 
 [[package]]
 name = "miden-verifier"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edf15bf92a77f8f7d0291b155af55bb5576fe4277d897dc035e73dc39275bace"
+checksum = "a7e25b94000d5eaa24375c1c0a6fb49e1f349a35b59f51717359f06bc56fe14f"
 dependencies = [
  "miden-air",
  "miden-core",
@@ -2729,9 +2827,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaf416e4cb72756655126f7dd7bb0af49c674f4c1b9903e80c009e0c37e552e6"
+checksum = "b84bcd6ae87133e903af7ef497404dda70c60d0ea14895fc8a5e6722754fc2a0"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -2743,15 +2841,15 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-otlp"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbee664a43e07615731afc539ca60c6d9f1a9425e25ca09c57bc36c87c55852b"
+checksum = "7a2366db2dca4d2ad033cad11e6ee42844fd727007af5ad04a1730f4cb8163bf"
 dependencies = [
  "http 1.3.1",
  "opentelemetry",
  "opentelemetry-proto",
  "opentelemetry_sdk",
- "prost",
+ "prost 0.14.1",
  "thiserror 2.0.17",
  "tokio",
  "tonic",
@@ -2759,21 +2857,22 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-proto"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e046fd7660710fe5a05e8748e70d9058dc15c94ba914e7c4faa7c728f0e8ddc"
+checksum = "a7175df06de5eaee9909d4805a3d07e28bb752c34cab57fa9cff549da596b30f"
 dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
- "prost",
+ "prost 0.14.1",
  "tonic",
+ "tonic-prost",
 ]
 
 [[package]]
 name = "opentelemetry_sdk"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11f644aa9e5e31d11896e024305d7e3c98a88884d9f8919dbf37a9991bc47a4b"
+checksum = "e14ae4f5991976fd48df6d843de219ca6d31b01daaab2dad5af2badeded372bd"
 dependencies = [
  "futures-channel",
  "futures-executor",
@@ -2781,7 +2880,6 @@ dependencies = [
  "opentelemetry",
  "percent-encoding",
  "rand",
- "serde_json",
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
@@ -3028,14 +3126,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2796faa41db3ec313a31f7624d9286acf277b52de526150b7e69f3debf891ee5"
 dependencies = [
  "bytes",
- "prost-derive",
+ "prost-derive 0.13.5",
+]
+
+[[package]]
+name = "prost"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7231bd9b3d3d33c86b58adbac74b5ec0ad9f496b19d22801d773636feaa95f3d"
+dependencies = [
+ "bytes",
+ "prost-derive 0.14.1",
 ]
 
 [[package]]
 name = "prost-build"
-version = "0.13.5"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
+checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
  "heck",
  "itertools",
@@ -3044,8 +3152,10 @@ dependencies = [
  "once_cell",
  "petgraph",
  "prettyplease",
- "prost",
- "prost-types",
+ "prost 0.14.1",
+ "prost-types 0.14.1",
+ "pulldown-cmark",
+ "pulldown-cmark-to-cmark",
  "regex",
  "syn",
  "tempfile",
@@ -3065,6 +3175,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost-derive"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "prost-reflect"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3073,20 +3196,20 @@ dependencies = [
  "logos 0.14.4",
  "miette",
  "once_cell",
- "prost",
- "prost-types",
+ "prost 0.13.5",
+ "prost-types 0.13.5",
 ]
 
 [[package]]
 name = "prost-reflect"
-version = "0.15.3"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37587d5a8a1b3dc9863403d084fc2254b91ab75a702207098837950767e2260b"
+checksum = "89a3ac73ec9a9118131a4594c9d336631a07852220a1d0ae03ee36b04503a063"
 dependencies = [
  "logos 0.15.1",
  "miette",
- "prost",
- "prost-types",
+ "prost 0.14.1",
+ "prost-types 0.14.1",
 ]
 
 [[package]]
@@ -3095,7 +3218,16 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52c2c1bf36ddb1a1c396b3601a3cec27c2462e45f07c386894ec3ccf5332bd16"
 dependencies = [
- "prost",
+ "prost 0.13.5",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9b4db3d6da204ed77bb26ba83b6122a73aeb2e87e25fbf7ad2e84c4ccbf8f72"
+dependencies = [
+ "prost 0.14.1",
 ]
 
 [[package]]
@@ -3106,25 +3238,25 @@ checksum = "6f352af331bf637b8ecc720f7c87bf903d2571fa2e14a66e9b2558846864b54a"
 dependencies = [
  "bytes",
  "miette",
- "prost",
+ "prost 0.13.5",
  "prost-reflect 0.14.7",
- "prost-types",
+ "prost-types 0.13.5",
  "protox-parse 0.7.0",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "protox"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "424c2bd294b69c49b949f3619362bc3c5d28298cd1163b6d1a62df37c16461aa"
+checksum = "8555716f64c546306ddf3383065dc40d4232609e79e0a4c50e94e87d54f30fb4"
 dependencies = [
  "bytes",
  "miette",
- "prost",
- "prost-reflect 0.15.3",
- "prost-types",
- "protox-parse 0.8.0",
+ "prost 0.14.1",
+ "prost-reflect 0.16.2",
+ "prost-types 0.14.1",
+ "protox-parse 0.9.0",
  "thiserror 2.0.17",
 ]
 
@@ -3136,20 +3268,40 @@ checksum = "a3a462d115462c080ae000c29a47f0b3985737e5d3a995fcdbcaa5c782068dde"
 dependencies = [
  "logos 0.14.4",
  "miette",
- "prost-types",
+ "prost-types 0.13.5",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "protox-parse"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57927f9dbeeffcce7192404deee6157a640cbb3fe8ac11eabbe571565949ab75"
+checksum = "072eee358134396a4643dff81cfff1c255c9fbd3fb296be14bdb6a26f9156366"
 dependencies = [
  "logos 0.15.1",
  "miette",
- "prost-types",
+ "prost-types 0.14.1",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "pulldown-cmark"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e8bbe1a966bd2f362681a44f6edce3c2310ac21e4d5067a6e7ec396297a6ea0"
+dependencies = [
+ "bitflags",
+ "memchr",
+ "unicase",
+]
+
+[[package]]
+name = "pulldown-cmark-to-cmark"
+version = "21.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5b6a0769a491a08b31ea5c62494a8f144ee0987d86d670a8af4df1e1b7cde75"
+dependencies = [
+ "pulldown-cmark",
 ]
 
 [[package]]
@@ -3263,9 +3415,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.11.3"
+version = "1.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b5288124840bee7b386bc413c487869b360b2b4ec421ea56425128692f2a82c"
+checksum = "843bc0191f75f3e22651ae5f1e72939ab2f72a4bc30fa80a066bd66edefc24d4"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -3275,9 +3427,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.11"
+version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "833eb9ce86d40ef33cb1306d8accf7bc8ec2bfea4355cbdebb3df68b40925cad"
+checksum = "5276caf25ac86c8d810222b3dbb938e512c55c6831a10f3e6ed1c93b84041f1c"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -3749,16 +3901,6 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 
 [[package]]
 name = "socket2"
-version = "0.5.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
-dependencies = [
- "libc",
- "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "socket2"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "233504af464074f9d066d7b5416c5f9b894a5862a6506e306f7b816cdd6f1807"
@@ -4046,28 +4188,25 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.47.1"
+version = "1.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e49afdadebb872d3145a5638b59eb0691ea23e46ca484037cfab3b76b95038"
+checksum = "ff360e02eab121e0bc37a2d3b4d4dc622e6eda3a8e5253d5435ecf5bd4c68408"
 dependencies = [
- "backtrace",
  "bytes",
- "io-uring",
  "libc",
  "mio",
  "pin-project-lite",
  "signal-hook-registry",
- "slab",
- "socket2 0.6.0",
+ "socket2",
  "tokio-macros",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "tokio-macros"
-version = "2.5.0"
+version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
+checksum = "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4201,9 +4340,9 @@ checksum = "d163a63c116ce562a22cda521fcc4d79152e7aba014456fb5eb442f6d6a10109"
 
 [[package]]
 name = "tonic"
-version = "0.13.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e581ba15a835f4d9ea06c55ab1bd4dce26fc53752c69a04aac00703bfb49ba9"
+checksum = "eb7613188ce9f7df5bfe185db26c5814347d110db17920415cf2fbcad85e7203"
 dependencies = [
  "async-trait",
  "axum",
@@ -4218,9 +4357,9 @@ dependencies = [
  "hyper-util",
  "percent-encoding",
  "pin-project",
- "prost",
  "rustls-native-certs",
- "socket2 0.5.10",
+ "socket2",
+ "sync_wrapper",
  "tokio",
  "tokio-rustls",
  "tokio-stream",
@@ -4232,35 +4371,61 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.13.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eac6f67be712d12f0b41328db3137e0d0757645d8904b4cb7d51cd9c2279e847"
+checksum = "4c40aaccc9f9eccf2cd82ebc111adc13030d23e887244bc9cfa5d1d636049de3"
 dependencies = [
  "prettyplease",
  "proc-macro2",
- "prost-build",
- "prost-types",
  "quote",
  "syn",
 ]
 
 [[package]]
 name = "tonic-health"
-version = "0.13.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb87334d340313fefa513b6e60794d44a86d5f039b523229c99c323e4e19ca4b"
+checksum = "2a82868bf299e0a1d2e8dce0dc33a46c02d6f045b2c1f1d6cc8dc3d0bf1812ef"
 dependencies = [
- "prost",
+ "prost 0.14.1",
  "tokio",
  "tokio-stream",
+ "tonic",
+ "tonic-prost",
+]
+
+[[package]]
+name = "tonic-prost"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66bd50ad6ce1252d87ef024b3d64fe4c3cf54a86fb9ef4c631fdd0ded7aeaa67"
+dependencies = [
+ "bytes",
+ "prost 0.14.1",
  "tonic",
 ]
 
 [[package]]
-name = "tonic-web"
-version = "0.13.1"
+name = "tonic-prost-build"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "774cad0f35370f81b6c59e3a1f5d0c3188bdb4a2a1b8b7f0921c860bfbd3aec6"
+checksum = "b4a16cba4043dc3ff43fcb3f96b4c5c154c64cbd18ca8dce2ab2c6a451d058a2"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "prost-build",
+ "prost-types 0.14.1",
+ "quote",
+ "syn",
+ "tempfile",
+ "tonic-build",
+]
+
+[[package]]
+name = "tonic-web"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75214f6b6bd28c19aa752ac09fdf0eea546095670906c21fe3940e180a4c43f2"
 dependencies = [
  "base64",
  "bytes",
@@ -4276,9 +4441,9 @@ dependencies = [
 
 [[package]]
 name = "tonic-web-wasm-client"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66e3bb7acca55e6790354be650f4042d418fcf8e2bc42ac382348f2b6bf057e5"
+checksum = "898cd44be5e23e59d2956056538f1d6b3c5336629d384ffd2d92e76f87fb98ff"
 dependencies = [
  "base64",
  "byteorder",
@@ -4396,15 +4561,16 @@ dependencies = [
 
 [[package]]
 name = "tracing-opentelemetry"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddcf5959f39507d0d04d6413119c04f33b623f4f951ebcbdddddfad2d0623a9c"
+checksum = "1e6e5658463dd88089aba75c7791e1d3120633b1bfde22478b28f625a9bb1b8e"
 dependencies = [
  "js-sys",
- "once_cell",
  "opentelemetry",
  "opentelemetry_sdk",
+ "rustversion",
  "smallvec",
+ "thiserror 2.0.17",
  "tracing",
  "tracing-core",
  "tracing-log",
@@ -4485,6 +4651,12 @@ checksum = "e1b88fcfe09e89d3866a5c11019378088af2d24c3fbd4f0543f96b479ec90697"
 dependencies = [
  "version_check",
 ]
+
+[[package]]
+name = "unicase"
+version = "2.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75b844d17643ee918803943289730bec8aac480150456169e647ed0b576ba539"
 
 [[package]]
 name = "unicode-ident"
@@ -5290,6 +5462,16 @@ name = "writeable"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
+
+[[package]]
+name = "x25519-dalek"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7e468321c81fb07fa7f4c636c3972b9100f0346e5b6a9f2bd0603a52f7ed277"
+dependencies = [
+ "curve25519-dalek",
+ "rand_core 0.6.4",
+]
 
 [[package]]
 name = "yansi"

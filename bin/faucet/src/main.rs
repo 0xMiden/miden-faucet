@@ -321,7 +321,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             tasks_ids.insert(api_id, "api");
 
             if let Some(frontend_url) = frontend_url {
-                let frontend_id = tasks.spawn(serve_frontend(frontend_url, api_url)).id();
+                let frontend_id = tasks.spawn(serve_frontend(frontend_url, api_url, node_url)).id();
                 tasks_ids.insert(frontend_id, "frontend");
             }
 
@@ -409,13 +409,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use fantoccini::ClientBuilder;
-    use miden_client::account::{
-        AccountId,
-        AccountIdAddress,
-        Address,
-        AddressInterface,
-        NetworkId,
-    };
+    use miden_client::account::{AccountId, Address, NetworkId};
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
@@ -443,9 +437,8 @@ mod tests {
 
         let network_id = NetworkId::Testnet;
         let account_id = AccountId::try_from(0).unwrap();
-        let address =
-            Address::from(AccountIdAddress::new(account_id, AddressInterface::BasicWallet));
-        let address_bech32 = address.to_bech32(network_id);
+        let address = Address::new(account_id);
+        let address_bech32 = address.encode(network_id);
 
         // Fill in the account address
         client

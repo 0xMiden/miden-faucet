@@ -5,14 +5,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{
-    AccountFile,
-    AccountId,
-    AccountIdAddress,
-    Address,
-    AddressInterface,
-    NetworkId,
-};
+use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
 use miden_client::asset::FungibleAsset;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
@@ -67,8 +60,7 @@ impl FaucetId {
     }
 
     pub fn to_bech32(&self) -> String {
-        let address = AccountIdAddress::new(self.account_id, AddressInterface::Unspecified);
-        Address::from(address).to_bech32(self.network_id.clone())
+        Address::new(self.account_id).encode(self.network_id.clone())
     }
 }
 

@@ -1,5 +1,5 @@
 use anyhow::Context;
-use miden_node_proto::generated::primitives::MmrDelta;
+use miden_client::crypto::{Forest, MmrDelta};
 use miden_node_proto::generated::rpc::api_server;
 use miden_node_proto::generated::{self as proto};
 use miden_testing::MockChain;
@@ -43,15 +43,17 @@ impl api_server::Api for StubRpcApi {
     ) -> Result<Response<proto::rpc_store::SyncStateResponse>, Status> {
         let mock_chain = MockChain::new();
         let block_header = proto::blockchain::BlockHeader::from(mock_chain.latest_block_header());
-        let mmr_delta = mock_chain.blockchain().peaks_at(block_header.block_num.into()).unwrap();
+        let mmr_peaks = mock_chain.blockchain().peaks_at(block_header.block_num.into()).unwrap();
+        let mmr_delta: MmrDelta = mock_chain
+            .blockchain()
+            .as_mmr()
+            .get_delta(Forest::empty(), mmr_peaks.forest())
+            .unwrap();
 
         Ok(Response::new(proto::rpc_store::SyncStateResponse {
             chain_tip: 0,
             block_header: Some(block_header),
-            mmr_delta: Some(MmrDelta {
-                forest: mmr_delta.forest().num_leaves() as u64,
-                data: mmr_delta.peaks().iter().map(proto::primitives::Digest::from).collect(),
-            }),
+            mmr_delta: Some(mmr_delta.into()),
             accounts: vec![],
             transactions: vec![],
             notes: vec![],
@@ -133,7 +135,7 @@ impl api_server::Api for StubRpcApi {
     async fn get_note_script_by_root(
         &self,
         _request: Request<proto::note::NoteRoot>,
-    ) -> Result<Response<proto::rpc_store::MaybeNoteScript>, Status> {
+    ) -> Result<Response<proto::shared::MaybeNoteScript>, Status> {
         unimplemented!()
     }
 

@@ -3,6 +3,7 @@ use axum::extract::{Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, Address};
+use miden_client::address::AddressId;
 use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
 use miden_pow_rate_limiter::ChallengeError;
@@ -212,12 +213,12 @@ impl RawMintRequest {
         let account_id = if self.account_id.starts_with("0x") {
             AccountId::from_hex(&self.account_id).map_err(AccountError::ParseId)
         } else {
-            Address::from_bech32(&self.account_id)
-                .map_err(AccountError::ParseAddress)
-                .and_then(|(_, address)| match address {
-                    Address::AccountId(account_id_address) => Ok(account_id_address.id()),
+            Address::decode(&self.account_id).map_err(AccountError::ParseAddress).and_then(
+                |(_, address)| match address.id() {
+                    AddressId::AccountId(account_id) => Ok(account_id),
                     _ => Err(AccountError::AddressNotIdBased),
-                })
+                },
+            )
         }
         .map_err(MintRequestError::AccountError)?;
 
