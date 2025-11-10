@@ -60,14 +60,11 @@ If you have a Miden Node running locally, you can run the faucet against that no
 miden-faucet init \
   --token-symbol MIDEN \
   --decimals 6 \
-  --max-supply 100000000000000000 \
-  --node-url http://localhost:57291
+  --max-supply 100000000000000000
 
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
-  --node-url http://localhost:57291 \
-  --network localhost
+  --api-url http://localhost:8000
 ```
 
 ### Development
@@ -79,12 +76,11 @@ miden-faucet init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
-  --node-url https://rpc.devnet.miden.io
+  --network devnet
 
 miden-faucet start \
   --frontend-url http://localhost:8080 \
   --api-url http://localhost:8000 \
-  --node-url https://rpc.devnet.miden.io \
   --network devnet
 ```
 
@@ -97,12 +93,11 @@ miden-faucet init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
-  --node-url https://rpc.testnet.miden.io
+  --network testnet
 
 miden-faucet start \
   --frontend-url http://localhost:8080 \
   --api-url http://localhost:8000 \
-  --node-url https://rpc.testnet.miden.io \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ``` 
@@ -114,6 +109,5 @@ If you only need the API and don't want to serve the web interface:
 ```bash
 miden-faucet start \
   --api-url http://localhost:8000 \
-  --node-url https://rpc.testnet.miden.io \
   --network testnet
 ```
