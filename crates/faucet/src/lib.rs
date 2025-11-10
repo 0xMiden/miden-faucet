@@ -118,6 +118,8 @@ impl Faucet {
             .build()
             .await?;
 
+        client.ensure_genesis_in_place().await?;
+
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
         let note_screener = NoteScreener::new(sqlite_store.clone());
@@ -127,7 +129,14 @@ impl Faucet {
             StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
         Self::sync_state(account.id(), &mut client, &state_sync_component).await?;
 
-        client.add_account(&account, false).await?;
+        let add_result = client.add_account(&account, false).await;
+        match add_result {
+            Ok(()) => (),
+            Err(ClientError::AccountAlreadyTracked(_)) => {
+                warn!("Account already tracked, skipping import");
+            },
+            Err(error) => anyhow::bail!("failed to add account: {error}"),
+        }
         client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
 
         if deploy {
