@@ -5,8 +5,9 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
+use miden_client::account::{Account, AccountId, Address, NetworkId};
 use miden_client::asset::FungibleAsset;
+use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
@@ -18,7 +19,9 @@ use miden_client::transaction::{
     LocalTransactionProver,
     TransactionId,
     TransactionProver,
+    TransactionRequest,
     TransactionRequestBuilder,
+    TransactionRequestError,
     TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
@@ -36,10 +39,13 @@ pub mod types;
 
 use crate::note_screener::NoteScreener;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
-use crate::types::AssetAmount;
+use crate::types::{AssetAmount, NoteType};
 
 const COMPONENT: &str = "miden-faucet-client";
+
 const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
+const KEYSTORE_PATH: &str = "keystore";
+const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -75,101 +81,141 @@ pub struct Faucet {
     script: TransactionScript,
 }
 
+/// Configuration for initializing and loading a faucet.
+pub struct FaucetConfig {
+    /// The path to the client store file.
+    pub store_path: PathBuf,
+    /// The endpoint of the node to connect to.
+    pub node_endpoint: Endpoint,
+    /// The network ID of the node to connect to.
+    pub network_id: NetworkId,
+    /// The timeout for the node connection.
+    pub timeout: Duration,
+    /// The remote prover url to use for proving transactions. If set to none, a local transaction
+    /// prover is used.
+    pub remote_tx_prover_url: Option<Url>,
+}
+
 impl Faucet {
-    /// Loads the faucet.
-    ///
-    /// A client is instantiated with the provided store path, node url and timeout. The account is
-    /// loaded from the provided account file. If the account is already tracked by the current
-    /// store, it is loaded. Otherwise, the account is added from the file state.
-    ///
-    /// If a remote transaction prover url is provided, it is used to prove transactions. Otherwise,
-    /// a local transaction prover is used.
-    #[instrument(target = COMPONENT, name = "faucet.load", fields(account_id), skip_all, err)]
-    pub async fn load(
-        store_path: PathBuf,
-        network_id: NetworkId,
-        account_file: AccountFile,
-        node_url: &Url,
-        timeout: Duration,
-        remote_tx_prover_url: Option<Url>,
-    ) -> anyhow::Result<Self> {
-        let account = account_file.account;
-        tracing::Span::current().record("account_id", account.id().to_string());
-
-        let keystore = FilesystemKeyStore::<StdRng>::new(PathBuf::from("keystore"))
+    /// Initializes a new faucet client, creating the keystore and the database with the given
+    /// account. If set to deploy, an empty transaction is created and submitted to the node.
+    pub async fn init(
+        config: &FaucetConfig,
+        account: Account,
+        secret_key: &AuthSecretKey,
+        deploy: bool,
+    ) -> anyhow::Result<()> {
+        let keystore = FilesystemKeyStore::<StdRng>::new(KEYSTORE_PATH.into())
             .context("failed to create keystore")?;
-        for key in account_file.auth_secret_keys {
-            keystore.add_key(&key)?;
-        }
-        let url: &str = node_url.as_str().trim_end_matches('/');
-        let endpoint = Endpoint::try_from(url)
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("failed to parse node url: {node_url}"))?;
+        keystore.add_key(secret_key)?;
 
-        let sqlite_store = Arc::new(SqliteStore::new(store_path).await?);
+        let sqlite_store = Arc::new(SqliteStore::new(config.store_path.clone()).await?);
 
         let mut client = ClientBuilder::new()
-            .grpc_client(&endpoint, Some(timeout.as_millis() as u64))
+            .grpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .authenticator(Arc::new(keystore))
             .store(sqlite_store.clone())
             .build()
             .await?;
-
-        let grpc_client = Arc::new(GrpcClient::new(&endpoint, timeout.as_millis() as u64));
 
         client.ensure_genesis_in_place().await?;
 
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
         let note_screener = NoteScreener::new(sqlite_store.clone());
+        let grpc_client =
+            Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component =
             StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
         Self::sync_state(account.id(), &mut client, &state_sync_component).await?;
 
-        let issuance = match client.import_account_by_id(account.id()).await {
-            Ok(()) => {
-                // SAFETY: if import was successful, the account is tracked by the client
-                let record = client.get_account(account.id()).await?.unwrap();
-                info!(
-                    commitment = %record.account().commitment(),
-                    nonce = %record.account().nonce(),
-                    "Received faucet account state from the node",
-                );
-                record.account().get_token_issuance()?
+        let add_result = client.add_account(&account, false).await;
+        match add_result {
+            Ok(()) => (),
+            Err(ClientError::AccountAlreadyTracked(_)) => {
+                warn!("Account already tracked, skipping import");
             },
-            Err(_) => match client.add_account(&account, false).await {
-                Ok(()) => {
-                    info!(
-                        commitment = %account.commitment(),
-                        nonce = %account.nonce(),
-                        "Loaded state from account file"
-                    );
-                    account.get_token_issuance()?
-                },
-                Err(ClientError::AccountAlreadyTracked(_)) => {
-                    // SAFETY: account is tracked, so its present in the db
-                    let record = client.get_account(account.id()).await?.unwrap();
-                    info!(
-                        commitment = %record.account().commitment(),
-                        nonce = %record.account().nonce(),
-                        "Loaded state from existing local client db"
-                    );
-                    record.account().get_token_issuance()?
-                },
-                Err(err) => anyhow::bail!("failed to add account from file: {err}"),
-            },
-        };
+            Err(error) => anyhow::bail!("failed to add account: {error}"),
+        }
+        client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
 
-        let faucet = BasicFungibleFaucet::try_from(&account)?;
-        let tx_prover: Arc<dyn TransactionProver> = match remote_tx_prover_url {
+        if deploy {
+            let mut faucet = Self::load(config).await?;
+
+            // TODO: This is a workaround to deploy the account on the chain. Ideally this would be
+            // done with an empty transaction, but that currently fails due to: https://github.com/0xMiden/miden-base/issues/2072
+            // Once that change is included in the next release, we can revert this workaround.
+            let mut rng = {
+                let auth_seed: [u64; 4] = rng().random();
+                let rng_seed = Word::from(auth_seed.map(Felt::new));
+                RpoRandomCoin::new(rng_seed)
+            };
+            let notes = build_p2id_notes(
+                &faucet.faucet_id(),
+                &[MintRequest {
+                    account_id: faucet.id.account_id,
+                    note_type: NoteType::Private,
+                    asset_amount: AssetAmount::new(1).unwrap(),
+                }],
+                &mut rng,
+            )?;
+
+            // Build and submit transaction
+            let tx_request = faucet
+                .create_transaction(notes)
+                .context("faucet failed to create transaction")?;
+
+            faucet.submit_new_transaction(tx_request).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Loads the faucet with the given config.
+    ///
+    /// The account used is the default account set in the store, that is set on `Faucet::init`.
+    #[instrument(target = COMPONENT, name = "faucet.load", fields(account_id), skip_all, err)]
+    pub async fn load(config: &FaucetConfig) -> anyhow::Result<Self> {
+        let span = tracing::Span::current();
+        let mut client = ClientBuilder::new()
+            .grpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
+            .filesystem_keystore(KEYSTORE_PATH)
+            .store(Arc::new(SqliteStore::new(config.store_path.clone()).await?))
+            .build()
+            .await
+            .context("failed to build client")?;
+
+        let account_id: AccountId = client
+            .get_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned())
+            .await?
+            .context("no default account id found")?;
+        span.record("account_id", account_id.to_hex());
+
+        // Try to update the account state with the node.
+        let _ = client.import_account_by_id(account_id).await.inspect(|_| {
+            info!("Received faucet account state from the node");
+        });
+
+        let record = client.get_account(account_id).await?.context("no account found")?;
+        let account = record.account();
+
+        let faucet = BasicFungibleFaucet::try_from(account)?;
+        let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
         };
-        let id = FaucetId::new(account.id(), network_id);
+        let id = FaucetId::new(account.id(), config.network_id.clone());
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
-        let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance.as_int())?));
+        let issuance =
+            Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
+
+        let note_screener =
+            NoteScreener::new(Arc::new(SqliteStore::new(config.store_path.clone()).await?));
+        let grpc_client =
+            Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
+        let state_sync_component = StateSync::new(grpc_client, Arc::new(note_screener), None);
 
         Ok(Self {
             id,
@@ -295,14 +341,13 @@ impl Faucet {
         let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
         let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
 
-        // Create the transaction
+        // Build and submit transaction
+        let tx_request =
+            self.create_transaction(notes).context("faucet failed to create transaction")?;
         let tx_id = self
-            .create_transaction(notes)
+            .submit_new_transaction(tx_request)
             .await
-            .context("faucet failed to create transaction")
-            .inspect_err(|err| {
-                error!(?err, "failed to create transaction");
-            })?;
+            .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
 
         Self::send_responses(response_senders, note_ids, tx_id);
@@ -361,11 +406,12 @@ impl Faucet {
         (valid_requests, response_senders)
     }
 
-    /// Creates a transaction with the given notes, executes it, proves it, and submits using the
-    /// local miden-client. This results in submitting the transaction to the node and updating the
-    /// local db to track the created notes.
-    #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all)]
-    async fn create_transaction(&mut self, notes: Vec<Note>) -> Result<TransactionId, ClientError> {
+    /// Creates a transaction that generates the given p2id notes.
+    #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err)]
+    fn create_transaction(
+        &mut self,
+        notes: Vec<Note>,
+    ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
         let n = notes.len() as u64;
@@ -382,13 +428,23 @@ impl Faucet {
         let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
 
-        let tx_request = TransactionRequestBuilder::new()
+        TransactionRequestBuilder::new()
             .custom_script(self.script.clone())
             .extend_advice_map(advice_map)
             .expected_output_recipients(expected_output_recipients)
             .script_arg(note_data_commitment)
-            .build()?;
+            .build()
+    }
 
+    /// Executes, proves, and then submits a transaction using the local miden-client.
+    /// This results in submitting the transaction to the node and updating the local db to track
+    /// the created notes.
+    #[instrument(target = COMPONENT, name = "faucet.mint.submit_new_transaction", skip_all, err)]
+    async fn submit_new_transaction(
+        &mut self,
+        tx_request: TransactionRequest,
+    ) -> Result<TransactionId, ClientError> {
+        // Execute the transaction
         let tx_result = self
             .client
             .execute_transaction(self.id.account_id, tx_request)
@@ -423,6 +479,17 @@ impl Faucet {
         self.client.apply_transaction(&tx_result, submission_height).await?;
 
         Ok(tx_id)
+    }
+
+    /// Returns the faucet account.
+    pub async fn faucet_account(&self) -> Result<Account, ClientError> {
+        Ok(self
+            .client
+            .get_account(self.id.account_id)
+            .await?
+            .ok_or(ClientError::AccountDataNotFound(self.id.account_id))?
+            .account()
+            .clone())
     }
 
     /// Returns the id of the faucet account.
