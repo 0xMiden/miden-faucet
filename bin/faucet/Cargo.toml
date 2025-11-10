@@ -58,7 +58,7 @@ reqwest          = { default-features = false, features = ["json"], version = "0
 serde_json       = { workspace = true }
 tokio            = { features = ["macros", "process"], workspace = true }
 tonic-web        = { version = "0.14" }
-uuid             = { features = ["v4"], version = "1.10" }
+uuid             = { workspace = true }
 
 # Required to avoid false positives in cargo-machete
 # This is due to the `winter-maybe-async` crate not working standalone.
