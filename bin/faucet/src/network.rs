@@ -2,13 +2,14 @@ use std::convert::Infallible;
 use std::str::FromStr;
 
 use miden_client::account::{NetworkId, NetworkIdError};
+use miden_client::rpc::Endpoint;
 use serde::{Deserialize, Serialize};
 
 // NETWORK
 // ================================================================================================
 
-/// Represents the network where the faucet is running. It is used to show the correct bech32
-/// addresses and explorer URL in the UI.
+/// Represents the network where the faucet is running. It is used to display the correct bech32
+/// addresses in the UI.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum FaucetNetwork {
     Testnet,
@@ -39,5 +40,15 @@ impl FaucetNetwork {
             FaucetNetwork::Localhost => NetworkId::new("mlcl")?,
             FaucetNetwork::Custom(s) => NetworkId::new(s)?,
         })
+    }
+
+    /// Converts the Network variant to its corresponding RPC endpoint string, if it exists.
+    pub fn to_rpc_endpoint(&self) -> Option<String> {
+        match self {
+            FaucetNetwork::Custom(_) => None,
+            FaucetNetwork::Devnet => Some(Endpoint::devnet().to_string()),
+            FaucetNetwork::Localhost => Some(Endpoint::localhost().to_string()),
+            FaucetNetwork::Testnet => Some(Endpoint::testnet().to_string()),
+        }
     }
 }

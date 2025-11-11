@@ -5,41 +5,50 @@ use axum::extract::State;
 use miden_client::utils::RwLock;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::types::AssetAmount;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
+use crate::api::ApiServer;
+use crate::api_key::ApiKey;
 
 /// Describes the faucet metadata needed to show on the frontend.
+#[derive(Clone)]
 pub struct Metadata {
     pub id: FaucetId,
     pub issuance: Arc<RwLock<AssetAmount>>,
     pub max_supply: AssetAmount,
     pub decimals: u8,
     pub explorer_url: Option<Url>,
-}
-
-impl Serialize for Metadata {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Metadata", 5)?;
-        state.serialize_field("id", &self.id.to_bech32())?;
-        state.serialize_field("issuance", &self.issuance.read().base_units())?;
-        state.serialize_field("max_supply", &self.max_supply.base_units())?;
-        state.serialize_field("decimals", &self.decimals)?;
-        state.serialize_field("explorer_url", &self.explorer_url)?;
-        state.end()
-    }
+    pub base_amount: u64,
 }
 
 // ENDPOINT
 // ================================================================================================
 
 #[instrument(parent = None, target = COMPONENT, name = "server.get_metadata", skip_all)]
-pub async fn get_metadata(State(metadata): State<&'static Metadata>) -> Json<&'static Metadata> {
-    Json(metadata)
+pub async fn get_metadata(State(server): State<ApiServer>) -> Json<GetMetadataResponse> {
+    let metadata = server.metadata;
+    let issuance = metadata.issuance.read().base_units();
+    Json(GetMetadataResponse {
+        id: metadata.id.to_bech32(),
+        issuance,
+        max_supply: metadata.max_supply.base_units(),
+        decimals: metadata.decimals,
+        explorer_url: metadata.explorer_url,
+        pow_load_difficulty: server.rate_limiter.get_load_difficulty(ApiKey::default()),
+        base_amount: metadata.base_amount,
+    })
+}
+
+#[derive(Serialize)]
+pub struct GetMetadataResponse {
+    pub id: String,
+    pub issuance: u64,
+    pub max_supply: u64,
+    pub decimals: u8,
+    pub explorer_url: Option<Url>,
+    pub pow_load_difficulty: u64,
+    pub base_amount: u64,
 }

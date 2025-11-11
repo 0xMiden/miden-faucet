@@ -19,6 +19,9 @@ clippy: ## Runs Clippy with configs
 fix: ## Runs Fix with configs
 	cargo fix --allow-staged --allow-dirty --all-targets --all-features --workspace
 
+.PHONY: build
+build: ## By default we should build in release mode
+	cargo build --release
 
 .PHONY: format
 format: ## Runs Format using nightly toolchain
@@ -65,7 +68,7 @@ book: ## Builds the book & serves documentation site
 
 .PHONY: test
 test:  ## Runs all tests
-	cargo nextest run --all-features --workspace
+	cargo nextest run --release --all-features --workspace
 
 # --- checking ------------------------------------------------------------------------------------
 
