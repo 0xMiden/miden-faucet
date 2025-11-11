@@ -17,9 +17,8 @@ target
 keystore/
 faucet_client_store.sqlite3
 
-# Node files used for examples
+# Node files
 node_modules/
-package-lock.json
 
 # Ignore mdbook build files
 book/
