@@ -11,7 +11,7 @@ fn main() {
     let target_dir = Path::new(&build_dir).join("frontend");
 
     fs::create_dir_all(&target_dir).expect("target directory should be created");
-    copy_dir_all("frontend", &target_dir)
+    copy_dir_all(Path::new("frontend"), &target_dir)
         .expect("frontend directory should be copied to target directory");
 
     let npm_install = Command::new("npm")
@@ -32,14 +32,12 @@ fn main() {
     assert!(npm_build.success(), "npm run build failed");
 }
 
-/// Copy all files from source directory to destination directory. Skips directories.
-fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
-    fs::create_dir_all(&dst)?;
+/// Copy all files from source directory to destination directory. Skips inner directories.
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     for entry in fs::read_dir(src)? {
         let entry = entry?;
-        let ty = entry.file_type()?;
-        if !ty.is_dir() {
-            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        if entry.file_type()?.is_file() {
+            fs::copy(entry.path(), dst.join(entry.file_name()))?;
         }
     }
     Ok(())
