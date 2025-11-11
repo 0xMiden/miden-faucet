@@ -15,11 +15,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
 use miden_client::account::{
-    Account,
-    AccountBuilder,
-    AccountFile,
-    AccountStorageMode,
-    AccountType,
+    Account, AccountBuilder, AccountFile, AccountStorageMode, AccountType,
 };
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
@@ -130,16 +126,15 @@ pub enum Command {
         #[clap(flatten)]
         config: ClientConfig,
 
-        /// API URL, in the format `<ip>:<port>`.
+        /// URL to bind the API server.
         #[arg(long = "api-bind-url", value_name = "URL", env = ENV_API_BIND_URL)]
         api_bind_url: Url,
 
-        /// Public API URL, in the format `<ip>:<port>`.
+        /// Public URL to access the API server. If not set, the bind url will be used.
         #[arg(long = "api-public-url", value_name = "URL", env = ENV_API_PUBLIC_URL)]
         api_public_url: Option<Url>,
 
-        /// Frontend API URL, in the format `<ip>:<port>`. If not set, the frontend will not be
-        /// served.
+        /// URL to bind the frontend server. If not set, the frontend will not be served.
         #[arg(long = "frontend-url", value_name = "URL", env = ENV_FRONTEND_URL)]
         frontend_url: Option<Url>,
 
