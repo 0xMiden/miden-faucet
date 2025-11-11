@@ -21,6 +21,7 @@ fix: ## Runs Fix with configs
 
 .PHONY: build
 build: ## By default we should build in release mode
+	cd bin/faucet/frontend && npm install && npm run build && cp node_modules/@demox-labs/miden-sdk/dist/assets/miden_client_web.wasm .
 	cargo build --release
 
 .PHONY: format
@@ -80,6 +81,7 @@ check: ## Check all targets and features for errors without code generation
 
 .PHONY: install-faucet
 install-faucet: ## Installs faucet
+	cd bin/faucet/frontend && npm install && npm run build && cp node_modules/@demox-labs/miden-sdk/dist/assets/miden_client_web.wasm .
 	${BUILD_PROTO} cargo install --path bin/faucet --locked
 
 .PHONY: check-tools

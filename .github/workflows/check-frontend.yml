@@ -1,0 +1,42 @@
+name: Check frontend files
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [main, next]
+
+# Limits workflow concurrency to only the latest commit in the PR.
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  check-frontend:
+    name: Check frontend files are up-to-date
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        working-directory: bin/faucet/frontend
+        run: | 
+          npm install
+          npm run build
+
+      - name: Check bundle.js and WASM file are up-to-date
+        working-directory: bin/faucet/frontend
+        run: |
+          cp node_modules/@demox-labs/miden-sdk/dist/assets/miden_client_web.wasm .
+          if ! git diff --quiet bundle.js miden_client_web.wasm; then
+            echo "Error: bundle.js or miden_client_web.wasm is out of date"
+            echo "Run: make build"
+            exit 1
+          fi
+
