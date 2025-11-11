@@ -21,8 +21,5 @@ faucet_client_store.sqlite3
 node_modules/
 package-lock.json
 
-# Frontend build artifacts
-bin/faucet/frontend/bundle.js
-
 # Ignore mdbook build files
 book/
