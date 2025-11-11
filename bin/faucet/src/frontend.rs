@@ -53,10 +53,7 @@ pub async fn get_index_html() -> Html<&'static str> {
 pub async fn get_miden_client_web_wasm() -> Response {
     (
         [(header::CONTENT_TYPE, header::HeaderValue::from_static("application/wasm"))],
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/frontend/miden_client_web.wasm"
-        ),),
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/miden_client_web.wasm"),),
     )
         .into_response()
 }
