@@ -55,7 +55,7 @@ pub async fn get_miden_client_web_wasm() -> Response {
         [(header::CONTENT_TYPE, header::HeaderValue::from_static("application/wasm"))],
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/frontend/node_modules/@demox-labs/miden-sdk/dist/assets/miden_client_web.wasm"
+            "/frontend/miden_client_web.wasm"
         ),),
     )
         .into_response()
