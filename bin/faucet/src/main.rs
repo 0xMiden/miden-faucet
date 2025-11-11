@@ -49,7 +49,8 @@ use crate::network::FaucetNetwork;
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
 
-const ENV_API_URL: &str = "MIDEN_FAUCET_API_URL";
+const ENV_API_BIND_URL: &str = "MIDEN_FAUCET_API_BIND_URL";
+const ENV_API_PUBLIC_URL: &str = "MIDEN_FAUCET_API_PUBLIC_URL";
 const ENV_FRONTEND_URL: &str = "MIDEN_FAUCET_FRONTEND_URL";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";
@@ -130,8 +131,12 @@ pub enum Command {
         config: ClientConfig,
 
         /// API URL, in the format `<ip>:<port>`.
-        #[arg(long = "api-url", value_name = "URL", env = ENV_API_URL)]
-        api_url: Url,
+        #[arg(long = "api-bind-url", value_name = "URL", env = ENV_API_BIND_URL)]
+        api_bind_url: Url,
+
+        /// Public API URL, in the format `<ip>:<port>`.
+        #[arg(long = "api-public-url", value_name = "URL", env = ENV_API_PUBLIC_URL)]
+        api_public_url: Option<Url>,
 
         /// Frontend API URL, in the format `<ip>:<port>`. If not set, the frontend will not be
         /// served.
@@ -324,7 +329,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     network,
                     store_path,
                 },
-            api_url,
+            api_bind_url,
+            api_public_url,
             frontend_url,
             max_claimable_amount,
             pow_secret,
@@ -402,12 +408,16 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let mut tasks = JoinSet::new();
             let mut tasks_ids = HashMap::new();
 
-            let api_id = tasks.spawn(api_server.serve(api_url.clone())).id();
+            let api_id = tasks.spawn(api_server.serve(api_bind_url.clone())).id();
             tasks_ids.insert(api_id, "api");
 
             if let Some(frontend_url) = frontend_url {
                 let frontend_id = tasks
-                    .spawn(serve_frontend(frontend_url, api_url, node_endpoint.to_string()))
+                    .spawn(serve_frontend(
+                        frontend_url,
+                        api_public_url.unwrap_or(api_bind_url),
+                        node_endpoint.to_string(),
+                    ))
                     .id();
                 tasks_ids.insert(frontend_id, "frontend");
             }
@@ -628,7 +638,8 @@ mod tests {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
                         config,
-                        api_url: Url::try_from(api_url).unwrap(),
+                        api_bind_url: Url::try_from(api_url).unwrap(),
+                        api_public_url: None,
                         frontend_url: Some(Url::parse(frontend_url).unwrap()),
                         max_claimable_amount: 1_000_000_000,
                         api_keys: vec![],
