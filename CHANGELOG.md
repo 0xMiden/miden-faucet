@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.1 (2025-11-11)
+
+- Added `api-public-url` CLI param to fix the backend and frontend communication ([#153](https://github.com/0xMiden/miden-faucet/pull/153)).
+
 ## 0.12.0 (2025-11-10)
 
 - Added requested `amount` to PoW Challenge ([#68](https://github.com/0xMiden/miden-faucet/pull/68)).
@@ -12,7 +16,7 @@
 - Separated frontend and backend servers ([#119](https://github.com/0xMiden/miden-faucet/pull/119)).
 - Frontend now awaits for the transaction to be committed ([#127](https://github.com/0xMiden/miden-faucet/pull/127)).
 - Added 10-block expiration delta to faucet minting transactions ([#136](https://github.com/0xMiden/miden-faucet/pull/136)).
-- 
+
 ## 0.11.8 (2025-10-27)
 
 - Sync state before creating transactions to avoid desync errors (#[132](https://github.com/0xMiden/miden-faucet/pull/132)).
