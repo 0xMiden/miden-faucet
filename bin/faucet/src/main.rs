@@ -15,11 +15,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
 use miden_client::account::{
-    Account,
-    AccountBuilder,
-    AccountFile,
-    AccountStorageMode,
-    AccountType,
+    Account, AccountBuilder, AccountFile, AccountStorageMode, AccountType,
 };
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
@@ -49,7 +45,7 @@ use crate::network::FaucetNetwork;
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
 
-const ENV_API_BIND_URL: &str = "MIDEN_FAUCET_API_BIND_URL";
+const ENV_API_PORT: &str = "MIDEN_FAUCET_API_PORT";
 const ENV_API_PUBLIC_URL: &str = "MIDEN_FAUCET_API_PUBLIC_URL";
 const ENV_FRONTEND_URL: &str = "MIDEN_FAUCET_FRONTEND_URL";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
@@ -130,11 +126,11 @@ pub enum Command {
         #[clap(flatten)]
         config: ClientConfig,
 
-        /// URL to bind the API server.
-        #[arg(long = "api-bind-url", value_name = "URL", env = ENV_API_BIND_URL)]
-        api_bind_url: Url,
+        /// Port to bind the API server. The URL will be constructed as `http://0.0.0.0:<api-port>`.
+        #[arg(long = "api-port", value_name = "PORT", env = ENV_API_PORT)]
+        api_port: u16,
 
-        /// Public URL to access the API server. If not set, the bind url will be used.
+        /// Public URL to access the API server. If not set, will default to http://localhost:<api-port>.
         #[arg(long = "api-public-url", value_name = "URL", env = ENV_API_PUBLIC_URL)]
         api_public_url: Option<Url>,
 
@@ -328,7 +324,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     network,
                     store_path,
                 },
-            api_bind_url,
+            api_port,
             api_public_url,
             frontend_url,
             max_claimable_amount,
@@ -407,14 +403,16 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let mut tasks = JoinSet::new();
             let mut tasks_ids = HashMap::new();
 
-            let api_id = tasks.spawn(api_server.serve(api_bind_url.clone())).id();
+            let api_url = Url::parse(&format!("http://0.0.0.0:{api_port}"))?;
+            let api_id = tasks.spawn(api_server.serve(api_url.clone())).id();
             tasks_ids.insert(api_id, "api");
 
             if let Some(frontend_url) = frontend_url {
+                let api_local_url = Url::parse(&format!("http://localhost:{api_port}"))?;
                 let frontend_id = tasks
                     .spawn(serve_frontend(
                         frontend_url,
-                        api_public_url.unwrap_or(api_bind_url),
+                        api_public_url.unwrap_or(api_local_url),
                         node_endpoint.to_string(),
                     ))
                     .id();
@@ -621,7 +619,8 @@ mod tests {
         .await
         .expect("failed to create faucet account");
 
-        let api_url = "http://localhost:8000";
+        let api_port = 8000;
+        let api_url = format!("http://localhost:{api_port}");
         let frontend_url = "http://localhost:8080";
 
         // Use std::thread to launch faucet - avoids Send requirements
@@ -637,7 +636,7 @@ mod tests {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
                         config,
-                        api_bind_url: Url::try_from(api_url).unwrap(),
+                        api_port,
                         api_public_url: None,
                         frontend_url: Some(Url::parse(frontend_url).unwrap()),
                         max_claimable_amount: 1_000_000_000,
@@ -659,7 +658,7 @@ mod tests {
         });
 
         // Wait for faucet to be up
-        let api_url = Url::parse(api_url).unwrap();
+        let api_url = Url::parse(&api_url).unwrap();
         let addrs = api_url.socket_addrs(|| None).unwrap();
         let start = Instant::now();
         let timeout = Duration::from_secs(10);
