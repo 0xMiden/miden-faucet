@@ -1997,9 +1997,8 @@ dependencies = [
 
 [[package]]
 name = "miden-client"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe3170c04004fefbb579facfdbc94889202e862998bb0ec49af687353b1982b1"
+version = "0.12.2"
+source = "git+https://github.com/0xMiden/miden-client?branch=main#07837e88592b4c34d04efc4cced6ebe2c6fdfcd7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2034,9 +2033,8 @@ dependencies = [
 
 [[package]]
 name = "miden-client-sqlite-store"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3f74888dbb2269093a1fc38cd14e0ec71413f41a2eb24ebb5a9bb138f661311"
+version = "0.12.2"
+source = "git+https://github.com/0xMiden/miden-client?branch=main#07837e88592b4c34d04efc4cced6ebe2c6fdfcd7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2195,9 +2193,9 @@ dependencies = [
 
 [[package]]
 name = "miden-lib"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44abeb7f67252547fa54605e61e89256fa546e2f25de382ccac78a1ced07ff88"
+checksum = "f2af7e35b52afadba83d50b614cbc2493b7ca1ad9a876033d0706c09a75a78cb"
 dependencies = [
  "Inflector",
  "fs-err",
@@ -2441,9 +2439,9 @@ dependencies = [
 
 [[package]]
 name = "miden-stdlib"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79bafb0b8715b8323eecef2b118a1dfa7112cc6cc247df742ccb8f8026c4da37"
+checksum = "5e90a5de45a1e6213ff17b66fff8accde0bbc64264e2c22bbcb9a895f8f3b767"
 dependencies = [
  "env_logger",
  "fs-err",
