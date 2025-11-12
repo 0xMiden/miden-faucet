@@ -1608,7 +1608,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b0f83760fb341a774ed326568e19f5a863af4a952def8c39f9ab92fd95b88e5"
 dependencies = [
  "equivalent",
- "hashbrown 0.16.0",
+ "hashbrown 0.15.5",
 ]
 
 [[package]]
@@ -1998,7 +1998,8 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.12.2"
-source = "git+https://github.com/0xMiden/miden-client?branch=main#07837e88592b4c34d04efc4cced6ebe2c6fdfcd7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a7ae22fab3cd0a52aad74a8a317c89ea28f0052c4d98ddfe7e315d8ca61d860"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2034,7 +2035,8 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.12.2"
-source = "git+https://github.com/0xMiden/miden-client?branch=main#07837e88592b4c34d04efc4cced6ebe2c6fdfcd7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5b8a92c99ae5c1714497ff1c11a5e7127a838ed876f5d9d5a19854b6db1a6a5"
 dependencies = [
  "anyhow",
  "async-trait",
