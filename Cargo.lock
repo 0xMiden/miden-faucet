@@ -1608,7 +1608,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b0f83760fb341a774ed326568e19f5a863af4a952def8c39f9ab92fd95b88e5"
 dependencies = [
  "equivalent",
- "hashbrown 0.16.0",
+ "hashbrown 0.15.5",
 ]
 
 [[package]]
@@ -1997,9 +1997,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client"
-version = "0.12.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe3170c04004fefbb579facfdbc94889202e862998bb0ec49af687353b1982b1"
+checksum = "3a7ae22fab3cd0a52aad74a8a317c89ea28f0052c4d98ddfe7e315d8ca61d860"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2034,9 +2034,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client-sqlite-store"
-version = "0.12.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3f74888dbb2269093a1fc38cd14e0ec71413f41a2eb24ebb5a9bb138f661311"
+checksum = "b5b8a92c99ae5c1714497ff1c11a5e7127a838ed876f5d9d5a19854b6db1a6a5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2131,7 +2131,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2172,7 +2172,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-lib"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "anyhow",
  "miden-client",
@@ -2195,9 +2195,9 @@ dependencies = [
 
 [[package]]
 name = "miden-lib"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44abeb7f67252547fa54605e61e89256fa546e2f25de382ccac78a1ced07ff88"
+checksum = "f2af7e35b52afadba83d50b614cbc2493b7ca1ad9a876033d0706c09a75a78cb"
 dependencies = [
  "Inflector",
  "fs-err",
@@ -2377,7 +2377,7 @@ dependencies = [
 
 [[package]]
 name = "miden-pow-rate-limiter"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "serde_json",
  "sha2",
@@ -2441,9 +2441,9 @@ dependencies = [
 
 [[package]]
 name = "miden-stdlib"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79bafb0b8715b8323eecef2b118a1dfa7112cc6cc247df742ccb8f8026c4da37"
+checksum = "5e90a5de45a1e6213ff17b66fff8accde0bbc64264e2c22bbcb9a895f8f3b767"
 dependencies = [
  "env_logger",
  "fs-err",

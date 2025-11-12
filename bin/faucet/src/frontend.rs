@@ -30,8 +30,6 @@ pub async fn serve_frontend(url: Url, api_public_url: Url, node_url: String) -> 
         .route("/wallet-icon.png", get(get_wallet_icon))
         .route("/favicon.ico", get(get_favicon))
         .route("/config.json", get(config_json))
-        // TODO: this is a hacky way of making the web-client work. Ideally the wasm file should be included in the bundle.
-        .route("/assets/miden_client_web.wasm", get(get_miden_client_web_wasm))
         .fallback(get(get_not_found_html));
 
     let listener = url
@@ -48,17 +46,6 @@ pub async fn serve_frontend(url: Url, api_public_url: Url, node_url: String) -> 
 
 pub async fn get_index_html() -> Html<&'static str> {
     Html(include_str!(concat!(env!("OUT_DIR"), "/frontend/index.html")))
-}
-
-pub async fn get_miden_client_web_wasm() -> Response {
-    (
-        [(header::CONTENT_TYPE, header::HeaderValue::from_static("application/wasm"))],
-        include_bytes!(concat!(
-            env!("OUT_DIR"),
-            "/frontend/node_modules/@demox-labs/miden-sdk/dist/assets/miden_client_web.wasm"
-        ),),
-    )
-        .into_response()
 }
 
 pub async fn get_not_found_html() -> Html<&'static str> {
