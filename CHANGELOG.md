@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.13.0 (TBD)
+
 ## 0.12.2 (2025-11-12)
 
 - Removed the web-client to improve frontend loading time ([#158](https://github.com/0xMiden/miden-faucet/pull/158)).
