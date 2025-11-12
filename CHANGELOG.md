@@ -2,6 +2,10 @@
 
 ## 0.13.0 (TBD)
 
+## 0.12.2 (2025-11-12)
+
+- Removed the web-client to improve frontend loading time ([#158](https://github.com/0xMiden/miden-faucet/pull/158)).
+
 ## 0.12.1 (2025-11-11)
 
 - Fixed release workflow by storing frontend artifacts in `OUT_DIR` (([#154](https://github.com/0xMiden/miden-faucet/pull/154))).
