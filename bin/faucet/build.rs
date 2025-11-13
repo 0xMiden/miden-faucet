@@ -3,7 +3,10 @@ use std::process::Command;
 use std::{env, fs};
 
 fn main() {
-    println!("cargo:rerun-if-changed=frontend/index.js");
+    println!("cargo:rerun-if-changed=frontend/api.js");
+    println!("cargo:rerun-if-changed=frontend/app.js");
+    println!("cargo:rerun-if-changed=frontend/ui.js");
+    println!("cargo:rerun-if-changed=frontend/utils.js");
     println!("cargo:rerun-if-changed=frontend/package.json");
     println!("cargo:rerun-if-changed=frontend/package-lock.json");
 
