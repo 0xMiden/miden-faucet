@@ -112,9 +112,7 @@ impl ChallengeCache {
                     self.challenges_per_domain.remove(&domain);
                 }
 
-                self.challenges_timestamps
-                    .remove(&(requestor, domain))
-                    .expect("challenge should have had a timestamp entry");
+                self.challenges_timestamps.remove(&(requestor, domain));
             }
         }
     }
