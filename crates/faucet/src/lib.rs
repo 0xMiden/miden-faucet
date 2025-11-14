@@ -12,7 +12,7 @@ use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
-use miden_client::rpc::{Endpoint, GrpcClient, RpcError};
+use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
@@ -294,12 +294,10 @@ impl Faucet {
             match self.mint(buffer.drain(..)).await {
                 Ok(()) => (),
                 Err(error) => {
-                    if let Some(ClientError::RpcError(RpcError::ConnectionError(_))) =
-                        error.downcast_ref::<ClientError>()
-                    {
-                        error!(?error, "connection error, discarding batch");
+                    if let Some(ClientError::RpcError(_)) = error.downcast_ref::<ClientError>() {
+                        error!(?error, "RPC error, discarding batch");
                     } else {
-                        anyhow::bail!("failed to mint batch: {error}");
+                        anyhow::bail!(error.context("failed to mint batch"));
                     }
                 },
             }

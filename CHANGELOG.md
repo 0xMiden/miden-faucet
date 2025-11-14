@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.3 (2025-11-14)
+
+- Fixed challenge cache lock poisoned bug by removing validation on `challenges_timestamps` cleanup ([#165](https://github.com/0xMiden/miden-faucet/pull/165)).
+
 ## 0.12.2 (2025-11-12)
 
 - Removed the web-client to improve frontend loading time ([#158](https://github.com/0xMiden/miden-faucet/pull/158)).
