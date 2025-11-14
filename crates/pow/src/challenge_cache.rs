@@ -57,13 +57,17 @@ impl ChallengeCache {
         if consumers.contains(&consumer) {
             return false;
         }
-
         consumers.push(consumer);
-        self.challenges_per_domain
-            .entry(challenge.domain)
-            .and_modify(|c| *c = c.saturating_add(1))
-            .or_insert(1);
-        self.challenges_timestamps.insert(consumer, challenge.timestamp);
+
+        let prev_challenge = self.challenges_timestamps.insert(consumer, challenge.timestamp);
+        if let Some(prev_timestamp) = prev_challenge {
+            self.challenges.remove(&prev_timestamp);
+        } else {
+            self.challenges_per_domain
+                .entry(challenge.domain)
+                .and_modify(|c| *c = c.saturating_add(1))
+                .or_insert(1);
+        }
         true
     }
 
