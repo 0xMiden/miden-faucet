@@ -136,7 +136,7 @@ export class MidenFaucetApp {
             }
         } catch (error) {
             this.metadataError = true;
-            this.ui.showError('Failed to fetch metadata.');
+            this.ui.showError('Failed to connect to the faucet API server (FetchMetadata).');
             console.error('Error fetching metadata:', error);
         }
     }
