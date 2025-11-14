@@ -9,7 +9,6 @@ use tonic::{Request, Response, Status};
 use tonic_web::GrpcWebLayer;
 use url::Url;
 
-#[derive(Clone)]
 pub struct StubRpcApi;
 
 #[tonic::async_trait]

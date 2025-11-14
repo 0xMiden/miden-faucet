@@ -13,6 +13,9 @@
 
 ## 0.12.0 (2025-11-10)
 
+### Changes
+
+- Replaced SHA3-256 with SHA-256 for PoW ([#79](https://github.com/0xMiden/miden-faucet/pull/79)).
 - Added requested `amount` to PoW Challenge ([#68](https://github.com/0xMiden/miden-faucet/pull/68)).
 - Added `pow_base_difficulty_amount` CLI param and updated default values ([#68](https://github.com/0xMiden/miden-faucet/pull/68)).
 - Added Retry-After header for HTTP response on rate limited error ([#70](https://github.com/0xMiden/miden-faucet/pull/70)).
