@@ -52,7 +52,7 @@ impl ChallengeCache {
     pub fn insert_challenge(&mut self, challenge: &Challenge) -> bool {
         let consumer = (challenge.requestor, challenge.domain);
 
-        // check if (timestamp, requestor, domain) is already in the cache
+        // Check if (timestamp, requestor, domain) is already in the cache.
         let consumers = self.challenges.entry(challenge.timestamp).or_default();
         if consumers.contains(&consumer) {
             return false;
@@ -61,8 +61,13 @@ impl ChallengeCache {
 
         let prev_challenge = self.challenges_timestamps.insert(consumer, challenge.timestamp);
         if let Some(prev_timestamp) = prev_challenge {
+            // Since the previous timestamp for this consumer is overridden, we can also just clean
+            // up that challenge from the cache. The number of challenges for the domain stays
+            // unchanged.
             self.challenges.remove(&prev_timestamp);
         } else {
+            // If there was no previous timestamp tracked for this consumer, the number of
+            // challenges for the domain has to be incremented.
             self.challenges_per_domain
                 .entry(challenge.domain)
                 .and_modify(|c| *c = c.saturating_add(1))
