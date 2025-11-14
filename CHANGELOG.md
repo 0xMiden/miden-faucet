@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.3 (2025-11-14)
+
+- Added an error display for failed metadata requests ([#166](https://github.com/0xMiden/miden-faucet/pull/166)).
+
 ## 0.12.2 (2025-11-12)
 
 - Removed the web-client to improve frontend loading time ([#158](https://github.com/0xMiden/miden-faucet/pull/158)).
