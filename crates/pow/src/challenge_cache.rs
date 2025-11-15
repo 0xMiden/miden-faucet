@@ -52,6 +52,8 @@ impl ChallengeCache {
     pub fn insert_challenge(&mut self, challenge: &Challenge, current_time: u64) {
         let consumer = (challenge.requestor, challenge.domain);
 
+        self.challenges.entry(current_time).or_default().insert(consumer);
+
         let prev_challenge = self.challenges_timestamps.insert(consumer, current_time);
         if let Some(prev_timestamp) = prev_challenge {
             // Since the previous timestamp for this consumer is overridden, we can also just clean
@@ -66,8 +68,6 @@ impl ChallengeCache {
                 .and_modify(|c| *c = c.saturating_add(1))
                 .or_insert(1);
         }
-
-        self.challenges.entry(current_time).or_default().insert(consumer);
     }
 
     /// Returns the seconds remaining until the next challenge can be submitted for the given

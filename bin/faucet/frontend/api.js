@@ -24,7 +24,6 @@ export async function getPowChallenge(backendUrl, recipient, amount) {
         const message = await response.text();
         throw new Error(`Failed to get PoW challenge: ${message}`);
     }
-    console.log("request challenge timestamp: ", new Date().getTime() / 1000);
 
     return response.json();
 }
@@ -38,7 +37,6 @@ export async function getTokens(backendUrl, challenge, nonce, recipient, amount,
         nonce: nonce
     };
 
-    console.log("submit challenge timestamp: ", new Date().getTime() / 1000);
     const response = await fetch(backendUrl + '/get_tokens?' + new URLSearchParams(params));
 
     if (!response.ok) {
