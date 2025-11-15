@@ -3,6 +3,7 @@
 ## 0.12.3 (2025-11-14)
 
 - Fixed challenge cache lock poisoned bug by removing validation on `challenges_timestamps` cleanup ([#165](https://github.com/0xMiden/miden-faucet/pull/165)).
+- Improved rate limiter by tracking challenges by submission timestamp ([#167](https://github.com/0xMiden/miden-faucet/pull/167)).
 
 ## 0.12.2 (2025-11-12)
 
