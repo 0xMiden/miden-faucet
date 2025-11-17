@@ -64,7 +64,12 @@ impl ChallengeCache {
             // Since the previous timestamp for this consumer is overridden, we can also just clean
             // up that challenge from the cache. The number of challenges for the domain stays
             // unchanged.
-            self.challenges.remove(&prev_timestamp);
+            if let Some(consumers) = self.challenges.get_mut(&prev_timestamp) {
+                consumers.retain(|c| c != &consumer);
+                if consumers.is_empty() {
+                    self.challenges.remove(&prev_timestamp);
+                }
+            }
         } else {
             // If there was no previous timestamp tracked for this consumer, the number of
             // challenges for the domain has to be incremented.
