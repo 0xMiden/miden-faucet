@@ -6,5 +6,3 @@ title       = "The Miden Faucet"
 
 [output.html]
 git-repository-url = "https://github.com/0xMiden/miden-faucet"
-
-[output.linkcheck]
