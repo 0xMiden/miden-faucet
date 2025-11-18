@@ -2,7 +2,7 @@
 
 ## 0.12.4 (2025-11-18)
 
-- Added version to the metadata endpoint ([#TBD]()).
+- Added version to the metadata endpoint ([#169](https://github.com/0xMiden/miden-faucet/pull/169)).
 
 ## 0.12.3 (2025-11-17)
 
