@@ -32,6 +32,7 @@ pub async fn get_metadata(State(server): State<ApiServer>) -> Json<GetMetadataRe
     let metadata = server.metadata;
     let issuance = metadata.issuance.read().base_units();
     Json(GetMetadataResponse {
+        version: env!("CARGO_PKG_VERSION").to_string(),
         id: metadata.id.to_bech32(),
         issuance,
         max_supply: metadata.max_supply.base_units(),
@@ -44,6 +45,7 @@ pub async fn get_metadata(State(server): State<ApiServer>) -> Json<GetMetadataRe
 
 #[derive(Serialize)]
 pub struct GetMetadataResponse {
+    pub version: String,
     pub id: String,
     pub issuance: u64,
     pub max_supply: u64,
