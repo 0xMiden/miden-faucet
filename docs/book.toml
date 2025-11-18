@@ -2,7 +2,6 @@
 authors      = ["Miden contributors"]
 description  = "Manual for the Miden Faucet application"
 language     = "en"
-multilingual = false
 title        = "The Miden Faucet"
 
 [output.html]
