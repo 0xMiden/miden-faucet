@@ -64,7 +64,8 @@ miden-faucet start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--api-url` | URL to serve the faucet API | - | Yes |
+| `--api-bind-url` | URL to serve the faucet API | - | Yes |
+| `--api-public-url` | Public URL to access the faucet API. If not set, the bind url will be used. | - | No |
 | `--frontend-url` | URL to serve the Frontend API | - | No |
 | `--node-url` | Miden node RPC endpoint. If not set, it will be derived from the network | - | No |
 | `--network` | Network configuration | `localhost` | No |
@@ -107,7 +108,8 @@ export MIDEN_FAUCET_MAX_SUPPLY=
 
 # Faucet Service Configuration
 export MIDEN_FAUCET_FRONTEND_URL=http://localhost:8080
-export MIDEN_FAUCET_API_URL=http://localhost:8000
+export MIDEN_FAUCET_API_BIND_URL=http://localhost:8000
+export MIDEN_FAUCET_API_PUBLIC_URL=http://localhost:8000
 export MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT=1000000000
 export MIDEN_FAUCET_ENABLE_OTEL=true
 export MIDEN_FAUCET_BASE_AMOUNT=100000000
