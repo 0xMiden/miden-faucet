@@ -481,4 +481,81 @@ mod tests {
         );
         assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain), 1);
     }
+
+    #[tokio::test]
+    async fn submit_challenge_while_previous_one_is_not_cleaned_up() {
+        let mut secret = [0u8; 32];
+        secret[..12].copy_from_slice(b"miden-faucet");
+
+        // setup pow with short challenge lifetime and long cleanup interval to test the case
+        // where cleanup has not run yet but the challenge is expired.
+        let pow = PoWRateLimiter::new(
+            secret,
+            PoWRateLimiterConfig {
+                challenge_lifetime: Duration::from_secs(1),
+                growth_rate: 1.0,
+                cleanup_interval: Duration::from_secs(3),
+                baseline: 0,
+            },
+        );
+        let domain_1 = [1u8; 32];
+        let requestor = [0u8; 32];
+        let request_complexity = 1;
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+        // submit first challenge
+        let challenge = pow.build_challenge(requestor, domain_1, request_complexity);
+        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
+        let result = pow.submit_challenge(
+            requestor,
+            domain_1,
+            &challenge,
+            nonce,
+            current_time,
+            request_complexity,
+        );
+        assert!(result.is_ok());
+
+        // submit another challenge with same timestamp but different domain
+        let domain_2 = [2u8; 32];
+        let challenge = pow.build_challenge(requestor, domain_2, request_complexity);
+        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
+        let result = pow.submit_challenge(
+            requestor,
+            domain_2,
+            &challenge,
+            nonce,
+            current_time,
+            request_complexity,
+        );
+        assert!(result.is_ok());
+
+        // submit challenge that overrides the first one (same consumer but previous challenge is
+        // expired)
+        tokio::time::sleep(pow.config.challenge_lifetime + Duration::from_secs(1)).await;
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let challenge = pow.build_challenge(requestor, domain_1, request_complexity);
+        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
+        let result = pow.submit_challenge(
+            requestor,
+            domain_1,
+            &challenge,
+            nonce,
+            current_time,
+            request_complexity,
+        );
+        dbg!(&result);
+        assert!(result.is_ok());
+
+        // check that the first challenge is removed from the cache
+        assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain_1), 1);
+        assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain_2), 1);
+        assert_eq!(
+            pow.challenges
+                .read()
+                .unwrap()
+                .next_challenge_delay(&(requestor, domain_1), current_time),
+            pow.config.challenge_lifetime.as_secs()
+        );
+    }
 }

@@ -1,6 +1,10 @@
 # Changelog
 
 ## 0.13.0 (TBD)
+## 0.12.3 (2025-11-17)
+
+- Fixed challenge cache lock poisoned bug by removing validation on `challenges_timestamps` cleanup ([#165](https://github.com/0xMiden/miden-faucet/pull/165)).
+- Added an error display for failed metadata requests ([#166](https://github.com/0xMiden/miden-faucet/pull/166)).
 
 ## 0.12.2 (2025-11-12)
 
