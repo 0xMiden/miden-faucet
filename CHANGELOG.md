@@ -1,6 +1,9 @@
 # Changelog
 
 ## 0.13.0 (TBD)
+
+- Added web-client to wait for note commitment on the node ([#174](https://github.com/0xMiden/miden-faucet/pull/174)).
+
 ## 0.12.3 (2025-11-17)
 
 - Fixed challenge cache lock poisoned bug by removing validation on `challenges_timestamps` cleanup ([#165](https://github.com/0xMiden/miden-faucet/pull/165)).
