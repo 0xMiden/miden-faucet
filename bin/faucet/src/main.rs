@@ -491,8 +491,8 @@ fn create_faucet_account(
     Ok((account, AuthSecretKey::RpoFalcon512(secret)))
 }
 
-// INTEGRATION TESTS
-// ================================================================================================
+// TESTS
+// =================================================================================================
 
 #[cfg(test)]
 mod tests {
@@ -501,17 +501,114 @@ mod tests {
     use std::str::FromStr;
     use std::time::{Duration, Instant};
 
+    use clap::Parser;
     use fantoccini::ClientBuilder;
-    use miden_client::account::{AccountId, Address, NetworkId};
+    use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
     use tokio::time::sleep;
     use url::Url;
+    use uuid::Uuid;
 
     use crate::network::FaucetNetwork;
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, ClientConfig, run_faucet_command};
+    use crate::{Cli, ClientConfig, create_faucet_account, run_faucet_command};
+
+    // CLI TESTS
+    // ---------------------------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn init_with_new_token() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--token-symbol",
+            "TEST",
+            "--decimals",
+            "6",
+            "--max-supply",
+            "100000000000000000",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn init_importing_account_file() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let account_path = temp_dir().join("test_account.mac");
+        let (account, secret) = create_faucet_account("TEST", 100_000_000, 3).unwrap();
+        let account_data = AccountFile::new(account, vec![secret]);
+        account_data.write(&account_path).unwrap();
+
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--import",
+            account_path.to_str().unwrap(),
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn init_with_deploy() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--token-symbol",
+            "TEST",
+            "--decimals",
+            "6",
+            "--max-supply",
+            "100000000000000000",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+            "--deploy",
+        ])))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn serve_fails_without_init() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "start",
+            "--api-bind-url",
+            "http://localhost:8000",
+            "--frontend-url",
+            "http://localhost:8081",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_err());
+    }
+
+    // INTEGRATION TEST
+    // ---------------------------------------------------------------------------------------------
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
     /// to test the faucet website. It then loads the website, mints tokens, and checks that all the
@@ -588,7 +685,7 @@ mod tests {
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
 
-    async fn run_stub_node() -> Url {
+    pub async fn run_stub_node() -> Url {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let listener_addr = listener.local_addr().unwrap();
         let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
@@ -604,7 +701,7 @@ mod tests {
             node_url: Some(stub_node_url.clone()),
             timeout: Duration::from_millis(5000),
             network: FaucetNetwork::Localhost,
-            store_path: temp_dir().join("test_store.sqlite3"),
+            store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
             remote_tx_prover_url: None,
         };
 
