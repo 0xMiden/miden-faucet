@@ -594,7 +594,7 @@ mod tests {
         let result = Box::pin(run_faucet_command(Cli::parse_from([
             "miden-faucet",
             "start",
-            "--api-url",
+            "--api-bind-url",
             "http://localhost:8000",
             "--frontend-url",
             "http://localhost:8081",
