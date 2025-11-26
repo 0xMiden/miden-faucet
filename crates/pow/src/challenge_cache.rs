@@ -52,18 +52,32 @@ impl ChallengeCache {
     pub fn insert_challenge(&mut self, challenge: &Challenge) -> bool {
         let consumer = (challenge.requestor, challenge.domain);
 
-        // check if (timestamp, requestor, domain) is already in the cache
+        // Check if (timestamp, requestor, domain) is already in the cache.
         let consumers = self.challenges.entry(challenge.timestamp).or_default();
         if consumers.contains(&consumer) {
             return false;
         }
-
         consumers.push(consumer);
-        self.challenges_per_domain
-            .entry(challenge.domain)
-            .and_modify(|c| *c = c.saturating_add(1))
-            .or_insert(1);
-        self.challenges_timestamps.insert(consumer, challenge.timestamp);
+
+        let prev_challenge = self.challenges_timestamps.insert(consumer, challenge.timestamp);
+        if let Some(prev_timestamp) = prev_challenge {
+            // Since the previous timestamp for this consumer is overridden, we can also just clean
+            // up that challenge from the cache. The number of challenges for the domain stays
+            // unchanged.
+            if let Some(consumers) = self.challenges.get_mut(&prev_timestamp) {
+                consumers.retain(|c| c != &consumer);
+                if consumers.is_empty() {
+                    self.challenges.remove(&prev_timestamp);
+                }
+            }
+        } else {
+            // If there was no previous timestamp tracked for this consumer, the number of
+            // challenges for the domain has to be incremented.
+            self.challenges_per_domain
+                .entry(challenge.domain)
+                .and_modify(|c| *c = c.saturating_add(1))
+                .or_insert(1);
+        }
         true
     }
 
@@ -112,9 +126,7 @@ impl ChallengeCache {
                     self.challenges_per_domain.remove(&domain);
                 }
 
-                self.challenges_timestamps
-                    .remove(&(requestor, domain))
-                    .expect("challenge should have had a timestamp entry");
+                self.challenges_timestamps.remove(&(requestor, domain));
             }
         }
     }

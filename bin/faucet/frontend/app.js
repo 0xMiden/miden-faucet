@@ -122,6 +122,11 @@ export class MidenFaucetApp {
             this.powLoadDifficulty = data.pow_load_difficulty;
             this.baseAmount = data.base_amount;
 
+            if (this.metadataError) {
+                this.metadataError = false;
+                this.ui.hideMessages();
+            }
+
             if (!this.metadataInitialized) {
                 this.metadataInitialized = true;
                 this.ui.setFaucetId(data.id);
@@ -130,6 +135,8 @@ export class MidenFaucetApp {
                 this.updateTokenHint(this.tokenAmountOptions[0]);
             }
         } catch (error) {
+            this.metadataError = true;
+            this.ui.showError('Failed to connect to the faucet API server (FetchMetadata).');
             console.error('Error fetching metadata:', error);
         }
     }
