@@ -2,10 +2,7 @@
 authors      = ["Miden contributors"]
 description  = "Manual for the Miden Faucet application"
 language     = "en"
-multilingual = false
 title        = "The Miden Faucet"
 
 [output.html]
 git-repository-url = "https://github.com/0xMiden/miden-faucet"
-
-[output.linkcheck]
