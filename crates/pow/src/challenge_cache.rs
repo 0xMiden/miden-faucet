@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -23,11 +23,14 @@ pub(crate) type Consumer = (Requestor, Domain);
 pub(crate) struct ChallengeCache {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     challenge_lifetime: Duration,
-    /// Maps challenge timestamp to consumers.
-    challenges: BTreeMap<u64, Vec<Consumer>>,
-    /// Maps domain to the number of submitted challenges.
+    /// Maps challenge timestamp to consumers. We use this to cleanup expired challenges and update
+    /// the consumers' last challenge timestamp.
+    challenges: BTreeMap<u64, HashSet<Consumer>>,
+    /// Maps domain to the number of submitted challenges. We use this to compute the load
+    /// difficulty.
     challenges_per_domain: HashMap<Domain, usize>,
-    /// Maps consumer to the timestamp of the last submitted challenge.
+    /// Maps consumer to the timestamp of the last submitted challenge. We use this to check if
+    /// consumers can submit new challenges.
     challenges_timestamps: HashMap<Consumer, u64>,
 }
 
@@ -42,30 +45,22 @@ impl ChallengeCache {
         }
     }
 
-    /// Inserts a challenge into the cache, updating the number of challenges submitted for the
-    /// domain.
+    /// Inserts a challenge into the cache.
     ///
-    /// Returns whether the challenge was newly inserted. That is:
-    /// * If the cache did not previously contain this challenge, `true` is returned.
-    /// * If the cache already contained this challenge, `false` is returned, and the cache is not
-    ///   modified.
-    pub fn insert_challenge(&mut self, challenge: &Challenge) -> bool {
+    /// Assumes that the consumer associated with the challenge is not rate limited. See
+    /// `next_challenge_delay`.
+    pub fn insert_challenge(&mut self, challenge: &Challenge, current_time: u64) {
         let consumer = (challenge.requestor, challenge.domain);
 
-        // Check if (timestamp, requestor, domain) is already in the cache.
-        let consumers = self.challenges.entry(challenge.timestamp).or_default();
-        if consumers.contains(&consumer) {
-            return false;
-        }
-        consumers.push(consumer);
+        self.challenges.entry(current_time).or_default().insert(consumer);
 
-        let prev_challenge = self.challenges_timestamps.insert(consumer, challenge.timestamp);
+        let prev_challenge = self.challenges_timestamps.insert(consumer, current_time);
         if let Some(prev_timestamp) = prev_challenge {
             // Since the previous timestamp for this consumer is overridden, we can also just clean
             // up that challenge from the cache. The number of challenges for the domain stays
             // unchanged.
             if let Some(consumers) = self.challenges.get_mut(&prev_timestamp) {
-                consumers.retain(|c| c != &consumer);
+                consumers.remove(&consumer);
                 if consumers.is_empty() {
                     self.challenges.remove(&prev_timestamp);
                 }
@@ -78,7 +73,6 @@ impl ChallengeCache {
                 .and_modify(|c| *c = c.saturating_add(1))
                 .or_insert(1);
         }
-        true
     }
 
     /// Returns the seconds remaining until the next challenge can be submitted for the given
@@ -150,5 +144,58 @@ impl ChallengeCache {
                 .expect("challenge cache lock should not be poisoned")
                 .cleanup_expired_challenges(current_time);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, RwLock};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    use crate::Challenge;
+    use crate::challenge_cache::ChallengeCache;
+
+    #[tokio::test]
+    async fn expired_challenges_are_cleaned_up() {
+        let challenge_lifetime = Duration::from_secs(4);
+        let cleanup_interval = Duration::from_millis(500);
+        let cache = Arc::new(RwLock::new(ChallengeCache::new(challenge_lifetime)));
+        let cleanup_cache = cache.clone();
+        tokio::spawn(
+            async move { ChallengeCache::run_cleanup(cleanup_cache, cleanup_interval).await },
+        );
+
+        let domain = [1u8; 32];
+        let requestor = [0u8; 32];
+        let signature = [0u8; 32];
+        let target = u64::MAX;
+        let request_complexity = 1;
+
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let challenge = Challenge::from_parts(
+            target,
+            timestamp,
+            request_complexity,
+            requestor,
+            domain,
+            signature,
+        );
+        cache.write().unwrap().insert_challenge(&challenge, timestamp);
+
+        // assert that the challenge was inserted
+        assert!(cache.read().unwrap().challenges.contains_key(&timestamp));
+        assert_eq!(cache.read().unwrap().challenges_per_domain.get(&domain).unwrap(), &1);
+        assert_eq!(
+            cache.read().unwrap().challenges_timestamps.get(&(requestor, domain)).unwrap(),
+            &timestamp
+        );
+
+        // wait for expiration + cleanup
+        tokio::time::sleep(cleanup_interval + challenge_lifetime + Duration::from_secs(1)).await;
+
+        // assert that the challenge was removed
+        assert!(!cache.read().unwrap().challenges.contains_key(&timestamp));
+        assert_eq!(cache.read().unwrap().challenges_per_domain.get(&domain), None);
+        assert_eq!(cache.read().unwrap().challenges_timestamps.get(&(requestor, domain)), None);
     }
 }

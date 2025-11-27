@@ -7,7 +7,7 @@ The PoW rate limiter operates through a challenge-response mechanism:
 1. **Challenge Generation**: When a requestor needs to perform an action, they request a challenge for a specific domain.
 2. **Computational Work**: The requestor must find a nonce that, when hashed with the challenge, produces a result below a dynamically calculated target.
 3. **Challenge Submission**: The solved challenge is submitted back to the rate limiter for validation.
-4. **Rate Limiting**: Once a challenge is successfully submitted, the requestor is temporarily rate-limited until the challenge expires.
+4. **Rate Limiting**: Once a challenge is successfully submitted, the requestor is temporarily rate-limited.
 
 ## Domain-Based Rate Limiting
 
@@ -20,7 +20,7 @@ The PoW rate limiter uses a **domain** concept to provide isolated rate limiting
 
 The `PoWRateLimiterConfig` struct allows you to customize the behavior of the rate limiter:
 
-- **`challenge_lifetime`**: How long a challenge remains valid after generation. After this duration, challenges expire and cannot be submitted. Choose based on expected solving time and security requirements.
+- **`challenge_lifetime`**: How long a challenge remains valid after generation. After this duration, challenges expire and cannot be submitted. It also sets for how long challenges will be stored and thus the requestor will be rate-limited. Choose based on expected solving time and security requirements.
 
 - **`growth_rate`**: Controls how aggressively difficulty increases with more active challenges. The number of active challenges gets multiplied by the growth rate to compute the load difficulty, so higher values mean more aggressive rate limiting.
 
@@ -33,8 +33,7 @@ The `PoWRateLimiterConfig` struct allows you to customize the behavior of the ra
 A challenge solution is valid when:
 1. The hash `H(challenge_string, nonce)` interpreted as a big-endian u64 is less than the target
 2. The challenge hasn't expired
-3. The challenge hasn't been used before
-4. The requestor isn't rate-limited, i.e. it has not previously submitted a challenge that is still valid
+3. The requestor isn't rate-limited, i.e. it has not submitted a challenge in the last `challenge_lifetime` seconds.
 
 ## Dynamic Difficulty
 

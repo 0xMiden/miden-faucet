@@ -166,7 +166,7 @@ impl PoWRateLimiter {
             return Err(ChallengeError::InvalidPoW);
         }
 
-        // Check if issuer has submitted a challenge that is still valid
+        // Check if issuer is rate limited
         let remaining_time = self
             .challenges
             .read()
@@ -177,14 +177,10 @@ impl PoWRateLimiter {
         }
 
         // Check if the cache already contains the challenge. If not, it is inserted.
-        if !self
-            .challenges
+        self.challenges
             .write()
             .expect("challenge cache lock should not be poisoned")
-            .insert_challenge(challenge)
-        {
-            return Err(ChallengeError::ChallengeAlreadyUsed);
-        }
+            .insert_challenge(challenge, current_time);
 
         Ok(())
     }
@@ -199,8 +195,6 @@ pub enum ChallengeError {
     InvalidPoW,
     #[error("requestor is rate limited for {0} more seconds")]
     RateLimited(u64),
-    #[error("challenge already used")]
-    ChallengeAlreadyUsed,
     #[error("invalid challenge signature")]
     InvalidSignature,
     #[error("invalid challenge serialization")]
@@ -227,7 +221,7 @@ mod tests {
         PoWRateLimiter::new(
             secret,
             PoWRateLimiterConfig {
-                challenge_lifetime: Duration::from_secs(30),
+                challenge_lifetime: Duration::from_secs(5),
                 growth_rate: 1.0,
                 cleanup_interval: Duration::from_millis(500),
                 baseline: 0,
@@ -236,7 +230,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_pow_validation() {
+    async fn challenge_nonce_is_validates() {
         let pow = create_test_pow();
         let domain = [1u8; 32];
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -270,7 +264,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_timestamp_validation() {
+    async fn challenge_timestamp_is_validated() {
         let pow = create_test_pow();
         let domain = [1u8; 32];
         let requestor = [0u8; 32];
@@ -320,7 +314,6 @@ mod tests {
         assert!(result.is_ok());
 
         // Try to submit second challenge - should fail because of rate limiting
-        tokio::time::sleep(pow.config.cleanup_interval).await;
         let challenge = pow.build_challenge(requestor, domain, request_complexity);
         let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
 
@@ -328,16 +321,11 @@ mod tests {
         let result =
             pow.submit_challenge(requestor, domain, &challenge, nonce, time_2, request_complexity);
         assert!(result.is_err());
-        let remaining_time = time_1
-            + pow.config.challenge_lifetime.as_secs()
-            + pow.config.cleanup_interval.as_secs()
-            - time_2;
-        match result {
-            Err(ChallengeError::RateLimited(timestamp)) => {
-                assert_eq!(timestamp, remaining_time);
-            },
-            _ => panic!("Expected RateLimited error"),
-        }
+        let remaining_time = time_1 + pow.config.challenge_lifetime.as_secs() - time_2;
+        let Err(ChallengeError::RateLimited(timestamp)) = result else {
+            panic!("Expected RateLimited error");
+        };
+        assert_eq!(timestamp, remaining_time);
 
         // Try to submit it using a different api key - should succeed
         let domain = [2u8; 32];
@@ -349,7 +337,54 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn submit_challenge_and_check_difficulty() {
+    async fn requestor_is_rate_limited_after_challenge_expires() {
+        let pow = create_test_pow();
+        let domain = [1u8; 32];
+        let requestor = [0u8; 32];
+        let request_complexity = 1;
+
+        // Request and solve challenge 1
+        let challenge_1 = pow.build_challenge(requestor, domain, request_complexity);
+        let nonce_1 = find_pow_solution(&challenge_1, 10000).expect("Should find solution");
+
+        // Wait 1 second and request and solve challenge 2
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let challenge_2 = pow.build_challenge(requestor, domain, request_complexity);
+        let nonce_2 = find_pow_solution(&challenge_2, 10000).expect("Should find solution");
+
+        // Wait until challenge 1 is almost expired and submit it
+        tokio::time::sleep(pow.config.challenge_lifetime - Duration::from_secs(1)).await;
+        let time_1 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let result = pow.submit_challenge(
+            requestor,
+            domain,
+            &challenge_1,
+            nonce_1,
+            time_1,
+            request_complexity,
+        );
+        assert!(result.is_ok());
+
+        // Wait 1 second until challenge 1 is expired and then submit challenge 2 should fail
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let time_2 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let result = pow.submit_challenge(
+            requestor,
+            domain,
+            &challenge_2,
+            nonce_2,
+            time_2,
+            request_complexity,
+        );
+        assert!(result.is_err());
+        let Err(ChallengeError::RateLimited(timestamp)) = result else {
+            panic!("Expected RateLimited error");
+        };
+        assert_eq!(timestamp, pow.config.challenge_lifetime.as_secs() - 1);
+    }
+
+    #[tokio::test]
+    async fn difficuty_increases_with_submitted_challenges() {
         let pow = create_test_pow();
         let domain = [1u8; 32];
         let requestor = [0u8; 32];
@@ -403,83 +438,6 @@ mod tests {
             pow.get_challenge_target(&domain, request_complexity),
             (u64::MAX >> pow.config.baseline) / difficulty
         );
-    }
-
-    #[tokio::test]
-    async fn test_cleanup_expired_challenges() {
-        let pow = create_test_pow();
-        let domain = [1u8; 32];
-        let requestor = [0u8; 32];
-        let request_complexity = 1;
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let target = u64::MAX;
-
-        // build challenge manually with past timestamp to ensure that expires in 1 second
-        let timestamp = current_time - pow.config.challenge_lifetime.as_secs();
-        let signature = Challenge::compute_signature(
-            pow.secret,
-            target,
-            timestamp,
-            request_complexity,
-            &requestor,
-            &domain,
-        );
-        let challenge = Challenge::from_parts(
-            target,
-            timestamp,
-            request_complexity,
-            requestor,
-            domain,
-            signature,
-        );
-        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-
-        pow.submit_challenge(
-            requestor,
-            domain,
-            &challenge,
-            nonce,
-            current_time,
-            request_complexity,
-        )
-        .unwrap();
-
-        // wait for cleanup
-        tokio::time::sleep(pow.config.cleanup_interval + Duration::from_secs(1)).await;
-
-        // check that the challenge is removed from the cache
-        assert_eq!(
-            pow.challenges
-                .read()
-                .unwrap()
-                .next_challenge_delay(&(requestor, domain), current_time),
-            0
-        );
-        assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain), 0);
-
-        // submit second challenge - should succeed
-        let challenge = pow.build_challenge(requestor, domain, request_complexity);
-        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        pow.submit_challenge(
-            requestor,
-            domain,
-            &challenge,
-            nonce,
-            current_time,
-            request_complexity,
-        )
-        .unwrap();
-
-        assert_ne!(
-            pow.challenges
-                .read()
-                .unwrap()
-                .next_challenge_delay(&(requestor, domain), current_time),
-            0
-        );
-        assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain), 1);
     }
 
     #[tokio::test]
