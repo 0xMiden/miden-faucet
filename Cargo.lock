@@ -2126,7 +2126,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2163,11 +2163,12 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
+ "uuid",
 ]
 
 [[package]]
 name = "miden-faucet-lib"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "miden-client",
@@ -2177,6 +2178,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -2373,7 +2375,7 @@ dependencies = [
 
 [[package]]
 name = "miden-pow-rate-limiter"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
  "serde_json",
  "sha2",
