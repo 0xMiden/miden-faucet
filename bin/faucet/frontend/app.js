@@ -22,7 +22,9 @@ export class MidenFaucetApp {
         }
 
         this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
-
+        this.walletAdapter.on('accountChange', (_) => {
+            this.walletAdapter.disconnect();
+        });
         this.init();
     }
 
