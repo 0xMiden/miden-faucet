@@ -12,15 +12,15 @@ license      = "MIT"
 readme       = "README.md"
 repository   = "https://github.com/0xMiden/miden-faucet"
 rust-version = "1.90"
-version      = "0.12.1"
+version      = "0.13.0"
 
 # Optimize the cryptography for faster tests involving account creation.
 [profile.test.package.miden-crypto]
 opt-level = 2
 
 [workspace.dependencies]
-miden-faucet-lib       = { path = "crates/faucet", version = "0.12" }
-miden-pow-rate-limiter = { path = "crates/pow", version = "0.12" }
+miden-faucet-lib       = { path = "crates/faucet", version = "0.13" }
+miden-pow-rate-limiter = { path = "crates/pow", version = "0.13" }
 
 # Miden dependencies.
 miden-client              = { version = "0.12" }
@@ -47,6 +47,7 @@ tracing               = { version = "0.1" }
 tracing-opentelemetry = { version = "0.32" }
 tracing-subscriber    = { features = ["env-filter", "fmt", "json"], version = "0.3" }
 url                   = { features = ["serde"], version = "2.5" }
+uuid                  = { features = ["v4"], version = "1.10" }
 
 # Lints are set to warn for development, which are promoted to errors in CI.
 [workspace.lints.clippy]

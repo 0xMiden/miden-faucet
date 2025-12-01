@@ -30,8 +30,6 @@ pub async fn serve_frontend(url: Url, api_public_url: Url, node_url: String) -> 
         .route("/wallet-icon.png", get(get_wallet_icon))
         .route("/favicon.ico", get(get_favicon))
         .route("/config.json", get(config_json))
-        // TODO: this is a hacky way of making the web-client work. Ideally the wasm file should be included in the bundle.
-        .route("/assets/miden_client_web.wasm", get(get_miden_client_web_wasm))
         .fallback(get(get_not_found_html));
 
     let listener = url
@@ -47,36 +45,25 @@ pub async fn serve_frontend(url: Url, api_public_url: Url, node_url: String) -> 
 }
 
 pub async fn get_index_html() -> Html<&'static str> {
-    Html(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/index.html")))
-}
-
-pub async fn get_miden_client_web_wasm() -> Response {
-    (
-        [(header::CONTENT_TYPE, header::HeaderValue::from_static("application/wasm"))],
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/frontend/node_modules/@demox-labs/miden-sdk/dist/assets/miden_client_web.wasm"
-        ),),
-    )
-        .into_response()
+    Html(include_str!(concat!(env!("OUT_DIR"), "/frontend/index.html")))
 }
 
 pub async fn get_not_found_html() -> Html<&'static str> {
-    Html(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/not_found.html")))
+    Html(include_str!(concat!(env!("OUT_DIR"), "/frontend/not_found.html")))
 }
 
 pub async fn get_bundle_js() -> JavaScript<&'static str> {
-    JavaScript(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/bundle.js")))
+    JavaScript(include_str!(concat!(env!("OUT_DIR"), "/frontend/bundle.js")))
 }
 
 pub async fn get_index_css() -> Css<&'static str> {
-    Css(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/index.css")))
+    Css(include_str!(concat!(env!("OUT_DIR"), "/frontend/index.css")))
 }
 
 pub async fn get_background() -> Response {
     (
         [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/png"))],
-        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/background.png"),),
+        include_bytes!(concat!(env!("OUT_DIR"), "/frontend/background.png"),),
     )
         .into_response()
 }
@@ -84,7 +71,7 @@ pub async fn get_background() -> Response {
 pub async fn get_wallet_icon() -> Response {
     (
         [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/png"))],
-        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/wallet-icon.png"),),
+        include_bytes!(concat!(env!("OUT_DIR"), "/frontend/wallet-icon.png"),),
     )
         .into_response()
 }
@@ -92,7 +79,7 @@ pub async fn get_wallet_icon() -> Response {
 pub async fn get_favicon() -> Response {
     (
         [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/x-icon"))],
-        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/favicon.ico"),),
+        include_bytes!(concat!(env!("OUT_DIR"), "/frontend/favicon.ico"),),
     )
         .into_response()
 }

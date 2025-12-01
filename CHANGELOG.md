@@ -1,7 +1,23 @@
 # Changelog
 
+## 0.13.0 (TBD)
+
+## 0.12.4 (2025-11-27)
+
+- Added version to the metadata endpoint ([#169](https://github.com/0xMiden/miden-faucet/pull/169)).
+
+## 0.12.3 (2025-11-17)
+
+- Fixed challenge cache lock poisoned bug by removing validation on `challenges_timestamps` cleanup ([#165](https://github.com/0xMiden/miden-faucet/pull/165)).
+- Added an error display for failed metadata requests ([#166](https://github.com/0xMiden/miden-faucet/pull/166)).
+
+## 0.12.2 (2025-11-12)
+
+- Removed the web-client to improve frontend loading time ([#158](https://github.com/0xMiden/miden-faucet/pull/158)).
+
 ## 0.12.1 (2025-11-11)
 
+- Fixed release workflow by storing frontend artifacts in `OUT_DIR` (([#154](https://github.com/0xMiden/miden-faucet/pull/154))).
 - Added `api-public-url` CLI param to fix the backend and frontend communication ([#153](https://github.com/0xMiden/miden-faucet/pull/153)).
 
 ## 0.12.0 (2025-11-10)

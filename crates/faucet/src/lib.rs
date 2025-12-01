@@ -12,7 +12,7 @@ use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
-use miden_client::rpc::{Endpoint, GrpcClient, RpcError};
+use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
@@ -294,12 +294,10 @@ impl Faucet {
             match self.mint(buffer.drain(..)).await {
                 Ok(()) => (),
                 Err(error) => {
-                    if let Some(ClientError::RpcError(RpcError::ConnectionError(_))) =
-                        error.downcast_ref::<ClientError>()
-                    {
-                        error!(?error, "connection error, discarding batch");
+                    if let Some(ClientError::RpcError(_)) = error.downcast_ref::<ClientError>() {
+                        error!(?error, "RPC error, discarding batch");
                     } else {
-                        anyhow::bail!("failed to mint batch: {error}");
+                        anyhow::bail!(error.context("failed to mint batch"));
                     }
                 },
             }
@@ -560,6 +558,7 @@ mod tests {
     use miden_client::testing::mock::{MockClient, MockRpcApi};
     use miden_client_sqlite_store::SqliteStore;
     use tokio::sync::{mpsc, oneshot};
+    use uuid::Uuid;
 
     use super::*;
     use crate::types::NoteType;
@@ -585,8 +584,11 @@ mod tests {
             receivers.push(receiver);
         }
 
-        let store =
-            Arc::new(SqliteStore::new(temp_dir().join("batch_requests.sqlite3")).await.unwrap());
+        let store = Arc::new(
+            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
+                .await
+                .unwrap(),
+        );
         run_faucet(rx_mint_requests, batch_size, store.clone());
 
         for receiver in receivers {
@@ -637,6 +639,7 @@ mod tests {
                     store.clone(),
                     Some(Arc::new(keystore)),
                     ExecutionOptions::new(None, 4096, false, false).unwrap(),
+                    None,
                     None,
                     None,
                     None,
