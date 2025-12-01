@@ -16,18 +16,16 @@ miden-faucet init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
-  --node-url https://rpc.testnet.miden.io
+  --network testnet
 ```
 
 ## Step 2: Start the Faucet
 
-Next, start the faucet by specifying the addresses where the API and the frontend will be served, the address of the Miden node, and the network configuration. The API server will handle incoming token requests and manage the minting process.
+Next, start the faucet by specifying which network to use. This will start an frontend server to interact with the faucet with an UI and an API server that will handle incoming token requests and manage the minting process.
 
 ```bash
 miden-faucet start \
-  --frontend-url http://localhost:8080 \
-  --api-port 8000 \
-  --node-url https://rpc.testnet.miden.io \
+  --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
 
@@ -60,11 +58,10 @@ If you have a Miden Node running locally, you can run the faucet against that no
 miden-faucet init \
   --token-symbol MIDEN \
   --decimals 6 \
-  --max-supply 100000000000000000
+  --max-supply 100000000000000000 \
+  --network localhost
 
-miden-faucet start \
-  --frontend-url http://localhost:8080 \
-  --api-port 8000 \
+miden-faucet start --network localhost
 ```
 
 ### Development
@@ -78,10 +75,7 @@ miden-faucet init \
   --max-supply 100000000000000000 \
   --network devnet
 
-miden-faucet start \
-  --frontend-url http://localhost:8080 \
-  --api-port 8000 \
-  --network devnet
+miden-faucet start --network devnet
 ```
 
 ### Testnet
@@ -96,8 +90,6 @@ miden-faucet init \
   --network testnet
 
 miden-faucet start \
-  --frontend-url http://localhost:8080 \
-  --api-port 8000 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ``` 
@@ -108,6 +100,6 @@ If you only need the API and don't want to serve the web interface:
 
 ```bash
 miden-faucet start \
-  --api-port 8000 \
+  --no-frontend \
   --network testnet
 ```
