@@ -5,7 +5,7 @@ permissions:
 
 on:
   push:
-    branches: [main, next, tomasarrachea-cargo-publish-workflow]
+    branches: [main, next]
 
 jobs:
   cargo-publish-dry-run:
