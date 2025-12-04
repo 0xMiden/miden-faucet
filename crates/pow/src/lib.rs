@@ -46,8 +46,9 @@ pub struct PoWRateLimiterConfig {
 }
 
 impl PoWRateLimiter {
-    /// Creates a new `PoW` instance.
-    pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
+    #[cfg(feature = "tokio")]
+    /// Creates a new `PoW` instance and starts a `tokio` task to clean up expired challenges.
+    pub fn new_with_cleanup(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
         let challenge_cache = Arc::new(RwLock::new(ChallengeCache::new(config.challenge_lifetime)));
 
         // Start the cleanup task
@@ -56,6 +57,22 @@ impl PoWRateLimiter {
             ChallengeCache::run_cleanup(cleanup_state, config.cleanup_interval).await;
         });
 
+        Self {
+            secret,
+            challenges: challenge_cache,
+            config,
+        }
+    }
+
+    /// Creates a new `PoW` instance.
+    ///
+    /// Note: You need to manually run the cleanup task by calling `ChallengeCache::run_cleanup`
+    /// periodically.
+    ///
+    /// See `PoWRateLimiter::new` for the version that starts the cleanup task automatically. It
+    /// requires to enable the `tokio` feature.
+    pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
+        let challenge_cache = Arc::new(RwLock::new(ChallengeCache::new(config.challenge_lifetime)));
         Self {
             secret,
             challenges: challenge_cache,
@@ -224,7 +241,7 @@ mod tests {
         let mut secret = [0u8; 32];
         secret[..12].copy_from_slice(b"miden-faucet");
 
-        PoWRateLimiter::new(
+        PoWRateLimiter::new_with_cleanup(
             secret,
             PoWRateLimiterConfig {
                 challenge_lifetime: Duration::from_secs(30),
@@ -489,7 +506,7 @@ mod tests {
 
         // setup pow with short challenge lifetime and long cleanup interval to test the case
         // where cleanup has not run yet but the challenge is expired.
-        let pow = PoWRateLimiter::new(
+        let pow = PoWRateLimiter::new_with_cleanup(
             secret,
             PoWRateLimiterConfig {
                 challenge_lifetime: Duration::from_secs(1),
