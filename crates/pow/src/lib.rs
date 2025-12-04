@@ -69,8 +69,8 @@ impl PoWRateLimiter {
     /// Note: You need to manually run the cleanup task by calling `ChallengeCache::run_cleanup`
     /// periodically.
     ///
-    /// See `PoWRateLimiter::new` for the version that starts the cleanup task automatically. It
-    /// requires to enable the `tokio` feature.
+    /// See `PoWRateLimiter::new_with_cleanup` to instantiate the rate limiter with the cleanup task
+    /// started automatically. It requires to enable the `tokio` feature.
     pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
         let challenge_cache = Arc::new(RwLock::new(ChallengeCache::new(config.challenge_lifetime)));
         Self {
