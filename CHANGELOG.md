@@ -2,6 +2,10 @@
 
 ## 0.13.0 (TBD)
 
+- Replaced the `api-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- Replaced the `frontend-url` param for `frontend-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- Added `no-frontend` param to optionally disable the frontend server ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+
 ## 0.12.4 (2025-11-27)
 
 - Added version to the metadata endpoint ([#169](https://github.com/0xMiden/miden-faucet/pull/169)).
