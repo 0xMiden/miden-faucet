@@ -4,6 +4,7 @@
 
 - Added version to the metadata endpoint ([#169](https://github.com/0xMiden/miden-faucet/pull/169)).
 - Small UI improvements ([#180](https://github.com/0xMiden/miden-faucet/pull/180)).
+- Updated `miden-client` to v0.12.5 ([#186](https://github.com/0xMiden/miden-faucet/pull/186)).
 
 ## 0.12.3 (2025-11-17)
 
