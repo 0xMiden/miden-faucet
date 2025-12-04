@@ -45,7 +45,8 @@ impl ChallengeCache {
         }
     }
 
-    /// Inserts a challenge into the cache.
+    /// Inserts a challenge into the cache. Overrides the previous challenge of the consumer, if
+    /// any.
     ///
     /// Assumes that the consumer associated with the challenge is not rate limited. See
     /// `next_challenge_delay`.
@@ -157,7 +158,7 @@ mod tests {
 
     #[tokio::test]
     async fn expired_challenges_are_cleaned_up() {
-        let challenge_lifetime = Duration::from_secs(4);
+        let challenge_lifetime = Duration::from_millis(100);
         let cleanup_interval = Duration::from_millis(500);
         let cache = Arc::new(RwLock::new(ChallengeCache::new(challenge_lifetime)));
         let cleanup_cache = cache.clone();

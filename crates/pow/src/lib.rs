@@ -176,7 +176,7 @@ impl PoWRateLimiter {
             return Err(ChallengeError::RateLimited(remaining_time));
         }
 
-        // Check if the cache already contains the challenge. If not, it is inserted.
+        // Insert the challenge into the cache
         self.challenges
             .write()
             .expect("challenge cache lock should not be poisoned")
@@ -221,7 +221,7 @@ mod tests {
         PoWRateLimiter::new(
             secret,
             PoWRateLimiterConfig {
-                challenge_lifetime: Duration::from_secs(5),
+                challenge_lifetime: Duration::from_secs(3),
                 growth_rate: 1.0,
                 cleanup_interval: Duration::from_millis(500),
                 baseline: 0,
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn challenge_nonce_is_validates() {
+    async fn challenge_nonce_is_validated() {
         let pow = create_test_pow();
         let domain = [1u8; 32];
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -353,7 +353,7 @@ mod tests {
         let nonce_2 = find_pow_solution(&challenge_2, 10000).expect("Should find solution");
 
         // Wait until challenge 1 is almost expired and submit it
-        tokio::time::sleep(pow.config.challenge_lifetime - Duration::from_secs(1)).await;
+        tokio::time::sleep(pow.config.challenge_lifetime - Duration::from_millis(1100)).await;
         let time_1 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let result = pow.submit_challenge(
             requestor,
