@@ -65,7 +65,7 @@ impl ApiServer {
         hasher.update(pow_secret.as_bytes());
         let secret_bytes: [u8; 32] = hasher.finalize().into();
 
-        let rate_limiter = PoWRateLimiter::new(secret_bytes, rate_limiter_config);
+        let rate_limiter = PoWRateLimiter::new_with_cleanup(secret_bytes, rate_limiter_config);
 
         ApiServer {
             mint_state,
