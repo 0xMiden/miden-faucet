@@ -13,8 +13,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@demox-labs/miden-wallet-adapter-base": "^0.7.0",
-    "@demox-labs/miden-wallet-adapter-miden": "^0.7.0"
+    "@demox-labs/miden-wallet-adapter-base": "^0.10.0",
+    "@demox-labs/miden-wallet-adapter-miden": "^0.10.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.11"
