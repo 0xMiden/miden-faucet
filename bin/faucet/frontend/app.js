@@ -2,7 +2,7 @@ import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
 import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
-import { getConfig, getMetadata, getPowChallenge, getTokens, get_note } from "./api.js";
+import { getConfig, getMetadata, getPowChallenge, getTokens, get_note, send_note } from "./api.js";
 
 export class MidenFaucetApp {
     constructor() {
@@ -92,18 +92,42 @@ export class MidenFaucetApp {
 
             const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
 
-            this.ui.showCompletedModal(
-                recipient,
-                amountAsTokens,
-                isPrivateNote,
-                getTokensResponse.tx_id,
-                getTokensResponse.note_id,
-                (noteId) => this.downloadNote(noteId, recipient),
-                () => {
-                    this.ui.hideModals();
-                    this.ui.resetForm();
+            this.ui.updateMintingTitle('TOKENS MINTED!');
+            this.ui.updateProgressBar(100);
+
+            if (isPrivateNote) {
+                await this.connectWallet();
+                // if the recipient's wallet is connected, import note directly
+                if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
+                    const noteImported = await this.importNoteToWallet(getTokensResponse.note_id);
+                    if (noteImported) {
+                        // TODO: show completed modal without download button
+                        this.ui.showCompletedPrivateImportedModal(
+                            recipient,
+                            amountAsTokens,
+                        );
+                        return;
+                    }
                 }
-            );
+
+                // if the note did not get imported to the wallet, send it through the note transport layer
+                const noteSent = await this.sendNoteToClient(getTokensResponse.note_id);
+
+                // fallback to save the note in the users filesystem
+                this.ui.showCompletedPrivateModal(
+                    recipient,
+                    amountAsTokens,
+                    getTokensResponse.note_id,
+                    noteSent,
+                    (noteId) => this.downloadNote(noteId),
+                );
+            } else {
+                this.ui.showCompletedPublicModal(
+                    recipient,
+                    amountAsTokens,
+                    getTokensResponse.tx_id,
+                );
+            }
         } catch (error) {
             this.ui.showError(error);
             return;
@@ -175,30 +199,40 @@ export class MidenFaucetApp {
         return estimatedTime;
     }
 
-    async downloadNote(noteId, recipient) {
+    async importNoteToWallet(noteId) {
+        try {
+            const data = await get_note(this.apiUrl, noteId);
+            await this.walletAdapter.importPrivateNote(data);
+            return true;
+        } catch {
+            console.log("Failed to import private note to wallet");
+            this.ui.showPrivateModalError("Failed to import note to wallet.");
+            return false;
+        }
+    }
+
+    async sendNoteToClient(noteId) {
+        try {
+            await send_note(this.apiUrl, noteId);
+            return true;
+        } catch {
+            // fails if the faucet server has not activated the note transport layer
+            console.log("Failed to send note through note transport layer");
+            return false;
+        }
+    }
+
+    async downloadNote(noteId) {
         this.ui.hidePrivateModalError();
         try {
             const data = await get_note(this.apiUrl, noteId);
 
-            // Decode base64
-            const binaryString = atob(data.data_base64);
-            const byteArray = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                byteArray[i] = binaryString.charCodeAt(i);
-            }
-
-            await this.connectWallet();
-            if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
-                await this.walletAdapter.importPrivateNote(byteArray);
-                this.ui.showNoteImportedMessage();
-            } else {
-                const blob = new Blob([byteArray], { type: 'application/octet-stream' });
-                Utils.downloadBlob(blob, 'note.mno');
-                this.ui.showNoteDownloadedMessage();
-            }
+            const blob = new Blob([data], { type: 'application/octet-stream' });
+            Utils.downloadBlob(blob, 'note.mno');
+            this.ui.showNoteDownloadedMessage();
         } catch (error) {
             console.error('Error downloading note:', error);
-            this.ui.showPrivateModalError('Failed to download note: ' + error.message);
+            this.ui.showPrivateModalError('Failed to download note.');
         }
     }
 
