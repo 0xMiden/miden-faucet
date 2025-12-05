@@ -2,6 +2,8 @@
 
 ## 0.13.0 (TBD)
 
+- Added integration to import mint private notes directly to the wallet ([#189](https://github.com/0xMiden/miden-faucet/pull/189)).
+
 ## 0.12.4 (2025-12-04)
 
 - Added version to the metadata endpoint ([#169](https://github.com/0xMiden/miden-faucet/pull/169)).
