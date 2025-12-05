@@ -4,7 +4,7 @@ use axum::response::IntoResponse;
 use base64::Engine;
 use base64::engine::general_purpose;
 use http::StatusCode;
-use miden_client::note::NoteId;
+use miden_client::note::{Note, NoteDetails, NoteId};
 use miden_client::store::{NoteExportType, NoteFilter};
 use miden_client::utils::Serializable;
 use serde::Deserialize;
@@ -27,7 +27,7 @@ pub async fn get_note(
     Query(request): Query<RawNoteRequest>,
 ) -> Result<impl IntoResponse, NoteRequestError> {
     let request = request.validate()?;
-    let note = server
+    let note_record = server
         .store
         .get_output_notes(NoteFilter::Unique(request.note_id))
         .instrument(info_span!(target: COMPONENT, "store.get_output_notes"))
@@ -38,15 +38,23 @@ pub async fn get_note(
         })?
         .pop()
         .ok_or(NoteRequestError::NoteNotFound)?;
-    let note_file = note
+    let note_file = note_record
         .clone()
         .into_note_file(&NoteExportType::NoteWithProof)
-        .or_else(|_| note.into_note_file(&NoteExportType::NoteDetails))
+        .or_else(|_| note_record.clone().into_note_file(&NoteExportType::NoteDetails))
         .map_err(|e| {
             tracing::error!(?e, "failed to convert note to note file");
             NoteRequestError::NoteNotFound
         })?;
     let encoded_note = general_purpose::STANDARD.encode(note_file.to_bytes());
+
+    let note = Note::try_from(note_record).unwrap();
+    let header = note.header().clone();
+    let details: NoteDetails = note.into();
+    let send_note_result = server.note_transport_client.send_note(header, details.to_bytes()).await;
+    if send_note_result.is_err() {
+        // send note to user
+    }
     let note_json = serde_json::json!({
         "note_id": request.note_id.to_string(),
         "data_base64": encoded_note,

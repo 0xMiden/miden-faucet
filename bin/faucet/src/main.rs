@@ -15,16 +15,13 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
 use miden_client::account::{
-    Account,
-    AccountBuilder,
-    AccountFile,
-    AccountStorageMode,
-    AccountType,
+    Account, AccountBuilder, AccountFile, AccountStorageMode, AccountType,
 };
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
 use miden_client::crypto::RpoRandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
+use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::rpc::Endpoint;
 use miden_client::{Felt, Word};
 use miden_client_sqlite_store::SqliteStore;
@@ -385,6 +382,11 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 base_amount,
             };
 
+            let nt_endpoint = "https://transport.miden.io".to_string();
+            let nt_timeout = timeout.as_millis() as u64;
+            let note_transport_client =
+                Arc::new(GrpcNoteTransportClient::connect(nt_endpoint, nt_timeout).await?);
+
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.
             let tx_mint_requests_clone = tx_mint_requests.clone();
@@ -396,6 +398,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 rate_limiter_config,
                 &api_keys,
                 store,
+                note_transport_client,
             );
 
             // Use select to concurrently:

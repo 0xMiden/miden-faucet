@@ -8,6 +8,7 @@ use axum::extract::FromRef;
 use axum::routing::get;
 use http::HeaderValue;
 use miden_client::account::{AccountId, AccountIdError, AddressError};
+use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::store::Store;
 use miden_client::utils::hex_to_bytes;
 use miden_faucet_lib::requests::MintRequestSender;
@@ -46,6 +47,7 @@ pub struct ApiServer {
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
     store: Arc<dyn Store>,
+    note_transport_client: Arc<GrpcNoteTransportClient>,
 }
 
 impl ApiServer {
@@ -57,6 +59,7 @@ impl ApiServer {
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
+        note_transport_client: Arc<GrpcNoteTransportClient>,
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
 
@@ -73,6 +76,7 @@ impl ApiServer {
             rate_limiter,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
             store,
+            note_transport_client,
         }
     }
 
