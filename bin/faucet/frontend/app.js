@@ -2,7 +2,7 @@ import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
 import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
-import { getConfig, getMetadata, getPowChallenge, getTokens, get_note } from "./api.js";
+import { getConfig, getMetadata, getPowChallenge, getTokens, get_note, send_note } from "./api.js";
 
 export class MidenFaucetApp {
     constructor() {
@@ -39,21 +39,25 @@ export class MidenFaucetApp {
 
     setupEventListeners() {
         const onSendTokens = (isPrivateNote) => this.handleSendTokens(isPrivateNote);
-        const onWalletConnect = () => this.handleWalletConnect();
+        const onWalletConnect = () => this.setRecipientFromWallet();
         const onTokenSelect = (requestedAmount) => this.updateTokenHint(requestedAmount);
         this.ui.setupEventListeners(onSendTokens, onWalletConnect, onTokenSelect);
     }
 
-
-    async handleWalletConnect() {
+    async connectWallet() {
         try {
             await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
-
-            if (this.walletAdapter.address) {
-                this.ui.setRecipientAddress(this.walletAdapter.address);
-            }
         } catch (error) {
             console.error("WalletConnectionError:", error);
+        }
+    }
+
+    async setRecipientFromWallet() {
+        await this.connectWallet();
+
+        if (this.walletAdapter.address) {
+            this.ui.setRecipientAddress(this.walletAdapter.address);
+        } else {
             this.ui.showConnectionError("Connection failed", "Failed to connect wallet.");
         }
     }
@@ -83,18 +87,49 @@ export class MidenFaucetApp {
 
             const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
 
-            this.ui.hideMintingModal();
+            this.ui.setMintingTitle('Tokens Minted!'); // TODO: update subtitle mostrando que se esta enviando a la wallet
+            this.ui.setMintingHint('Importing note to your wallet...');
+
             if (isPrivateNote) {
-                this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.note_id, getTokensResponse.tx_id, (noteId) => this.downloadNote(noteId));
+                await this.connectWallet();
+                // if the recipient's wallet is connected, import note directly
+                let noteImported = false;
+                if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
+                    noteImported = await this.importNoteToWallet(getTokensResponse.note_id); // TODO:Add a timeout in case user doesn see popup
+                    if (noteImported) {
+                        // this.ui.showNoteImportedHints();
+                    }
+                }
+
+                if (!noteImported) {
+                    this.ui.setMintingHint('Sending note to your client...');
+                    // if the note did not get imported to the wallet, send it through the note transport layer
+                    const noteSent = await this.sendNoteToClient(getTokensResponse.note_id);
+                    if (noteSent) {
+                        // this.ui.showNoteSentHints();
+                    }
+                }
+
+                this.ui.showCompletedPrivateModal(
+                    recipient,
+                    amountAsTokens,
+                    getTokensResponse.note_id,
+                    getTokensResponse.tx_id,
+                    (noteId) => {
+                        this.downloadNote(noteId);
+                        this.ui.showDownloadedNoteHints();
+                    },
+                );
             } else {
-                this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id, () => {
-                    this.ui.hideModals();
-                    this.ui.resetForm();
-                });
+                this.ui.showCompletedPublicModal(
+                    recipient,
+                    amountAsTokens,
+                    getTokensResponse.tx_id,
+                );
             }
         } catch (error) {
             this.ui.hideMintingModal();
-            this.handleApiError(error, 'Request failed', error.message);
+            this.handleApiError(error, 'Unexpected error', error.message);
             return;
         }
     }
@@ -166,18 +201,34 @@ export class MidenFaucetApp {
         return estimatedTime;
     }
 
+    async importNoteToWallet(noteId) {
+        try {
+            const data = await get_note(this.apiUrl, noteId);
+            await this.walletAdapter.importPrivateNote(data);
+            return true;
+        } catch {
+            console.error("Failed to import private note to wallet");
+            this.ui.showRequestFailedError("Wallet import failed", "Failed to import private note to wallet.");
+            return false;
+        }
+    }
+
+    async sendNoteToClient(noteId) {
+        try {
+            await send_note(this.apiUrl, noteId);
+            return true;
+        } catch (error) {
+            // fails if the faucet server has not activated the note transport layer
+            // TODO: should be shown in UI? maybe stack up errors? since this implies note could not be imported to wallet either
+            console.error("Failed to send note through note transport layer", error);
+            return false;
+        }
+    }
+
     async downloadNote(noteId) {
         try {
             const data = await get_note(this.apiUrl, noteId);
-
-            // Decode base64
-            const binaryString = atob(data.data_base64);
-            const byteArray = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                byteArray[i] = binaryString.charCodeAt(i);
-            }
-
-            const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+            const blob = new Blob([data], { type: 'application/octet-stream' });
             Utils.downloadBlob(blob, 'note.mno');
         } catch (error) {
             console.error('Error downloading note:', error);

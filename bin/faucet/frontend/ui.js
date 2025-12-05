@@ -63,6 +63,16 @@ export class UIController {
         modal.classList.add('active');
     }
 
+    setMintingTitle(title) {
+        const mintingTitle = document.getElementById('minting-title');
+        mintingTitle.textContent = title;
+    }
+
+    setMintingHint(hint) {
+        const mintingHint = document.getElementById('minting-hint');
+        mintingHint.textContent = hint;
+    }
+
     hideMintingModal() {
         const mintingModal = document.getElementById('minting-modal');
         mintingModal.classList.remove('active');
@@ -87,7 +97,7 @@ export class UIController {
         }
     }
 
-    showCompletedPublicModal(recipient, amountAsTokens, txId, onClose) {
+    showCompletedPublicModal(recipient, amountAsTokens, txId) {
         document.getElementById('completed-public-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-public-recipient-address').textContent = recipient;
         const completedPublicModal = document.getElementById('completed-public-modal');
@@ -97,7 +107,8 @@ export class UIController {
         this.setupExplorerButton(publicExplorerButton, txId);
         completedPublicModal.onclick = (e) => {
             if (e.target !== publicExplorerButton) {
-                onClose();
+                this.hideModals();
+                this.resetForm();
             }
         };
     }
@@ -159,7 +170,7 @@ export class UIController {
 
     showError(title, description) {
         this.hideIcons();
-        this.hideDownloadedNoteHints();
+        this.hideNoteHints();
 
         const errorTitle = document.getElementById('home-error-message-title');
         errorTitle.textContent = title;
@@ -184,7 +195,7 @@ export class UIController {
         this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
     }
 
-    showCloseButton(onClose) {
+    showCloseButton() {
         const closeButton = document.getElementById('private-close-button');
         closeButton.style.display = 'block';
         closeButton.onclick = () => {
@@ -192,21 +203,20 @@ export class UIController {
             this.hideErrors();
             this.hideModals();
             this.resetForm();
-            onClose();
+            const downloadButton = document.getElementById('download-button');
+            downloadButton.classList.remove('pressed')
+            this.hideNoteHints();
         };
     }
 
     setupDownloadButton(noteId, onDownloadNote) {
         const downloadButton = document.getElementById('download-button');
+        document.getElementById('download-button-text').textContent = 'Download Note';
         downloadButton.onclick = async () => {
             this.hideErrors();
-            this.showDownloadedNoteHints();
             downloadButton.classList.add('pressed');
             document.getElementById('download-button-text').textContent = 'Download Again';
-            this.showCloseButton(() => {
-                downloadButton.classList.remove('pressed')
-                this.hideDownloadedNoteHints();
-            });
+            this.showCloseButton();
 
             await onDownloadNote(noteId);
         };
@@ -215,17 +225,35 @@ export class UIController {
     showDownloadedNoteHints() {
         const nextSteps = document.getElementById('next-steps');
         nextSteps.style.display = 'block';
+        const nextStepsList = document.getElementById('next-steps-list');
+        nextStepsList.display = 'block';
         const warningText = document.getElementById('warning-text');
         warningText.style.display = 'block';
     }
 
-    hideDownloadedNoteHints() {
+    showNoteSentHints() {
         const nextSteps = document.getElementById('next-steps');
-        console.log('nextSteps', nextSteps);
+        nextSteps.style.display = 'block';
+
+        const step = document.getElementById('single-next-step');
+        step.textContent = 'Note has been sent to your client, sync and consume'; //TODO: write properly
+        // 1. sync 2. consume. if note does not appear, download an import manually
+    }
+
+    showNoteImportedHints() {
+        const nextSteps = document.getElementById('next-steps');
+        nextSteps.style.display = 'block';
+
+        const step = document.getElementById('single-next-step');
+        step.textContent = 'Note has been imported to your wallet, it\'s ready to claim'; //TODO: write properly
+    }
+
+    hideNoteHints() {
+        const nextSteps = document.getElementById('next-steps');
         nextSteps.style.display = 'none';
         const warningText = document.getElementById('warning-text');
-        console.log('warningText', warningText);
         warningText.style.display = 'none';
+
     }
 
     setTokenOptions(tokenAmountOptions, decimals) {

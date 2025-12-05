@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Geist&family=Geist+Mono:wght@100..900&display=swap"
+        href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Geist+Mono:wght@100..900&family=Geist:wght@400&family=Geist:wght@500&family=Geist:wght@600&display=swap"
         rel="stylesheet">
     <script type="module" src="bundle.js"></script>
 </head>
@@ -126,7 +126,7 @@
                         <div class="minting-text">
                             <div class="minting-title" id="minting-title">Minting Tokens</div>
                             <div class="minting-separator"></div>
-                            <div class="minting-hint">This may take a few seconds depending
+                            <div class="minting-hint" id="minting-hint">This may take a few seconds depending
                                 on server load.
                             </div>
                         </div>
@@ -150,7 +150,7 @@
 
                     <div class="modal-content completed-modal">
                         <div class="loading-section">
-                            <div class="success-tick-css">
+                            <div id="success-tick" class="success-tick-css">
                                 <div class="checkmark"></div>
                             </div>
                         </div>
@@ -229,17 +229,20 @@
                         <div class="step">
                             <div class="highlight">Next Steps</div>
                         </div>
-                        <div class="step">
-                            <strong>Step 1:</strong> Save the downloaded note file somewhere safe. You'll need
-                            this
-                            file to import the note into your wallet.
-                        </div>
-                        <div class="step">
-                            <strong>Step 2:</strong> Open your wallet and go to the "Import Note" section.
-                        </div>
-                        <div class="step">
-                            <strong>Step 3:</strong> Upload the note file to make the tokens available in your
-                            wallet.
+                        <div id="single-next-step" class="step" style="display: none;"></div>
+                        <div id="next-steps-list">
+                            <div class="step">
+                                <strong>Step 1:</strong> Save the downloaded note file somewhere safe. You'll need this
+                                file
+                                to import the note into your wallet.
+                            </div>
+                            <div class="step">
+                                <strong>Step 2:</strong> Open your wallet and go to the "Import Note" section.
+                            </div>
+                            <div class="step">
+                                <strong>Step 3:</strong> Upload the note file to make the tokens available in your
+                                wallet.
+                            </div>
                         </div>
                     </div>
 
