@@ -121,12 +121,14 @@ impl ChallengeCache {
                         *c = c.saturating_sub(1);
                         *c == 0
                     })
-                    .expect("challenge should have had a domain entry");
+                    .expect("domain should have a submitted challenges count");
                 if remove_domain {
                     self.challenges_per_domain.remove(&domain);
                 }
 
-                self.challenges_timestamps.remove(&(requestor, domain));
+                self.challenges_timestamps
+                    .remove(&(requestor, domain))
+                    .expect("consumer should have a submitted challenge");
             }
         }
     }
