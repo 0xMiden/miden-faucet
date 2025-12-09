@@ -34,14 +34,6 @@ export class MidenFaucetApp {
             console.error('Failed to initialize app:', error);
             this.ui.showError('Failed to initialize application. Please refresh the page.');
         }
-
-        // We try to proactively connect the wallet and ignore any errors
-        try {
-            await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
-        } catch (error) {
-            console.error('Failed to connect wallet:', error);
-        }
-
     }
 
     setupEventListeners() {
@@ -53,10 +45,20 @@ export class MidenFaucetApp {
 
 
     async handleWalletConnect() {
+        await this.connectWallet();
+
         if (this.walletAdapter.address) {
             this.ui.setRecipientAddress(this.walletAdapter.address);
         } else {
             this.ui.showError("Failed to connect wallet.");
+        }
+    }
+
+    async connectWallet() {
+        try {
+            await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
+        } catch (error) {
+            console.error("WalletConnectionError:", error);
         }
     }
 
@@ -185,7 +187,8 @@ export class MidenFaucetApp {
                 byteArray[i] = binaryString.charCodeAt(i);
             }
 
-            if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) == Utils.idFromBech32(recipient)) {
+            await this.connectWallet();
+            if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
                 await this.walletAdapter.importPrivateNote(byteArray);
                 this.ui.showNoteImportedMessage();
             } else {
