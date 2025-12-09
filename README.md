@@ -29,7 +29,7 @@ miden-faucet init \
 ```bash
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
+  --api-bind-url http://localhost:8000 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
