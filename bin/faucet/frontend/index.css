@@ -319,7 +319,7 @@ body {
 }
 
 .progress-bar-modal {
-    position: absolute;
+    position: fixed;
     top: 49%;
     left: 50%;
     transform: translate(-50%, 105px) scale(0.9);
