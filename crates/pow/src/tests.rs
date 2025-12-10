@@ -275,7 +275,6 @@ async fn submit_challenge_while_previous_one_is_not_cleaned_up() {
         current_time,
         request_complexity,
     );
-    dbg!(&result);
     assert!(result.is_ok());
 
     // check that the first challenge is removed from the cache

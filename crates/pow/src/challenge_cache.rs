@@ -56,7 +56,8 @@ impl ChallengeCache {
     ) -> Result<(), ChallengeError> {
         let solver = (challenge.requestor, challenge.domain);
 
-        // Check if the solver is rate limited
+        // Check if the solver is rate limited. There could still be an expired challenge in the
+        // cache for this solver, so in that case we override it.
         let remaining_time = self.next_challenge_delay(&solver, current_time);
         if remaining_time != 0 {
             return Err(ChallengeError::RateLimited(remaining_time));
@@ -66,6 +67,10 @@ impl ChallengeCache {
 
         let prev_challenge = self.challenges_timestamps.insert(solver, current_time);
         if let Some(prev_timestamp) = prev_challenge {
+            assert!(
+                prev_timestamp + self.challenge_lifetime.as_secs() <= current_time,
+                "previous timestamp should be expired"
+            );
             // Since the previous timestamp for this solver is overridden, we can also just clean
             // up that challenge from the cache. The number of challenges for the domain stays
             // unchanged.
