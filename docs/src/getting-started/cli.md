@@ -33,7 +33,7 @@ miden-faucet init \
 
 ```bash
 miden-faucet start \
-  --api-url <URL> \
+  --api-bind-url <URL> \
   --frontend-url <URL> \
   --node-url <URL> \
   --network <NETWORK>
@@ -218,7 +218,7 @@ miden-faucet init \
 
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
+  --api-bind-url http://localhost:8000 \
   --node-url http://localhost:57291 \
   --network localhost
 ```

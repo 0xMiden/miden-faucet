@@ -26,7 +26,7 @@ Next, start the faucet by specifying the addresses where the API and the fronten
 ```bash
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
+  --api-bind-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
   --network testnet
 ```
@@ -64,7 +64,7 @@ miden-faucet init \
 
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000
+  --api-bind-url http://localhost:8000
 ```
 
 ### Development
@@ -80,7 +80,7 @@ miden-faucet init \
 
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
+  --api-bind-url http://localhost:8000 \
   --network devnet
 ```
 
@@ -97,7 +97,7 @@ miden-faucet init \
 
 miden-faucet start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
+  --api-bind-url http://localhost:8000 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ``` 
@@ -108,6 +108,6 @@ If you only need the API and don't want to serve the web interface:
 
 ```bash
 miden-faucet start \
-  --api-url http://localhost:8000 \
+  --api-bind-url http://localhost:8000 \
   --network testnet
 ```
