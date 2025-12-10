@@ -128,7 +128,7 @@ impl ChallengeCache {
 
                 self.challenges_timestamps
                     .remove(&(requestor, domain))
-                    .expect("consumer should have a submitted challenge");
+                    .expect("solver should have a submitted challenge");
             }
         }
     }
