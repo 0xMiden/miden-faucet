@@ -13,26 +13,23 @@ For comprehensive guides, API reference, and examples, see the [Miden Faucet Doc
 make install-faucet
 ```
 
-2. Create faucet account. This will generate authentication keypair and generate and write public faucet account data with its keypair into the file specified in `output-path`:
+2. Initialize the faucet. This will generate a new account with the specified token configuration and save the account data to a local SQLite store:
 
 ```bash
-miden-faucet create-faucet-account \
-  --output-path <path to faucet.mac> \
+miden-faucet init \
   --token-symbol MIDEN \
   --decimals 6 \
-  --max-supply 100000000000000000
+  --max-supply 100000000000000000 \
+  --network testnet
 ```
 > [!TIP]
 > This account will not be created on chain yet, creation on chain will happen on the first minting transaction.
 
-3. Start the faucet server:
+3. Start the faucet:
 ```bash
 miden-faucet start \
-  --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
-  --node-url https://rpc.testnet.miden.io:443 \
-  --network testnet \
-  --account <path to faucet.mac>
+  --explorer-url https://testnet.midenscan.com \
+  --network testnet
 ```
 
 After a few seconds you may go to `http://localhost:8080` and see the faucet UI.

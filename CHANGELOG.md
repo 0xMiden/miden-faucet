@@ -3,10 +3,15 @@
 ## 0.13.0 (TBD)
 
 - Updated faucet optional deployment to use an empty transaction (#[182](https://github.com/0xMiden/miden-faucet/pull/182)).
+- [BREAKING] Replaced the `api-bind-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- [BREAKING] Replaced the `frontend-url` param for `frontend-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- [BREAKING] Added `no-frontend` param to optionally disable the frontend server ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
 
-## 0.12.4 (2025-11-27)
+## 0.12.4 (2025-12-04)
 
 - Added version to the metadata endpoint ([#169](https://github.com/0xMiden/miden-faucet/pull/169)).
+- Small UI improvements ([#180](https://github.com/0xMiden/miden-faucet/pull/180)).
+- Updated `miden-client` to v0.12.5 ([#186](https://github.com/0xMiden/miden-faucet/pull/186)).
 
 ## 0.12.3 (2025-11-17)
 
