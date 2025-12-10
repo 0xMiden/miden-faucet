@@ -488,7 +488,7 @@ mod tests {
         );
         assert!(result.is_ok());
 
-        // submit challenge that overrides the first one (same consumer but previous challenge is
+        // submit challenge that overrides the first one (same solver but previous challenge is
         // expired)
         tokio::time::sleep(pow.config.challenge_lifetime + Duration::from_secs(1)).await;
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
