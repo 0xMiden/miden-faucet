@@ -1,11 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, RwLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
-use tokio::time::interval;
-
-use crate::challenge::Challenge;
-use crate::{Domain, Requestor};
+use crate::{Challenge, Domain, Requestor};
 
 /// Represents the consumer of a challenge, i.e. a requestor and a domain.
 pub(crate) type Consumer = (Requestor, Domain);
@@ -105,7 +101,7 @@ impl ChallengeCache {
     /// # Panics
     /// Panics if any expired challenge has no corresponding entries on the requestor or domain
     /// maps.
-    fn cleanup_expired_challenges(&mut self, current_time: u64) {
+    pub fn cleanup_expired_challenges(&mut self, current_time: u64) {
         // Challenges older than this are expired.
         let limit_timestamp = current_time - self.challenge_lifetime.as_secs();
 
@@ -128,27 +124,6 @@ impl ChallengeCache {
 
                 self.challenges_timestamps.remove(&(requestor, domain));
             }
-        }
-    }
-
-    /// Run the cleanup task.
-    ///
-    /// The cleanup task is responsible for removing expired challenges from the cache.
-    /// It runs every minute and removes challenges that are no longer valid because of their
-    /// timestamp.
-    pub async fn run_cleanup(cache: Arc<RwLock<Self>>, cleanup_interval: Duration) {
-        let mut interval = interval(cleanup_interval);
-
-        loop {
-            interval.tick().await;
-            let current_time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("current timestamp should be greater than unix epoch")
-                .as_secs();
-            cache
-                .write()
-                .expect("challenge cache lock should not be poisoned")
-                .cleanup_expired_challenges(current_time);
         }
     }
 }
