@@ -166,21 +166,11 @@ impl PoWRateLimiter {
             return Err(ChallengeError::InvalidPoW);
         }
 
-        // Check if issuer is rate limited
-        let remaining_time = self
-            .challenges
-            .read()
-            .expect("challenge cache lock should not be poisoned")
-            .next_challenge_delay(&(requestor, domain), current_time);
-        if remaining_time != 0 {
-            return Err(ChallengeError::RateLimited(remaining_time));
-        }
-
         // Insert the challenge into the cache
         self.challenges
             .write()
             .expect("challenge cache lock should not be poisoned")
-            .insert_challenge(challenge, current_time);
+            .insert_challenge(challenge, current_time)?;
 
         Ok(())
     }
@@ -508,12 +498,5 @@ mod tests {
         // check that the first challenge is removed from the cache
         assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain_1), 1);
         assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain_2), 1);
-        assert_eq!(
-            pow.challenges
-                .read()
-                .unwrap()
-                .next_challenge_delay(&(requestor, domain_1), current_time),
-            pow.config.challenge_lifetime.as_secs()
-        );
     }
 }

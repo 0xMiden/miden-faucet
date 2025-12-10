@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::interval;
 
 use crate::challenge::Challenge;
-use crate::{Domain, Requestor};
+use crate::{ChallengeError, Domain, Requestor};
 
 /// Represents the solver of a challenge, i.e. a requestor and a domain.
 pub(crate) type Solver = (Requestor, Domain);
@@ -45,13 +45,22 @@ impl ChallengeCache {
         }
     }
 
-    /// Inserts a challenge into the cache. Overrides the previous challenge of the solver, if
-    /// any.
+    /// Inserts a challenge into the cache.
     ///
-    /// Assumes that the solver associated with the challenge is not rate limited. See
-    /// `next_challenge_delay`.
-    pub fn insert_challenge(&mut self, challenge: &Challenge, current_time: u64) {
+    /// # Errors
+    /// Returns an error if the solver is rate limited.
+    pub fn insert_challenge(
+        &mut self,
+        challenge: &Challenge,
+        current_time: u64,
+    ) -> Result<(), ChallengeError> {
         let solver = (challenge.requestor, challenge.domain);
+
+        // Check if the solver is rate limited
+        let remaining_time = self.next_challenge_delay(&solver, current_time);
+        if remaining_time != 0 {
+            return Err(ChallengeError::RateLimited(remaining_time));
+        }
 
         self.challenges.entry(current_time).or_default().insert(solver);
 
@@ -74,12 +83,13 @@ impl ChallengeCache {
                 .and_modify(|c| *c = c.saturating_add(1))
                 .or_insert(1);
         }
+        Ok(())
     }
 
     /// Returns the seconds remaining until the next challenge can be submitted for the given
     /// requestor and domain. If the solver has not submitted a challenge yet, or the previous
     /// one expired, 0 is returned.
-    pub fn next_challenge_delay(&self, solver: &Solver, current_time: u64) -> u64 {
+    fn next_challenge_delay(&self, solver: &Solver, current_time: u64) -> u64 {
         self.challenges_timestamps.get(solver).map_or(0, |timestamp| {
             (timestamp + self.challenge_lifetime.as_secs()).saturating_sub(current_time)
         })
@@ -181,7 +191,7 @@ mod tests {
             domain,
             signature,
         );
-        cache.write().unwrap().insert_challenge(&challenge, timestamp);
+        cache.write().unwrap().insert_challenge(&challenge, timestamp).unwrap();
 
         // assert that the challenge was inserted
         assert!(cache.read().unwrap().challenges.contains_key(&timestamp));
