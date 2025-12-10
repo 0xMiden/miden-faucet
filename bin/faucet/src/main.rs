@@ -131,7 +131,7 @@ pub enum Command {
         #[clap(flatten)]
         config: ClientConfig,
 
-        /// Port to bind the API server.
+        /// Port to bind the API server. The server will be started on `0.0.0.0:<api-bind-port>`.
         #[arg(long = "api-bind-port", value_name = "PORT", env = ENV_API_BIND_PORT, default_value = "8000")]
         api_bind_port: u16,
 
@@ -139,7 +139,8 @@ pub enum Command {
         #[arg(long = "api-public-url", value_name = "URL", env = ENV_API_PUBLIC_URL, default_value = "http://localhost:8000")]
         api_public_url: Url,
 
-        /// Port to bind the frontend server.
+        /// Port to bind the frontend server. The server will be started on
+        /// `0.0.0.0:<frontend-bind-port>`.
         #[arg(long = "frontend-bind-port", value_name = "PORT", env = ENV_FRONTEND_BIND_PORT, default_value = "8080")]
         frontend_bind_port: u16,
 
