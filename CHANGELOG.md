@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0 (TBD)
+
+- [BREAKING] Replaced the `api-bind-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- [BREAKING] Replaced the `frontend-url` param for `frontend-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- [BREAKING] Added `no-frontend` param to optionally disable the frontend server ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+## 0.12.5 (TBD)
+
+- Added `mint` CLI command ([#195](https://github.com/0xMiden/miden-faucet/pull/195)).
+
 ## 0.12.4 (2025-12-04)
 
 - Added version to the metadata endpoint ([#169](https://github.com/0xMiden/miden-faucet/pull/169)).
@@ -76,7 +85,7 @@
 - Redesigned the home frontend ([#20](https://github.com/0xMiden/miden-faucet/pull/20)).
 - Redesigned the tokens request flows ([#25](https://github.com/0xMiden/miden-faucet/pull/25)).
 - Added faucet supply amounts to the metadata ([#30](https://github.com/0xMiden/miden-faucet/pull/30)).
-- Added supply exceeded check ([#31](https://github.com/0xMiden/miden-faucet/pull/31)). 
+- Added supply exceeded check ([#31](https://github.com/0xMiden/miden-faucet/pull/31)).
 - Use HTTP 429 status code for rate limited error ([#51](https://github.com/0xMiden/miden-faucet/pull/51)).
 - Replace amount options validation for maximum claimable amount ([#52](https://github.com/0xMiden/miden-faucet/pull/52)).
 - Added `mdbook` documentation ([#61](https://github.com/0xMiden/miden-faucet/pull/61)).
