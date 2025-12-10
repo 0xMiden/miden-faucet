@@ -48,8 +48,8 @@ export class MidenFaucetApp {
         try {
             await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
 
-            if (this.walletAdapter.accountId) {
-                this.ui.setRecipientAddress(this.walletAdapter.accountId);
+            if (this.walletAdapter.address) {
+                this.ui.setRecipientAddress(this.walletAdapter.address);
             }
         } catch (error) {
             console.error("WalletConnectionError:", error);
