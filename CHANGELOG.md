@@ -3,6 +3,10 @@
 ## 0.13.0 (TBD)
 
 - Added web-client to wait for note commitment on the node ([#174](https://github.com/0xMiden/miden-faucet/pull/174)).
+- [BREAKING] Replaced the `api-bind-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- [BREAKING] Replaced the `frontend-url` param for `frontend-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- [BREAKING] Added `no-frontend` param to optionally disable the frontend server ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+
 ## 0.12.4 (2025-12-04)
 
 - Added version to the metadata endpoint ([#169](https://github.com/0xMiden/miden-faucet/pull/169)).
