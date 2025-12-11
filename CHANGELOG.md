@@ -5,6 +5,10 @@
 - Added a feature `tokio` for the `miden-pow-rate-limiter` crate ([#188](https://github.com/0xMiden/miden-faucet/pull/188).)
 
 ## 0.12.4 (2025-11-27)
+- [BREAKING] Replaced the `api-bind-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- [BREAKING] Replaced the `frontend-url` param for `frontend-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- [BREAKING] Added `no-frontend` param to optionally disable the frontend server ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+
 ## 0.12.4 (2025-12-04)
 
 - Added version to the metadata endpoint ([#169](https://github.com/0xMiden/miden-faucet/pull/169)).
@@ -15,6 +19,7 @@
 
 - Fixed challenge cache lock poisoned bug by removing validation on `challenges_timestamps` cleanup ([#165](https://github.com/0xMiden/miden-faucet/pull/165)).
 - Added an error display for failed metadata requests ([#166](https://github.com/0xMiden/miden-faucet/pull/166)).
+- Improved rate limiter by tracking challenges by submission timestamp ([#167](https://github.com/0xMiden/miden-faucet/pull/167)).
 
 ## 0.12.2 (2025-11-12)
 
