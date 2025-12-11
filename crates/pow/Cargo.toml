@@ -14,10 +14,13 @@ version.workspace      = true
 [lints]
 workspace = true
 
+[features]
+tokio = ["tokio/time"]
+
 [dependencies]
 sha2      = { workspace = true }
 thiserror = { workspace = true }
-tokio     = { features = ["time"], workspace = true }
+tokio     = { optional = true, workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

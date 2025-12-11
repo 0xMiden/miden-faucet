@@ -9,6 +9,7 @@ mod challenge_cache;
 mod tests;
 
 pub use challenge::Challenge;
+use tokio::time::interval;
 
 // PoW Rate Limiter
 // ================================================================================================
@@ -48,20 +49,59 @@ pub struct PoWRateLimiterConfig {
 }
 
 impl PoWRateLimiter {
-    /// Creates a new `PoW` instance.
-    pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
+    /// Creates a new `PoW` instance and starts a `tokio` task to clean up expired challenges.
+    #[cfg(feature = "tokio")]
+    pub fn new_with_cleanup(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
         let challenge_cache = Arc::new(RwLock::new(ChallengeCache::new(config.challenge_lifetime)));
 
         // Start the cleanup task
         let cleanup_state = challenge_cache.clone();
         tokio::spawn(async move {
-            ChallengeCache::run_cleanup(cleanup_state, config.cleanup_interval).await;
+            Self::run_cleanup(cleanup_state, config.cleanup_interval).await;
         });
 
         Self {
             secret,
             challenges: challenge_cache,
             config,
+        }
+    }
+
+    /// Creates a new `PoW` instance.
+    ///
+    /// Note: You need to manually run the cleanup task by calling `ChallengeCache::run_cleanup`
+    /// periodically.
+    ///
+    /// See `PoWRateLimiter::new_with_cleanup` to instantiate the rate limiter with the cleanup task
+    /// started automatically. It requires to enable the `tokio` feature.
+    pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
+        let challenge_cache = Arc::new(RwLock::new(ChallengeCache::new(config.challenge_lifetime)));
+        Self {
+            secret,
+            challenges: challenge_cache,
+            config,
+        }
+    }
+
+    /// Runs the challenge clean up.
+    ///
+    /// Periodically removes expired challenges from the cache. It sleeps for the duration of the
+    /// given cleanup interval before each clean up.
+    ///
+    /// Note: this is a blocking function.
+    async fn run_cleanup(challenges: Arc<RwLock<ChallengeCache>>, cleanup_interval: Duration) {
+        let mut interval = interval(cleanup_interval);
+
+        loop {
+            interval.tick().await;
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("current timestamp should be greater than unix epoch")
+                .as_secs();
+            challenges
+                .write()
+                .expect("challenge cache lock should not be poisoned")
+                .cleanup_expired_challenges(current_time);
         }
     }
 
