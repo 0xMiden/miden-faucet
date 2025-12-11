@@ -145,6 +145,7 @@ async fn requestor_is_rate_limited_after_challenge_expires() {
     let nonce_2 = find_pow_solution(&challenge_2, 10000).expect("Should find solution");
 
     // Wait until challenge 1 is almost expired and submit it
+    #[allow(clippy::unchecked_time_subtraction)]
     tokio::time::sleep(pow.config.challenge_lifetime - Duration::from_millis(1100)).await;
     let time_1 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     let result =

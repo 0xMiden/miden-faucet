@@ -16,7 +16,8 @@ export class MidenFaucetApp {
         // Check if Web Crypto API is available
         if (!window.crypto || !window.crypto.subtle) {
             console.error("Web Crypto API not available");
-            this.ui.showError('Web Crypto API not available. Please use a modern browser.');
+            this.ui.showConnectionError('Web Crypto API not available', 'Please use a modern browser');
+            return;
         }
 
         this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
@@ -32,7 +33,7 @@ export class MidenFaucetApp {
             this.startMetadataPolling();
         } catch (error) {
             console.error('Failed to initialize app:', error);
-            this.ui.showError('Failed to initialize application. Please refresh the page.');
+            this.handleApiError(error, 'Connection failed', 'Some data couldn\'t be loaded right now.');
         }
     }
 
@@ -53,7 +54,7 @@ export class MidenFaucetApp {
             }
         } catch (error) {
             console.error("WalletConnectionError:", error);
-            this.ui.showError("Failed to connect wallet.");
+            this.ui.showConnectionError("Connection failed", "Failed to connect wallet.");
         }
     }
 
@@ -62,55 +63,57 @@ export class MidenFaucetApp {
             const { recipient, amount, amountAsTokens } = this.ui.getFormData();
 
             if (!recipient) {
-                this.ui.showError('Recipient address is required.');
+                this.ui.showInvalidRequestError('Invalid address', 'Please enter a recipient address.');
                 return;
             }
             if (!amount || amount === '0') {
-                this.ui.showError('Amount is required.');
+                this.ui.showInvalidRequestError('Invalid amount', 'Please enter a non zero amount.');
                 return;
             }
             if (!Utils.validateAddress(recipient)) {
-                this.ui.showError('Please enter a valid recipient address.');
+                this.ui.showInvalidRequestError('Invalid address', 'Please enter a valid recipient address.');
                 return;
             }
 
-            this.ui.hideMessages();
+            this.ui.hideErrors();
             this.ui.showMintingModal(recipient, amountAsTokens, isPrivateNote);
-            this.ui.updateMintingTitle('PREPARING THE REQUEST');
-            this.ui.updateProgressBar(0);
 
             const powData = await getPowChallenge(this.apiUrl, recipient, amount);
             const nonce = await this.findValidNonce(powData.challenge, powData.target);
 
-            this.ui.updateMintingTitle('MINTING TOKENS');
-            this.ui.updateProgressBar(50);
-
             const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
 
-            this.ui.showCompletedModal(
-                recipient,
-                amountAsTokens,
-                isPrivateNote,
-                getTokensResponse.tx_id,
-                getTokensResponse.note_id,
-                (noteId) => this.downloadNote(noteId),
-                () => {
+            this.ui.hideMintingModal();
+            if (isPrivateNote) {
+                this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.note_id, getTokensResponse.tx_id, (noteId) => this.downloadNote(noteId));
+            } else {
+                this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id, () => {
                     this.ui.hideModals();
                     this.ui.resetForm();
-                }
-            );
+                });
+            }
         } catch (error) {
-            this.ui.showError(error);
+            this.ui.hideMintingModal();
+            this.handleApiError(error, 'Request failed', error.message);
             return;
         }
     }
 
     startMetadataPolling() {
-        this.fetchMetadata();
+        try {
+            this.fetchMetadata();
+        } catch (error) {
+            this.ui.showConnectionError('Connection failed', 'Some data couldn\'t be loaded right now.');
+            console.error('Error fetching metadata:', error);
+        }
 
         // Poll every 4 seconds
         this.metadataInterval = setInterval(() => {
-            this.fetchMetadata();
+            try {
+                this.fetchMetadata();
+            } catch (error) {
+                console.error('Error fetching metadata:', error);
+            }
         }, 4000);
     }
 
@@ -122,11 +125,6 @@ export class MidenFaucetApp {
             this.powLoadDifficulty = data.pow_load_difficulty;
             this.baseAmount = data.base_amount;
 
-            if (this.metadataError) {
-                this.metadataError = false;
-                this.ui.hideMessages();
-            }
-
             if (!this.metadataInitialized) {
                 this.metadataInitialized = true;
                 this.ui.setFaucetId(data.id);
@@ -135,8 +133,6 @@ export class MidenFaucetApp {
                 this.updateTokenHint(this.tokenAmountOptions[0]);
             }
         } catch (error) {
-            this.metadataError = true;
-            this.ui.showError('Failed to connect to the faucet API server (FetchMetadata).');
             console.error('Error fetching metadata:', error);
         }
     }
@@ -171,7 +167,6 @@ export class MidenFaucetApp {
     }
 
     async downloadNote(noteId) {
-        this.ui.hidePrivateModalError();
         try {
             const data = await get_note(this.apiUrl, noteId);
 
@@ -184,11 +179,9 @@ export class MidenFaucetApp {
 
             const blob = new Blob([byteArray], { type: 'application/octet-stream' });
             Utils.downloadBlob(blob, 'note.mno');
-
-            this.ui.showNoteDownloadedMessage();
         } catch (error) {
             console.error('Error downloading note:', error);
-            this.ui.showPrivateModalError('Failed to download note: ' + error.message);
+            this.handleApiError(error, 'Download failed', error.message);
         }
     }
 
@@ -234,6 +227,35 @@ export class MidenFaucetApp {
             if (nonce % 1000 === 0) {
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
+        }
+    }
+
+    handleApiError(error, defaultTitle, defaultMessage) {
+        // Check if it's an ApiError with a status code
+        if (error.statusCode) {
+            const statusCode = error.statusCode;
+            const errorMessage = error.message || defaultMessage;
+
+            switch (statusCode) {
+                case 400: // Bad Request
+                    this.ui.showInvalidRequestError('Invalid request', errorMessage);
+                    break;
+                case 429: // Too Many Requests (Rate Limited)
+                    this.ui.showWaitError('Error!', errorMessage || 'Too many requests.');
+                    break;
+                case 500: // Internal Server Error
+                    this.ui.showConnectionError('Server error', errorMessage || 'An internal server error occurred.');
+                    break;
+                case 503: // Service Unavailable
+                    this.ui.showConnectionError('Service unavailable', errorMessage || 'The faucet is currently unavailable.');
+                    break;
+                default:
+                    // For other status codes, use the default error handler
+                    this.ui.showRequestFailedError(defaultTitle, errorMessage);
+            }
+        } else {
+            // For non-API errors (e.g. network errors), use default handler
+            this.ui.showRequestFailedError(defaultTitle, defaultMessage);
         }
     }
 }

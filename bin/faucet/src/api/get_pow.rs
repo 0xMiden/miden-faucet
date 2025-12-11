@@ -111,7 +111,7 @@ impl PowRequestError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::AccountError(error) => error.to_string(),
+            Self::AccountError(_) => "Please enter a valid recipient address".to_owned(),
             Self::InvalidApiKey(_) => "Invalid API key".to_owned(),
         }
     }

@@ -8,7 +8,7 @@ export class UIController {
         this.publicButton = document.getElementById('send-public-button');
         this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
-        this.progressFill = document.getElementById('progress-fill');
+        this.issuanceFill = document.getElementById('issuance-fill');
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountHint = document.getElementById('token-amount-hint');
@@ -47,8 +47,6 @@ export class UIController {
 
         const completedPublicModal = document.getElementById('completed-public-modal');
         completedPublicModal.classList.remove('active');
-
-        this.hideProgressBar();
     }
 
     showMintingModal(recipient, amountAsTokens, isPrivateNote) {
@@ -60,116 +58,130 @@ export class UIController {
         // Update modal content
         tokenAmount.textContent = amountAsTokens;
         recipientAddress.textContent = recipient;
-        noteType.textContent = isPrivateNote ? 'PRIVATE' : 'PUBLIC';
+        noteType.textContent = isPrivateNote ? 'Private' : 'Public';
 
         modal.classList.add('active');
     }
 
-    showCompletedModal(recipient, amountAsTokens, isPrivateNote, txId, noteId, onDownloadNote, onClose) {
+    hideMintingModal() {
         const mintingModal = document.getElementById('minting-modal');
         mintingModal.classList.remove('active');
+    }
 
-        document.getElementById('completed-public-token-amount').textContent = amountAsTokens;
-        document.getElementById('completed-public-recipient-address').textContent = recipient;
+    showCompletedPrivateModal(recipient, amountAsTokens, noteId, txId, onDownloadNote) {
         document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-private-recipient-address').textContent = recipient;
-
-        this.updateMintingTitle('TOKENS MINTED!');
         const completedPrivateModal = document.getElementById('completed-private-modal');
-        const completedPublicModal = document.getElementById('completed-public-modal');
+        completedPrivateModal.classList.add('active');
+        this.setupDownloadButton(noteId, onDownloadNote);
+        const privateExplorerButton = document.getElementById('private-explorer-button');
+        this.setupExplorerButton(privateExplorerButton, txId);
+    }
 
-        this.updateProgressBar(100);
-
-        if (isPrivateNote) {
-            completedPrivateModal.classList.add('active');
-            this.setupDownloadButton(noteId, onDownloadNote);
+    setupExplorerButton(explorerButton, txId) {
+        if (this.explorerUrl) {
+            explorerButton.style.display = 'block';
+            explorerButton.onclick = () => window.open(`${this.explorerUrl}/tx/${txId}`, '_blank');
         } else {
-            completedPublicModal.classList.add('active');
-
-            const explorerButton = document.getElementById('explorer-button');
-            if (this.explorerUrl) {
-                explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(`${this.explorerUrl}/tx/${txId}`, '_blank');
-            } else {
-                explorerButton.style.display = 'none';
-            }
-
-            completedPublicModal.onclick = (e) => {
-                const continueText = document.getElementById('public-continue-text');
-                if (e.target === completedPublicModal || e.target === continueText) {
-                    onClose();
-                }
-            };
+            explorerButton.style.display = 'none';
         }
     }
 
-    updateMintingTitle(title) {
-        const mintingTitle = document.getElementById('minting-title');
-        mintingTitle.textContent = title;
+    showCompletedPublicModal(recipient, amountAsTokens, txId, onClose) {
+        document.getElementById('completed-public-token-amount').textContent = amountAsTokens;
+        document.getElementById('completed-public-recipient-address').textContent = recipient;
+        const completedPublicModal = document.getElementById('completed-public-modal');
+        completedPublicModal.classList.add('active');
+
+        const publicExplorerButton = document.getElementById('public-explorer-button');
+        this.setupExplorerButton(publicExplorerButton, txId);
+        completedPublicModal.onclick = (e) => {
+            if (e.target !== publicExplorerButton) {
+                onClose();
+            }
+        };
     }
 
-    showPublicModalError(message) {
-        const publicModalError = document.getElementById('public-error-message');
-        publicModalError.textContent = message;
-        publicModalError.style.display = 'block';
+    showRequestFailedError(title, description) {
+        this.showError(title, description);
+
+        const icon = document.getElementById('error-icon');
+        icon.style.display = 'block';
     }
 
-    showPrivateModalError(message) {
-        const privateModalError = document.getElementById('private-error-message');
-        privateModalError.textContent = message;
-        privateModalError.style.display = 'block';
+    showConnectionError(title, description) {
+        this.showError(title, description);
+
+        const icon = document.getElementById('warning-icon');
+        icon.style.display = 'block';
     }
 
-    hidePrivateModalError() {
-        const privateModalError = document.getElementById('private-error-message');
-        privateModalError.style.display = 'none';
+    showInvalidRequestError(title, description) {
+        this.showError(title, description);
+
+        const icon = document.getElementById('invalid-icon');
+        icon.style.display = 'block';
     }
 
-    showError(message) {
-        this.hideModals();
-        const errorMessage = document.getElementById('error-message');
-        errorMessage.textContent = message;
-        errorMessage.style.display = 'block';
+    showWaitError(title, description) {
+        this.showError(title, description);
+
+        const icon = document.getElementById('wait-error-icon');
+        icon.style.display = 'block';
     }
 
-    hideMessages() {
-        const errorMessage = document.getElementById('error-message');
+    showStillLoading(title, description) {
+        this.showError(title, description);
+
+        const icon = document.getElementById('wait-icon');
+        icon.style.display = 'block';
+
+        const errorMessage = document.getElementById('home-error-message');
+        errorMessage.style.backgroundColor = '#F6DED2';
+    }
+
+    hideIcons() {
+        const warningIcon = document.getElementById('warning-icon');
+        warningIcon.style.display = 'none';
+
+        const waitErrorIcon = document.getElementById('wait-error-icon');
+        waitErrorIcon.style.display = 'none';
+
+        const waitIcon = document.getElementById('wait-icon');
+        waitIcon.style.display = 'none';
+
+        const invalidIcon = document.getElementById('invalid-icon');
+        invalidIcon.style.display = 'none';
+
+        const errorIcon = document.getElementById('error-icon');
+        errorIcon.style.display = 'none';
+    }
+
+    showError(title, description) {
+        this.hideIcons();
+        this.hideDownloadedNoteHints();
+
+        const errorTitle = document.getElementById('home-error-message-title');
+        errorTitle.textContent = title;
+
+        const errorDescription = document.getElementById('home-error-message-description');
+        errorDescription.textContent = description;
+
+        const errorMessage = document.getElementById('home-error-message');
+        errorMessage.style.display = 'flex';
+    }
+
+    hideErrors() {
+        this.hideIcons();
+
+        const errorMessage = document.getElementById('home-error-message');
         errorMessage.style.display = 'none';
+        errorMessage.style.backgroundColor = '#FFE8E9';
 
-        const privateModalError = document.getElementById('private-error-message');
-        privateModalError.style.display = 'none';
-
-        const publicModalError = document.getElementById('public-error-message');
-        publicModalError.style.display = 'none';
-
-        const continueText = document.getElementById('private-continue-text');
-        continueText.style.visibility = 'hidden';
-    }
-
-    updateProgressBar(progress) {
-        this.showProgressBar();
-        const progressBarFill = document.getElementById('progress-bar-fill');
-        progressBarFill.style.width = progress + '%';
-    }
-
-    showProgressBar() {
-        const progressBarTotal = document.getElementById('progress-bar-total');
-        progressBarTotal.classList.add('active');
-    }
-
-    hideProgressBar() {
-        this.updateProgressBar(0);
-        const progressBarTotal = document.getElementById('progress-bar-total');
-        progressBarTotal.classList.remove('active');
     }
 
     setTokenHint(estimatedTime) {
         this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
-    }
-
-    showNoteDownloadedMessage() {
-        const continueText = document.getElementById('private-continue-text');
-        continueText.style.visibility = 'visible';
     }
 
     showCloseButton(onClose) {
@@ -177,7 +189,7 @@ export class UIController {
         closeButton.style.display = 'block';
         closeButton.onclick = () => {
             closeButton.style.display = 'none';
-            this.hideMessages();
+            this.hideErrors();
             this.hideModals();
             this.resetForm();
             onClose();
@@ -187,9 +199,33 @@ export class UIController {
     setupDownloadButton(noteId, onDownloadNote) {
         const downloadButton = document.getElementById('download-button');
         downloadButton.onclick = async () => {
+            this.hideErrors();
+            this.showDownloadedNoteHints();
+            downloadButton.classList.add('pressed');
+            document.getElementById('download-button-text').textContent = 'Download Again';
+            this.showCloseButton(() => {
+                downloadButton.classList.remove('pressed')
+                this.hideDownloadedNoteHints();
+            });
+
             await onDownloadNote(noteId);
-            this.showCloseButton(() => { });
         };
+    }
+
+    showDownloadedNoteHints() {
+        const nextSteps = document.getElementById('next-steps');
+        nextSteps.style.display = 'block';
+        const warningText = document.getElementById('warning-text');
+        warningText.style.display = 'block';
+    }
+
+    hideDownloadedNoteHints() {
+        const nextSteps = document.getElementById('next-steps');
+        console.log('nextSteps', nextSteps);
+        nextSteps.style.display = 'none';
+        const warningText = document.getElementById('warning-text');
+        console.log('warningText', warningText);
+        warningText.style.display = 'none';
     }
 
     setTokenOptions(tokenAmountOptions, decimals) {
@@ -214,6 +250,6 @@ export class UIController {
     setIssuanceAndSupply(issuance, max_supply, decimals) {
         this.issuance.textContent = Utils.baseUnitsToTokens(issuance, decimals);
         this.tokensSupply.textContent = Utils.baseUnitsToTokens(max_supply, decimals);
-        this.progressFill.style.width = (issuance / max_supply) * 100 + '%';
+        this.issuanceFill.style.width = (issuance / max_supply) * 100 + '%';
     }
 }
