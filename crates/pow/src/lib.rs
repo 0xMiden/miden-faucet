@@ -88,7 +88,7 @@ impl PoWRateLimiter {
         }
     }
 
-    /// Returns a clone of the challenge cache lock.
+    /// Returns the challenge cache.
     pub fn challenge_cache(&self) -> Arc<RwLock<ChallengeCache>> {
         self.challenges.clone()
     }
