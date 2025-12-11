@@ -94,7 +94,7 @@ impl PoWRateLimiter {
     }
 
     /// Cleans up the challenge cache, removing all the expired challenges.
-    fn run_cleanup(challenges: &Arc<RwLock<ChallengeCache>>) {
+    pub fn run_cleanup(challenges: &Arc<RwLock<ChallengeCache>>) {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("current timestamp should be greater than unix epoch")

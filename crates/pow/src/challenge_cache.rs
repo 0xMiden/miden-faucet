@@ -112,7 +112,6 @@ impl ChallengeCache {
     /// # Panics
     /// Panics if any expired challenge has no corresponding entries on the requestor or domain
     /// maps.
-    #[cfg(feature = "tokio")]
     pub fn cleanup_expired_challenges(&mut self, current_time: u64) {
         // Timestamps lower than this are expired. Add 1 since `BTreeMap::split_off` is inclusive.
         let limit_timestamp = current_time - self.challenge_lifetime.as_secs() + 1;
