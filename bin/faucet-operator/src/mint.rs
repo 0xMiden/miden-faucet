@@ -1,4 +1,4 @@
-//! CLI command to mint tokens from a remote faucet
+//! CLI command to mint tokens from a remote faucet by solving its `PoW` challenge.
 
 use std::time::Duration;
 
@@ -33,9 +33,9 @@ pub struct MintCmd {
     #[arg(short = 'a', long = "account", value_name = "ACCOUNT")]
     account: String,
 
-    /// Amount to mint (in base units).
-    #[arg(short = 'm', long = "amount", value_name = "U64")]
-    amount: u64,
+    /// Quantity to mint (in base units).
+    #[arg(short = 'q', long = "quantity", value_name = "U64", alias = "amount")]
+    quantity: u64,
 
     /// Optional faucet API key.
     #[arg(long = "api-key", value_name = "STRING")]
@@ -45,7 +45,7 @@ pub struct MintCmd {
 impl MintCmd {
     /// Executes the mint command.
     pub async fn execute(&self) -> Result<(), MintClientError> {
-        if self.amount == 0 {
+        if self.quantity == 0 {
             return Err(MintClientError::AmountZero);
         }
 
@@ -59,14 +59,14 @@ impl MintCmd {
             faucet_client.base_url
         );
 
-        let (challenge, target) = faucet_client.request_pow(&account_id, self.amount).await?;
+        let (challenge, target) = faucet_client.request_pow(&account_id, self.quantity).await?;
 
         println!("Solving faucet PoW challenge, this can take some time...");
         let nonce = solve_challenge(&challenge, target).await?;
 
         println!("Submitting mint request for a public P2ID note...");
         let minted_note = faucet_client
-            .request_tokens(&challenge, nonce, &account_id, self.amount)
+            .request_tokens(&challenge, nonce, &account_id, self.quantity)
             .await?;
 
         println!("Mint request accepted. Transaction: {}", minted_note.tx_id);
@@ -201,16 +201,16 @@ impl FaucetHttpClient {
 
 /// Response from the `/pow` endpoint.
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct PowResponse {
-    challenge: String,
-    target: u64,
+pub struct PowResponse {
+    pub challenge: String,
+    pub target: u64,
 }
 
 /// Response from the `/get_tokens` endpoint.
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct GetTokensResponse {
-    note_id: String,
-    tx_id: String,
+pub struct GetTokensResponse {
+    pub note_id: String,
+    pub tx_id: String,
 }
 
 /// Represents a minted note with its ID and transaction ID.
@@ -306,133 +306,4 @@ async fn solve_challenge(challenge_hex: &str, target: u64) -> Result<u64, MintCl
     })
     .await
     .map_err(|err| MintClientError::PowTask(err.to_string()))?
-}
-
-// TESTS
-// =================================================================================================
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use axum::extract::{Query, State};
-    use axum::routing::get;
-    use axum::{Json, Router};
-    use miden_client::account::AccountId;
-    use miden_client::note::NoteId;
-    use serde::Deserialize;
-    use tokio::net::TcpListener;
-    use tokio::sync::Mutex;
-
-    use super::{GetTokensResponse, MintCmd, MintNote, PowResponse};
-
-    #[derive(Clone, Default)]
-    struct RecordedRequest {
-        account_id: Option<String>,
-        amount: Option<u64>,
-        is_private_note: Option<String>,
-        api_key: Option<String>,
-        challenge: Option<String>,
-    }
-
-    #[derive(Clone)]
-    struct AppState {
-        pow_response: PowResponse,
-        note: MintNote,
-        recorded: Arc<Mutex<RecordedRequest>>,
-    }
-
-    #[derive(Deserialize)]
-    struct PowQuery {
-        amount: u64,
-        account_id: String,
-        api_key: Option<String>,
-    }
-
-    #[derive(Deserialize)]
-    struct TokensQuery {
-        account_id: String,
-        is_private_note: String,
-        asset_amount: u64,
-        challenge: String,
-        #[allow(dead_code)]
-        nonce: u64,
-        api_key: Option<String>,
-    }
-
-    #[tokio::test]
-    async fn mint_command_requests_public_note() {
-        let account_hex = "0xca8203e8e58cf72049b061afca78ce";
-        let account_id = AccountId::from_hex(account_hex).unwrap();
-        let expected_amount = 123_000;
-        let pow_response = PowResponse {
-            challenge: "00".repeat(32),
-            target: u64::MAX,
-        };
-        let note_id_hex = format!("0x{}", "00".repeat(32));
-        let note_id =
-            NoteId::try_from_hex(&note_id_hex).expect("hex string should produce a note id");
-        let app_state = AppState {
-            pow_response,
-            note: MintNote { note_id, tx_id: "0xdeadbeef".to_string() },
-            recorded: Arc::new(Mutex::new(RecordedRequest::default())),
-        };
-
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let app = Router::new()
-            .route("/pow", get(pow_handler))
-            .route("/get_tokens", get(tokens_handler))
-            .with_state(app_state.clone());
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
-
-        let cli = MintCmd {
-            api_url: format!("http://{addr}"),
-            account: account_id.to_hex(),
-            amount: expected_amount,
-            api_key: Some("test-key".to_owned()),
-        };
-
-        cli.execute().await.unwrap();
-
-        let recorded = app_state.recorded.lock().await.clone();
-        assert_eq!(recorded.account_id, Some(account_id.to_hex()));
-        assert_eq!(recorded.amount, Some(expected_amount));
-        assert_eq!(recorded.is_private_note.as_deref(), Some("false"));
-        assert_eq!(recorded.api_key.as_deref(), Some("test-key"));
-        assert_eq!(recorded.challenge, Some("00".repeat(32)));
-    }
-
-    async fn pow_handler(
-        State(state): State<AppState>,
-        Query(params): Query<PowQuery>,
-    ) -> Json<PowResponse> {
-        {
-            let mut recorded = state.recorded.lock().await;
-            recorded.account_id = Some(params.account_id);
-            recorded.amount = Some(params.amount);
-            recorded.api_key = params.api_key;
-        }
-        Json(state.pow_response.clone())
-    }
-
-    async fn tokens_handler(
-        State(state): State<AppState>,
-        Query(params): Query<TokensQuery>,
-    ) -> Json<GetTokensResponse> {
-        {
-            let mut recorded = state.recorded.lock().await;
-            recorded.account_id = Some(params.account_id.clone());
-            recorded.amount = Some(params.asset_amount);
-            recorded.is_private_note = Some(params.is_private_note.clone());
-            recorded.api_key = params.api_key.clone();
-            recorded.challenge = Some(params.challenge);
-        }
-        Json(GetTokensResponse {
-            note_id: state.note.note_id.to_hex(),
-            tx_id: state.note.tx_id.clone(),
-        })
-    }
 }

@@ -23,7 +23,7 @@ The Miden Faucet can be configured using:
 ### Basic Configuration
 
 ```bash
-miden-faucet init \
+miden-faucet-client init \
   --token-symbol <SYMBOL> \
   --decimals <U8> \
   --max-supply <U64> \
@@ -32,7 +32,7 @@ miden-faucet init \
 ```
 
 ```bash
-miden-faucet start \
+miden-faucet-client start \
   --api-bind-url <URL> \
   --frontend-url <URL> \
   --node-url <URL> \
@@ -177,7 +177,7 @@ export MIDEN_FAUCET_API_KEYS=key1,key2,key3
 ### Generate API Keys
 
 ```bash
-miden-faucet create-api-key
+miden-faucet-client create-api-key
 ```
 
 This generates an API key that can be used for authentication. It is printed to stdout.
@@ -210,17 +210,27 @@ Enable OpenTelemetry for production monitoring:
 ## Configuration Example
 
 ```bash
-miden-faucet init \
+miden-faucet-client init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
   --node-url http://localhost:57291
 
-miden-faucet start \
+miden-faucet-client start \
   --frontend-url http://localhost:8080 \
   --api-bind-url http://localhost:8000 \
   --node-url http://localhost:57291 \
   --network localhost
 ```
 
-For detailed options, run `miden-faucet [COMMAND] --help`. 
+For detailed options, run `miden-faucet-client [COMMAND] --help`. The legacy alias `miden-faucet` is still available for backwards compatibility.
+
+To request tokens from a remote faucet, use the separate operator CLI:
+```bash
+miden-faucet-operator mint --url <FAUCET_API_URL> --account <ACCOUNT_ID> --amount <BASE_UNITS>
+```
+
+To see available options:
+```bash
+miden-faucet-operator mint --help
+```
