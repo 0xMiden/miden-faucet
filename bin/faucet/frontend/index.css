@@ -5,7 +5,7 @@
 }
 
 body {
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     background-color: #ffffff;
     color: rgba(0, 0, 0, 0.4);
     font-weight: 500;
@@ -32,7 +32,7 @@ body {
     color: rgb(255, 255, 255);
     top: -22px;
     translate: 10px 0;
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     font-size: 13px;
     letter-spacing: 0;
 }
@@ -56,7 +56,7 @@ body {
 
 .main-content {
     width: 100%;
-    max-width: 400px;
+    max-width: 600px;
 }
 
 .form-title {
@@ -74,12 +74,12 @@ body {
     display: block;
     font-size: 14px;
     margin-bottom: 8px;
+    color: rgba(0, 0, 0, 1);
 }
 
 .form-input {
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     font-weight: 500;
-    letter-spacing: -0.02em;
     font-size: 13px;
     width: 100%;
     height: 48px;
@@ -96,9 +96,8 @@ body {
 }
 
 .form-select {
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     font-weight: 500;
-    letter-spacing: -0.02em;
     font-size: 13px;
     width: 100%;
     height: 48px;
@@ -136,10 +135,9 @@ body {
 }
 
 .button {
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     font-weight: 500;
-    letter-spacing: -0.02em;
-    font-size: 16px;
+    font-size: 14px;
     width: 100%;
     height: 48px;
     border: 1px solid #e0e0e0;
@@ -166,17 +164,16 @@ body {
 }
 
 .note {
+    font-family: "SF Pro Display", monospace;
     text-align: center;
     font-size: 12px;
-    font-weight: 400;
-    letter-spacing: -0.04em;
+    font-weight: 500;
     font-style: italic;
     color: rgba(0, 0, 0, 0.26);
 }
 
 .modal-overlay {
-    font-family: "DM Mono", monospace;
-    letter-spacing: -0.02em;
+    font-family: "Geist", monospace;
     color: rgba(0, 0, 0, 0.4);
     position: fixed;
     top: 0;
@@ -362,8 +359,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 400;
 }
 
 .footer-content {
@@ -375,15 +372,16 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 15px;
-    font-family: "DM Mono", monospace;
-    font-weight: 500;
+    font-size: 12px;
+    font-family: "SF Pro Display", monospace;
+    font-weight: 400;
 }
 
 .footer-content-section {
     display: flex;
     flex-direction: row;
     gap: 4px;
+    color: rgba(124, 124, 124, 1)
 }
 
 .footer-section {
@@ -393,10 +391,11 @@ body {
 
 .footer-label {
     margin-bottom: 4px;
+    color: #ff5500;
 }
 
 .footer-value {
-    color: rgba(0, 0, 0, 0.4);
+    color: rgba(0, 0, 0, 1);
     font-weight: 400;
     font-size: 12px;
 }
@@ -494,8 +493,7 @@ body {
 }
 
 .explorer-button {
-    font-family: "DM Mono", monospace;
-    letter-spacing: -0.02em;
+    font-family: "Geist", monospace;
     font-weight: 400;
     border: 0.5px solid #e0e0e0;
     background-color: white;
@@ -507,8 +505,7 @@ body {
 }
 
 .continue-text {
-    font-family: "DM Mono", monospace;
-    letter-spacing: -0.02em;
+    font-family: "Geist", monospace;
     position: relative;
     top: 30vh;
     font-size: 12px;
@@ -539,7 +536,7 @@ body {
 }
 
 .download-button {
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     font-size: 16px;
     font-weight: 500;
     letter-spacing: -0.04em;
