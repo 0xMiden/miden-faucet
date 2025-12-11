@@ -17,7 +17,7 @@ pub(crate) type Solver = (Requestor, Domain);
 ///
 /// The cache is cleaned up periodically, removing expired challenges.
 #[derive(Clone)]
-pub(crate) struct ChallengeCache {
+pub struct ChallengeCache {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     challenge_lifetime: Duration,
     /// Maps challenge timestamp to solvers. We use this to cleanup expired challenges and update
@@ -112,6 +112,7 @@ impl ChallengeCache {
     /// # Panics
     /// Panics if any expired challenge has no corresponding entries on the requestor or domain
     /// maps.
+    #[cfg(feature = "tokio")]
     pub fn cleanup_expired_challenges(&mut self, current_time: u64) {
         // Timestamps lower than this are expired. Add 1 since `BTreeMap::split_off` is inclusive.
         let limit_timestamp = current_time - self.challenge_lifetime.as_secs() + 1;

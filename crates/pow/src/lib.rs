@@ -9,7 +9,6 @@ mod challenge_cache;
 mod tests;
 
 pub use challenge::Challenge;
-use tokio::time::interval;
 
 // PoW Rate Limiter
 // ================================================================================================
@@ -57,7 +56,12 @@ impl PoWRateLimiter {
         // Start the cleanup task
         let cleanup_state = challenge_cache.clone();
         tokio::spawn(async move {
-            Self::run_cleanup(cleanup_state, config.cleanup_interval).await;
+            let mut interval = tokio::time::interval(config.cleanup_interval);
+
+            loop {
+                interval.tick().await;
+                Self::run_cleanup(&cleanup_state);
+            }
         });
 
         Self {
@@ -83,17 +87,19 @@ impl PoWRateLimiter {
         }
     }
 
+    /// Returns a clone of the challenge cache lock.
+    pub fn challenge_cache(&self) -> Arc<RwLock<ChallengeCache>> {
+        self.challenges.clone()
+    }
+
     /// Runs the challenge clean up.
     ///
     /// Periodically removes expired challenges from the cache. It sleeps for the duration of the
     /// given cleanup interval before each clean up.
     ///
     /// Note: this is a blocking function.
-    async fn run_cleanup(challenges: Arc<RwLock<ChallengeCache>>, cleanup_interval: Duration) {
-        let mut interval = interval(cleanup_interval);
-
+    fn run_cleanup(challenges: &Arc<RwLock<ChallengeCache>>) {
         loop {
-            interval.tick().await;
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("current timestamp should be greater than unix epoch")
