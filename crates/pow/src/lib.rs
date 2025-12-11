@@ -48,7 +48,8 @@ pub struct PoWRateLimiterConfig {
 }
 
 impl PoWRateLimiter {
-    /// Creates a new `PoW` instance and starts a `tokio` task to clean up expired challenges.
+    /// Creates a new `PoW` instance and starts a `tokio` task that periodically cleans up expired
+    /// challenges.
     #[cfg(feature = "tokio")]
     pub fn new_with_cleanup(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
         let challenge_cache = Arc::new(RwLock::new(ChallengeCache::new(config.challenge_lifetime)));
@@ -92,12 +93,7 @@ impl PoWRateLimiter {
         self.challenges.clone()
     }
 
-    /// Runs the challenge clean up.
-    ///
-    /// Periodically removes expired challenges from the cache. It sleeps for the duration of the
-    /// given cleanup interval before each clean up.
-    ///
-    /// Note: this is a blocking function.
+    /// Cleans up the challenge cache, removing all the expired challenges.
     fn run_cleanup(challenges: &Arc<RwLock<ChallengeCache>>) {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
