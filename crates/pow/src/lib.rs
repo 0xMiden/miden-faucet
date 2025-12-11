@@ -99,16 +99,14 @@ impl PoWRateLimiter {
     ///
     /// Note: this is a blocking function.
     fn run_cleanup(challenges: &Arc<RwLock<ChallengeCache>>) {
-        loop {
-            let current_time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("current timestamp should be greater than unix epoch")
-                .as_secs();
-            challenges
-                .write()
-                .expect("challenge cache lock should not be poisoned")
-                .cleanup_expired_challenges(current_time);
-        }
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("current timestamp should be greater than unix epoch")
+            .as_secs();
+        challenges
+            .write()
+            .expect("challenge cache lock should not be poisoned")
+            .cleanup_expired_challenges(current_time);
     }
 
     /// Generates a new challenge with a difficulty that will depend on the number of active
