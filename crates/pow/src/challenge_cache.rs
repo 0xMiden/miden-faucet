@@ -113,8 +113,8 @@ impl ChallengeCache {
     /// Panics if any expired challenge has no corresponding entries on the requestor or domain
     /// maps.
     pub fn cleanup_expired_challenges(&mut self, current_time: u64) {
-        // Challenges older than this are expired.
-        let limit_timestamp = current_time - self.challenge_lifetime.as_secs();
+        // Timestamps lower than this are expired. Add 1 since `BTreeMap::split_off` is inclusive.
+        let limit_timestamp = current_time - self.challenge_lifetime.as_secs() + 1;
 
         let valid_challenges = self.challenges.split_off(&limit_timestamp);
         let expired_challenges = std::mem::replace(&mut self.challenges, valid_challenges);
