@@ -17,7 +17,7 @@ pub(crate) type Solver = (Requestor, Domain);
 ///
 /// The cache is cleaned up periodically, removing expired challenges.
 #[derive(Clone)]
-pub struct ChallengeCache {
+pub(crate) struct ChallengeCache {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     challenge_lifetime: Duration,
     /// Maps challenge timestamp to solvers. We use this to cleanup expired challenges and update

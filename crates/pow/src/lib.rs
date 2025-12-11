@@ -52,24 +52,21 @@ impl PoWRateLimiter {
     /// challenges.
     #[cfg(feature = "tokio")]
     pub fn new_with_cleanup(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
-        let challenge_cache = Arc::new(RwLock::new(ChallengeCache::new(config.challenge_lifetime)));
+        let cleanup_interval = config.cleanup_interval;
+        let rate_limiter = Self::new(secret, config);
 
         // Start the cleanup task
-        let cleanup_state = challenge_cache.clone();
+        let cleanup_rate_limiter = rate_limiter.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(config.cleanup_interval);
+            let mut interval = tokio::time::interval(cleanup_interval);
 
             loop {
                 interval.tick().await;
-                Self::run_cleanup(&cleanup_state);
+                cleanup_rate_limiter.cleanup_challenge_cache();
             }
         });
 
-        Self {
-            secret,
-            challenges: challenge_cache,
-            config,
-        }
+        rate_limiter
     }
 
     /// Creates a new `PoW` instance.
@@ -88,18 +85,13 @@ impl PoWRateLimiter {
         }
     }
 
-    /// Returns the challenge cache.
-    pub fn challenge_cache(&self) -> Arc<RwLock<ChallengeCache>> {
-        self.challenges.clone()
-    }
-
     /// Cleans up the challenge cache, removing all the expired challenges.
-    pub fn run_cleanup(challenges: &Arc<RwLock<ChallengeCache>>) {
+    pub fn cleanup_challenge_cache(&self) {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("current timestamp should be greater than unix epoch")
             .as_secs();
-        challenges
+        self.challenges
             .write()
             .expect("challenge cache lock should not be poisoned")
             .cleanup_expired_challenges(current_time);
