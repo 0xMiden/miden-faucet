@@ -7,9 +7,9 @@ WantedBy=multi-user.target
 
 [Service]
 Type=exec
-Environment="OTEL_SERVICE_NAME=miden-faucet"
+Environment="OTEL_SERVICE_NAME=miden-faucet-client"
 EnvironmentFile=/lib/systemd/system/miden-faucet.env
-ExecStart=/usr/bin/miden-faucet start
+ExecStart=/usr/bin/miden-faucet-client start
 WorkingDirectory=/opt/miden-faucet
 User=miden-faucet
 RestartSec=5

@@ -2,7 +2,6 @@ mod api;
 mod api_key;
 mod frontend;
 mod logging;
-mod mint;
 mod network;
 #[cfg(test)]
 mod testing;
@@ -48,7 +47,7 @@ use crate::network::FaucetNetwork;
 // =================================================================================================
 
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
-const COMPONENT: &str = "miden-faucet-server";
+const COMPONENT: &str = "miden-faucet-client";
 
 const ENV_API_BIND_URL: &str = "MIDEN_FAUCET_API_BIND_URL";
 const ENV_API_PUBLIC_URL: &str = "MIDEN_FAUCET_API_PUBLIC_URL";
@@ -206,9 +205,6 @@ pub enum Command {
         #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
         batch_size: usize,
     },
-
-    /// Request tokens from a remote faucet (public note; does not consume).
-    Mint(mint::MintCmd),
 }
 
 /// Configuration for the faucet client.
@@ -441,10 +437,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 },
             }?;
         },
-
-        Command::Mint(cmd) => {
-            cmd.execute().await.map_err(anyhow::Error::new)?;
-        },
     }
 
     Ok(())
@@ -521,7 +513,7 @@ mod tests {
 
     use crate::network::FaucetNetwork;
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, ClientConfig, Command, create_faucet_account, run_faucet_command};
+    use crate::{Cli, ClientConfig, create_faucet_account, run_faucet_command};
 
     // CLI TESTS
     // ---------------------------------------------------------------------------------------------
@@ -531,7 +523,7 @@ mod tests {
         let stub_node_url = run_stub_node().await;
         let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
         let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
+            "miden-faucet-client",
             "init",
             "--token-symbol",
             "TEST",
@@ -558,7 +550,7 @@ mod tests {
         account_data.write(&account_path).unwrap();
 
         let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
+            "miden-faucet-client",
             "init",
             "--import",
             account_path.to_str().unwrap(),
@@ -576,7 +568,7 @@ mod tests {
         let stub_node_url = run_stub_node().await;
         let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
         let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
+            "miden-faucet-client",
             "init",
             "--token-symbol",
             "TEST",
@@ -600,7 +592,7 @@ mod tests {
         let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
 
         let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
+            "miden-faucet-client",
             "start",
             "--api-bind-url",
             "http://0.0.0.0:8000",
@@ -613,110 +605,6 @@ mod tests {
         ])))
         .await;
         assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn mint_command_against_local_faucet() {
-        use crate::mint::MintCmd;
-
-        let stub_node_url = run_stub_node().await;
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-
-        // Initialize faucet account
-        Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "init",
-            "--token-symbol",
-            "TEST",
-            "--decimals",
-            "6",
-            "--max-supply",
-            "100000000000000000",
-            "--node-url",
-            stub_node_url.to_string().as_str(),
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await
-        .expect("failed to init faucet");
-
-        // Reserve an open port for the API server
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let api_addr = listener.local_addr().unwrap();
-        drop(listener);
-        let api_url = Url::from_str(&format!("http://{api_addr}")).unwrap();
-
-        // Start faucet server on a dedicated thread with low PoW difficulty for fast testing
-        let config = ClientConfig {
-            node_url: Some(stub_node_url.clone()),
-            timeout: Duration::from_millis(5_000),
-            network: FaucetNetwork::Localhost,
-            store_path: store_path.clone(),
-            remote_tx_prover_url: None,
-        };
-
-        let api_url_for_server = api_url.clone();
-        let start_handle = std::thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("runtime");
-
-            rt.block_on(async {
-                Box::pin(run_faucet_command(Cli {
-                    command: Command::Start {
-                        config,
-                        api_bind_url: api_url_for_server,
-                        api_public_url: None,
-                        frontend_url: None,
-                        max_claimable_amount: 1_000_000_000,
-                        api_keys: vec![],
-                        pow_secret: "test".to_string(),
-                        pow_challenge_lifetime: Duration::from_secs(30),
-                        pow_cleanup_interval: Duration::from_secs(1),
-                        pow_growth_rate: 0.5,
-                        pow_baseline: 8,
-                        base_amount: 100_000,
-                        open_telemetry: false,
-                        explorer_url: None,
-                        batch_size: 8,
-                    },
-                }))
-                .await
-                .expect("failed to start faucet");
-            });
-        });
-
-        // Wait for faucet API to become reachable
-        let addrs = api_url.socket_addrs(|| None).unwrap();
-        let start = Instant::now();
-        let timeout = Duration::from_secs(10);
-        loop {
-            match tokio::net::TcpStream::connect(&addrs[..]).await {
-                Ok(_) => break,
-                Err(_) if start.elapsed() < timeout => {
-                    sleep(Duration::from_millis(200)).await;
-                },
-                Err(e) => panic!("faucet never became reachable: {e}"),
-            }
-        }
-
-        // Should mint a public P2ID note without consuming
-        MintCmd::parse_from([
-            "mint",
-            "--url",
-            api_url.to_string().as_str(),
-            "--account",
-            "0xca8203e8e58cf72049b061afca78ce",
-            "--amount",
-            "1000",
-        ])
-        .execute()
-        .await
-        .expect("mint command should succeed");
-
-        // Drop server after test
-        drop(start_handle);
     }
 
     // INTEGRATION TEST

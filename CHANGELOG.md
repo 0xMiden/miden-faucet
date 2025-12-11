@@ -1,13 +1,8 @@
 # Changelog
 
-## 0.13.0 (TBD)
-
-- [BREAKING] Replaced the `api-bind-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
-- [BREAKING] Replaced the `frontend-url` param for `frontend-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
-- [BREAKING] Added `no-frontend` param to optionally disable the frontend server ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
 ## 0.12.5 (TBD)
 
-- Added `mint` CLI command ([#195](https://github.com/0xMiden/miden-faucet/pull/195)).
+- Renamed the faucet CLI to `miden-faucet-client` and kept a `miden-faucet` alias for compatibility; added a new `miden-faucet-operator` binary with the `mint` command ([#195](https://github.com/0xMiden/miden-faucet/pull/195)).
 
 ## 0.12.4 (2025-12-04)
 

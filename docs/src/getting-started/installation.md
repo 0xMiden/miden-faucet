@@ -38,13 +38,13 @@ sudo apt install llvm clang bindgen pkg-config libssl-dev libsqlite3-dev
 Install the latest faucet binary:
 
 ```sh
-cargo install miden-faucet --locked
+cargo install miden-faucet-client --locked
 ```
 
 This will install the latest official version of the faucet. You can install a specific version `x.y.z` using
 
 ```sh
-cargo install miden-faucet --locked --version x.y.z
+cargo install miden-faucet-client --locked --version x.y.z
 ```
 
 You can also use `cargo` to compile the node from the source code if for some reason you need a specific git revision.
@@ -53,13 +53,15 @@ this for advanced use only. The incantation is a little different as you'll be t
 
 ```sh
 # Install from a specific branch
-cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet --branch <branch>
+cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet-client --branch <branch>
 
 # Install a specific tag
-cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet --tag <tag>
+cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet-client --tag <tag>
 
 # Install a specific git revision
-cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet --rev <git-sha>
+cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet-client --rev <git-sha>
+
+> The legacy `miden-faucet` binary name is still available as an alias for backwards compatibility.
 ```
 
 More information on the various `cargo install` options can be found
