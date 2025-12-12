@@ -8,7 +8,7 @@ export class UIController {
         this.publicButton = document.getElementById('send-public-button');
         this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
-        this.progressFill = document.getElementById('progress-fill');
+        this.issuanceFill = document.getElementById('issuance-fill');
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountHint = document.getElementById('token-amount-hint');
@@ -47,8 +47,6 @@ export class UIController {
 
         const completedPublicModal = document.getElementById('completed-public-modal');
         completedPublicModal.classList.remove('active');
-
-        this.hideProgressBar();
     }
 
     showMintingModal(recipient, amountAsTokens, isPrivateNote) {
@@ -60,7 +58,7 @@ export class UIController {
         // Update modal content
         tokenAmount.textContent = amountAsTokens;
         recipientAddress.textContent = recipient;
-        noteType.textContent = isPrivateNote ? 'PRIVATE' : 'PUBLIC';
+        noteType.textContent = isPrivateNote ? 'Private' : 'Public';
 
         modal.classList.add('active');
     }
@@ -74,11 +72,8 @@ export class UIController {
         document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-private-recipient-address').textContent = recipient;
 
-        this.updateMintingTitle('TOKENS MINTED!');
         const completedPrivateModal = document.getElementById('completed-private-modal');
         const completedPublicModal = document.getElementById('completed-public-modal');
-
-        this.updateProgressBar(100);
 
         if (isPrivateNote) {
             completedPrivateModal.classList.add('active');
@@ -101,11 +96,6 @@ export class UIController {
                 }
             };
         }
-    }
-
-    updateMintingTitle(title) {
-        const mintingTitle = document.getElementById('minting-title');
-        mintingTitle.textContent = title;
     }
 
     showPublicModalError(message) {
@@ -144,23 +134,6 @@ export class UIController {
 
         const continueText = document.getElementById('private-continue-text');
         continueText.style.visibility = 'hidden';
-    }
-
-    updateProgressBar(progress) {
-        this.showProgressBar();
-        const progressBarFill = document.getElementById('progress-bar-fill');
-        progressBarFill.style.width = progress + '%';
-    }
-
-    showProgressBar() {
-        const progressBarTotal = document.getElementById('progress-bar-total');
-        progressBarTotal.classList.add('active');
-    }
-
-    hideProgressBar() {
-        this.updateProgressBar(0);
-        const progressBarTotal = document.getElementById('progress-bar-total');
-        progressBarTotal.classList.remove('active');
     }
 
     setTokenHint(estimatedTime) {
@@ -214,6 +187,6 @@ export class UIController {
     setIssuanceAndSupply(issuance, max_supply, decimals) {
         this.issuance.textContent = Utils.baseUnitsToTokens(issuance, decimals);
         this.tokensSupply.textContent = Utils.baseUnitsToTokens(max_supply, decimals);
-        this.progressFill.style.width = (issuance / max_supply) * 100 + '%';
+        this.issuanceFill.style.width = (issuance / max_supply) * 100 + '%';
     }
 }
