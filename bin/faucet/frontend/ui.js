@@ -65,42 +65,87 @@ export class UIController {
         modal.classList.add('active');
     }
 
-    showCompletedModal(recipient, amountAsTokens, isPrivateNote, txId, noteId, onDownloadNote, onClose) {
+    showCompletedPrivateModal(recipient, amountAsTokens, noteId, noteSent, onDownloadNote) {
+        const mintingModal = document.getElementById('minting-modal');
+        mintingModal.classList.remove('active');
+
+        document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
+        document.getElementById('completed-private-recipient-address').textContent = recipient;
+
+        document.getElementById('success-tick').style.display = 'none';
+        document.getElementById('next-steps').style.display = 'block';
+
+        const completedPrivateModal = document.getElementById('completed-private-modal');
+
+        if (noteSent) {
+            // TODO: update next steps depending on whether the note was sent to the wallet or not
+            this.showNoteSentInstructions();
+        } else {
+            this.showDownloadInstructions();
+        }
+
+        completedPrivateModal.classList.add('active');
+        this.setupDownloadButton(noteId, onDownloadNote);
+    }
+
+    showCompletedPrivateImportedModal(recipient, amountAsTokens) {
+        const mintingModal = document.getElementById('minting-modal');
+        mintingModal.classList.remove('active');
+
+        document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
+        document.getElementById('completed-private-recipient-address').textContent = recipient;
+
+        document.getElementById('download-button').style.display = 'none';
+        document.getElementById('next-steps').style.display = 'none';
+
+        const completedPrivateModal = document.getElementById('completed-private-modal');
+        completedPrivateModal.classList.add('active');
+
+        this.setupCloseButton();
+    }
+
+    showNoteSentInstructions() {
+        const continueText = document.getElementById('next-steps');
+        continueText.textContent = 'Note has been sent to your client, sync and consume'; //TODO: write properly
+        // 1. sync 2. consume. if note does not appear, download an import manually
+        continueText.style.visibility = 'visible';
+    }
+
+    showDownloadInstructions() {
+        const continueText = document.getElementById('next-steps');
+        continueText.textContent = 'NEXT STEPS:'; //TODO: write properly, this are the current next steps
+        continueText.style.visibility = 'visible';
+    }
+
+    showCompletedPublicModal(recipient, amountAsTokens, txId) {
         const mintingModal = document.getElementById('minting-modal');
         mintingModal.classList.remove('active');
 
         document.getElementById('completed-public-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-public-recipient-address').textContent = recipient;
-        document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
-        document.getElementById('completed-private-recipient-address').textContent = recipient;
 
         this.updateMintingTitle('TOKENS MINTED!');
-        const completedPrivateModal = document.getElementById('completed-private-modal');
         const completedPublicModal = document.getElementById('completed-public-modal');
 
         this.updateProgressBar(100);
 
-        if (isPrivateNote) {
-            completedPrivateModal.classList.add('active');
-            this.setupDownloadButton(noteId, onDownloadNote);
+        completedPublicModal.classList.add('active');
+
+        const explorerButton = document.getElementById('explorer-button');
+        if (this.explorerUrl) {
+            explorerButton.style.display = 'block';
+            explorerButton.onclick = () => window.open(`${this.explorerUrl}/tx/${txId}`, '_blank');
         } else {
-            completedPublicModal.classList.add('active');
-
-            const explorerButton = document.getElementById('explorer-button');
-            if (this.explorerUrl) {
-                explorerButton.style.display = 'block';
-                explorerButton.onclick = () => window.open(`${this.explorerUrl}/tx/${txId}`, '_blank');
-            } else {
-                explorerButton.style.display = 'none';
-            }
-
-            completedPublicModal.onclick = (e) => {
-                const continueText = document.getElementById('public-continue-text');
-                if (e.target === completedPublicModal || e.target === continueText) {
-                    onClose();
-                }
-            };
+            explorerButton.style.display = 'none';
         }
+
+        completedPublicModal.onclick = (e) => {
+            const continueText = document.getElementById('public-continue-text');
+            if (e.target === completedPublicModal || e.target === continueText) {
+                this.hideModals();
+                this.resetForm();
+            }
+        };
     }
 
     updateMintingTitle(title) {
@@ -174,20 +219,19 @@ export class UIController {
     }
 
     showNoteImportedMessage() {
+        // TODO: this can be shown in the modal instead
         const continueText = document.getElementById('private-continue-text');
         continueText.textContent = 'YOUR NOTE HAS BEEN IMPORTED TO YOUR WALLET. CLICK X TO CONTINUE';
         continueText.style.visibility = 'visible';
     }
 
-    showCloseButton(onClose) {
+    setupCloseButton() {
         const closeButton = document.getElementById('private-close-button');
-        closeButton.style.display = 'block';
         closeButton.onclick = () => {
             closeButton.style.display = 'none';
             this.hideMessages();
             this.hideModals();
             this.resetForm();
-            onClose();
         };
     }
 
@@ -195,7 +239,7 @@ export class UIController {
         const downloadButton = document.getElementById('download-button');
         downloadButton.onclick = async () => {
             await onDownloadNote(noteId);
-            this.showCloseButton(() => { });
+            this.setupCloseButton();
         };
     }
 
