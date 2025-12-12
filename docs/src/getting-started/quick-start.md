@@ -29,6 +29,7 @@ miden-faucet-client start \
   --api-bind-url http://0.0.0.0:8000 \
   --api-public-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
+  --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
 
@@ -79,7 +80,8 @@ miden-faucet-client init \
 miden-faucet-client start \
   --frontend-url http://localhost:8080 \
   --api-bind-url http://0.0.0.0:8000 \
-  --api-public-url http://localhost:8000
+  --api-public-url http://localhost:8000 \
+  --network localhost
 ```
 
 ### Development
