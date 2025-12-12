@@ -72,7 +72,6 @@ export class UIController {
         document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-private-recipient-address').textContent = recipient;
 
-        this.updateMintingTitle('Tokens Minted!');
         const completedPrivateModal = document.getElementById('completed-private-modal');
         const completedPublicModal = document.getElementById('completed-public-modal');
 
@@ -97,11 +96,6 @@ export class UIController {
                 }
             };
         }
-    }
-
-    updateMintingTitle(title) {
-        const mintingTitle = document.getElementById('minting-title');
-        mintingTitle.textContent = title;
     }
 
     showPublicModalError(message) {
