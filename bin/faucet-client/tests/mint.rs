@@ -6,7 +6,7 @@ use axum::{Json, Router};
 use clap::Parser;
 use miden_client::account::AccountId;
 use miden_client::note::NoteId;
-use miden_faucet_operator::mint::{GetTokensResponse, MintCmd, PowResponse};
+use miden_faucet_client::mint::{GetTokensResponse, MintCmd, PowResponse};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;

@@ -1,5 +1,5 @@
 [workspace]
-members = ["bin/faucet", "bin/faucet-operator", "crates/faucet"]
+members = ["bin/faucet-client", "bin/faucet-operator", "crates/faucet"]
 
 resolver = "2"
 
