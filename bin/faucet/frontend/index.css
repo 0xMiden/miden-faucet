@@ -180,7 +180,7 @@ body {
     left: 0;
     width: 100vw;
     height: 100vh;
-    backdrop-filter: blur(50px);
+    backdrop-filter: brightness(0.93) blur(50px);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -422,7 +422,7 @@ body {
 
 .error-message {
     background-color: #f8d7da;
-    max-width: 400px;
+    max-width: 600px;
     color: #721c24;
     padding: 12px 16px;
     border-radius: 6px;
