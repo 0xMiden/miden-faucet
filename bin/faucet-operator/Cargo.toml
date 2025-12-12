@@ -1,11 +1,12 @@
 [package]
 authors.workspace      = true
-description            = "Operator CLI for interacting with a Miden faucet"
+description            = "Token faucet operator (init/start) for Miden faucet"
 edition.workspace      = true
 homepage.workspace     = true
+keywords               = ["faucet", "miden", "node", "operator"]
 license.workspace      = true
 name                   = "miden-faucet-operator"
-readme                 = "../../README.md"
+readme                 = "README.md"
 repository.workspace   = true
 rust-version.workspace = true
 version.workspace      = true
@@ -14,20 +15,51 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-anyhow       = { workspace = true }
-clap         = { features = ["derive", "env", "string"], version = "4.5" }
-hex          = { version = "0.4" }
-miden-client = { workspace = true }
-rand         = { features = ["thread_rng"], workspace = true }
-reqwest      = { default-features = false, features = ["json", "rustls-tls"], version = "0.12" }
-serde        = { workspace = true }
-serde_json   = { workspace = true }
-sha2         = { workspace = true }
-thiserror    = { workspace = true }
-tokio        = { features = ["macros", "net", "rt-multi-thread", "sync", "time"], workspace = true }
-url          = { workspace = true }
+miden-faucet-lib       = { workspace = true }
+miden-pow-rate-limiter = { workspace = true }
+
+# Miden dependencies.
+miden-client              = { features = ["tonic"], workspace = true }
+miden-client-sqlite-store = { workspace = true }
+
+# External dependencies.
+anyhow                = { workspace = true }
+async-trait           = { version = "0.1" }
+axum                  = { features = ["tokio"], version = "0.8" }
+axum-extra            = { version = "0.10" }
+base64                = { version = "0.22" }
+clap                  = { features = ["derive", "env", "string"], version = "4.5" }
+http                  = { workspace = true }
+humantime             = { workspace = true }
+opentelemetry         = { workspace = true }
+opentelemetry-otlp    = { workspace = true }
+opentelemetry_sdk     = { workspace = true }
+rand                  = { features = ["thread_rng"], workspace = true }
+rand_chacha           = { version = "0.9" }
+serde                 = { workspace = true }
+serde_json            = { workspace = true }
+sha2                  = { workspace = true }
+thiserror             = { workspace = true }
+tokio                 = { features = ["fs"], workspace = true }
+tokio-stream          = { features = ["net"], workspace = true }
+tonic                 = { features = ["tls-native-roots"], workspace = true }
+tower                 = { workspace = true }
+tower-http            = { features = ["cors", "set-header", "trace"], workspace = true }
+tracing               = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber    = { workspace = true }
+url                   = { workspace = true }
 
 [dev-dependencies]
-axum  = { features = ["tokio"], version = "0.8" }
-serde = { workspace = true }
-tokio = { features = ["macros", "net", "rt-multi-thread", "time"], workspace = true }
+fantoccini       = { version = "0.22" }
+miden-node-proto = { version = "0.12" }
+miden-testing    = { version = "0.12" }
+reqwest          = { default-features = false, features = ["json"], version = "0.12" }
+serde_json       = { workspace = true }
+tokio            = { features = ["macros", "process"], workspace = true }
+tonic-web        = { version = "0.14" }
+
+# Required to avoid false positives in cargo-machete
+# This is due to the `winter-maybe-async` crate not working standalone.
+[package.metadata.cargo-machete]
+ignored = ["async-trait"]

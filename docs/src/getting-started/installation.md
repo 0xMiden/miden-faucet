@@ -66,7 +66,7 @@ cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-fauce
 cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet-client --rev <git-sha>
 cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet-operator --rev <git-sha>
 
-> The legacy `miden-faucet` binary name is still available as an alias for backwards compatibility.
+> Use `miden-faucet-operator` to initialize/start the faucet service, and `miden-faucet-client` to mint from a running faucet. The legacy `miden-faucet` binary name is still available as an alias for the operator.
 ```
 
 More information on the various `cargo install` options can be found
