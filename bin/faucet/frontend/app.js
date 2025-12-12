@@ -77,13 +77,11 @@ export class MidenFaucetApp {
             this.ui.hideMessages();
             this.ui.showMintingModal(recipient, amountAsTokens, isPrivateNote);
             this.ui.updateMintingTitle('Preparing Note Request...');
-            this.ui.updateProgressBar(0);
 
             const powData = await getPowChallenge(this.apiUrl, recipient, amount);
             const nonce = await this.findValidNonce(powData.challenge, powData.target);
 
             this.ui.updateMintingTitle('Minting Tokens');
-            this.ui.updateProgressBar(50);
 
             const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
 

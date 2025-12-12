@@ -315,38 +315,6 @@ body {
     font-style: italic;
 }
 
-.progress-bar-modal {
-    position: fixed;
-    top: 49%;
-    left: 50%;
-    transform: translate(-50%, 105px) scale(0.9);
-    z-index: 3;
-    width: 85%;
-    max-width: 550px;
-    height: 10px;
-    background-color: #e0e0e0;
-    overflow: hidden;
-    opacity: 0;
-    transition: transform 0.3s ease;
-}
-
-.progress-bar-modal.active {
-    transform: translate(-50%, 109px) scale(1);
-    opacity: 1;
-}
-
-.progress-bar-placeholder {
-    height: 10px;
-    margin-bottom: 10px;
-}
-
-.progress-fill-modal {
-    height: 100%;
-    background-color: #FE5400;
-    width: 0%;
-    transition: width 0.2s ease;
-}
-
 .footer {
     margin-top: auto;
     width: 100%;
@@ -405,6 +373,11 @@ body {
 }
 
 .progress-bar {
+    height: 7px;
+    background-color: #ff5500;
+}
+
+.issuance-bar {
     width: 240px;
     height: 4px;
     background-color: #e0e0e0;
@@ -413,7 +386,7 @@ body {
     overflow: hidden;
 }
 
-.progress-fill {
+.issuance-fill {
     height: 100%;
     background-color: #ff5500;
     width: 0%;

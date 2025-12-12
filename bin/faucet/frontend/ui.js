@@ -8,7 +8,7 @@ export class UIController {
         this.publicButton = document.getElementById('send-public-button');
         this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
-        this.progressFill = document.getElementById('progress-fill');
+        this.issuanceFill = document.getElementById('issuance-fill');
         this.issuance = document.getElementById('issuance');
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountHint = document.getElementById('token-amount-hint');
@@ -47,8 +47,6 @@ export class UIController {
 
         const completedPublicModal = document.getElementById('completed-public-modal');
         completedPublicModal.classList.remove('active');
-
-        this.hideProgressBar();
     }
 
     showMintingModal(recipient, amountAsTokens, isPrivateNote) {
@@ -77,8 +75,6 @@ export class UIController {
         this.updateMintingTitle('Tokens Minted!');
         const completedPrivateModal = document.getElementById('completed-private-modal');
         const completedPublicModal = document.getElementById('completed-public-modal');
-
-        this.updateProgressBar(100);
 
         if (isPrivateNote) {
             completedPrivateModal.classList.add('active');
@@ -146,23 +142,6 @@ export class UIController {
         continueText.style.visibility = 'hidden';
     }
 
-    updateProgressBar(progress) {
-        this.showProgressBar();
-        const progressBarFill = document.getElementById('progress-bar-fill');
-        progressBarFill.style.width = progress + '%';
-    }
-
-    showProgressBar() {
-        const progressBarTotal = document.getElementById('progress-bar-total');
-        progressBarTotal.classList.add('active');
-    }
-
-    hideProgressBar() {
-        this.updateProgressBar(0);
-        const progressBarTotal = document.getElementById('progress-bar-total');
-        progressBarTotal.classList.remove('active');
-    }
-
     setTokenHint(estimatedTime) {
         this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
     }
@@ -214,6 +193,6 @@ export class UIController {
     setIssuanceAndSupply(issuance, max_supply, decimals) {
         this.issuance.textContent = Utils.baseUnitsToTokens(issuance, decimals);
         this.tokensSupply.textContent = Utils.baseUnitsToTokens(max_supply, decimals);
-        this.progressFill.style.width = (issuance / max_supply) * 100 + '%';
+        this.issuanceFill.style.width = (issuance / max_supply) * 100 + '%';
     }
 }
