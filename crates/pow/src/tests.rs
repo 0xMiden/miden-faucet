@@ -10,7 +10,7 @@ fn create_test_pow() -> PoWRateLimiter {
     let mut secret = [0u8; 32];
     secret[..12].copy_from_slice(b"miden-faucet");
 
-    PoWRateLimiter::new(
+    PoWRateLimiter::new_with_cleanup(
         secret,
         PoWRateLimiterConfig {
             challenge_lifetime: Duration::from_secs(3),

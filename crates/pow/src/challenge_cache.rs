@@ -1,8 +1,5 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::{Arc, RwLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use tokio::time::interval;
+use std::time::Duration;
 
 use crate::challenge::Challenge;
 use crate::{ChallengeError, Domain, Requestor};
@@ -115,9 +112,9 @@ impl ChallengeCache {
     /// # Panics
     /// Panics if any expired challenge has no corresponding entries on the requestor or domain
     /// maps.
-    fn cleanup_expired_challenges(&mut self, current_time: u64) {
-        // Challenges older than this are expired.
-        let limit_timestamp = current_time - self.challenge_lifetime.as_secs();
+    pub fn cleanup_expired_challenges(&mut self, current_time: u64) {
+        // Timestamps lower than this are expired. Add 1 since `BTreeMap::split_off` is inclusive.
+        let limit_timestamp = current_time - self.challenge_lifetime.as_secs() + 1;
 
         let valid_challenges = self.challenges.split_off(&limit_timestamp);
         let expired_challenges = std::mem::replace(&mut self.challenges, valid_challenges);
@@ -142,32 +139,10 @@ impl ChallengeCache {
             }
         }
     }
-
-    /// Run the cleanup task.
-    ///
-    /// The cleanup task is responsible for removing expired challenges from the cache.
-    /// It runs every minute and removes challenges that are no longer valid because of their
-    /// timestamp.
-    pub async fn run_cleanup(cache: Arc<RwLock<Self>>, cleanup_interval: Duration) {
-        let mut interval = interval(cleanup_interval);
-
-        loop {
-            interval.tick().await;
-            let current_time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("current timestamp should be greater than unix epoch")
-                .as_secs();
-            cache
-                .write()
-                .expect("challenge cache lock should not be poisoned")
-                .cleanup_expired_challenges(current_time);
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, RwLock};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use crate::Challenge;
@@ -176,12 +151,7 @@ mod tests {
     #[tokio::test]
     async fn expired_challenges_are_cleaned_up() {
         let challenge_lifetime = Duration::from_millis(100);
-        let cleanup_interval = Duration::from_millis(500);
-        let cache = Arc::new(RwLock::new(ChallengeCache::new(challenge_lifetime)));
-        let cleanup_cache = cache.clone();
-        tokio::spawn(
-            async move { ChallengeCache::run_cleanup(cleanup_cache, cleanup_interval).await },
-        );
+        let mut cache = ChallengeCache::new(challenge_lifetime);
 
         let domain = [1u8; 32];
         let requestor = [0u8; 32];
@@ -189,31 +159,32 @@ mod tests {
         let target = u64::MAX;
         let request_complexity = 1;
 
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let insertion_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let challenge = Challenge::from_parts(
             target,
-            timestamp,
+            insertion_timestamp,
             request_complexity,
             requestor,
             domain,
             signature,
         );
-        cache.write().unwrap().insert_challenge(&challenge, timestamp).unwrap();
+        cache.insert_challenge(&challenge, insertion_timestamp).unwrap();
 
         // assert that the challenge was inserted
-        assert!(cache.read().unwrap().challenges.contains_key(&timestamp));
-        assert_eq!(cache.read().unwrap().challenges_per_domain.get(&domain).unwrap(), &1);
+        assert!(cache.challenges.contains_key(&insertion_timestamp));
+        assert_eq!(cache.challenges_per_domain.get(&domain).unwrap(), &1);
         assert_eq!(
-            cache.read().unwrap().challenges_timestamps.get(&(requestor, domain)).unwrap(),
-            &timestamp
+            cache.challenges_timestamps.get(&(requestor, domain)).unwrap(),
+            &insertion_timestamp
         );
 
         // wait for expiration + cleanup
-        tokio::time::sleep(cleanup_interval + challenge_lifetime + Duration::from_secs(1)).await;
+        let expiration_time = insertion_timestamp + challenge_lifetime.as_secs();
+        cache.cleanup_expired_challenges(expiration_time);
 
         // assert that the challenge was removed
-        assert!(!cache.read().unwrap().challenges.contains_key(&timestamp));
-        assert_eq!(cache.read().unwrap().challenges_per_domain.get(&domain), None);
-        assert_eq!(cache.read().unwrap().challenges_timestamps.get(&(requestor, domain)), None);
+        assert!(!cache.challenges.contains_key(&insertion_timestamp));
+        assert_eq!(cache.challenges_per_domain.get(&domain), None);
+        assert_eq!(cache.challenges_timestamps.get(&(requestor, domain)), None);
     }
 }
