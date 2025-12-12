@@ -23,7 +23,7 @@ The Miden Faucet can be configured using:
 ### Basic Configuration
 
 ```bash
-miden-faucet init \
+miden-faucet-operator init \
   --token-symbol <SYMBOL> \
   --decimals <U8> \
   --max-supply <U64> \
@@ -32,7 +32,7 @@ miden-faucet init \
 ```
 
 ```bash
-miden-faucet start \
+miden-faucet-operator start \
   --api-url <URL> \
   --frontend-url <URL> \
   --node-url <URL> \
@@ -64,7 +64,7 @@ miden-faucet start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--api-bind-url` | URL to serve the faucet API | - | Yes |
+| `--api-url` | URL to serve the faucet API | - | Yes |
 | `--api-public-url` | Public URL to access the faucet API. If not set, the bind url will be used. | - | No |
 | `--frontend-url` | URL to serve the Frontend API | - | No |
 | `--node-url` | Miden node RPC endpoint. If not set, it will be derived from the network | - | No |
@@ -177,7 +177,7 @@ export MIDEN_FAUCET_API_KEYS=key1,key2,key3
 ### Generate API Keys
 
 ```bash
-miden-faucet create-api-key
+miden-faucet-operator create-api-key
 ```
 
 This generates an API key that can be used for authentication. It is printed to stdout.
@@ -210,17 +210,28 @@ Enable OpenTelemetry for production monitoring:
 ## Configuration Example
 
 ```bash
-miden-faucet init \
+miden-faucet-operator init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
   --node-url http://localhost:57291
 
-miden-faucet start \
+miden-faucet-operator start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
+  --api-url http://0.0.0.0:8000 \
+  --api-public-url http://localhost:8000 \
   --node-url http://localhost:57291 \
   --network localhost
 ```
 
-For detailed options, run `miden-faucet [COMMAND] --help`. 
+For detailed options, run `miden-faucet-operator [COMMAND] --help`. The legacy alias `miden-faucet` is still available for backwards compatibility.
+
+To request tokens from a remote faucet, use the client mint CLI:
+```bash
+miden-faucet-client mint --url <FAUCET_API_URL> --account <ACCOUNT_ID> --amount <BASE_UNITS>
+```
+
+To see available options:
+```bash
+miden-faucet-operator mint --help
+```

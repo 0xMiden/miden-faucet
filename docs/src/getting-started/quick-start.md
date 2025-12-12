@@ -12,7 +12,7 @@ Get the Miden Faucet running in minutes.
 First, we need to initialize the faucet with a new account that will hold the tokens to be distributed. This command generates a new account with the specified token configuration and saves the account data to a local SQLite store. The account is not yet deployed to the network - that will happen when the faucet is running and the first transaction is sent to the node.
 
 ```bash
-miden-faucet init \
+miden-faucet-operator init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
@@ -24,16 +24,31 @@ miden-faucet init \
 Next, start the faucet by specifying the addresses where the API and the frontend will be served, the address of the Miden node, and the network configuration. The API server will handle incoming token requests and manage the minting process.
 
 ```bash
-miden-faucet start \
+miden-faucet-operator start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
+  --api-url http://0.0.0.0:8000 \
+  --api-public-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
+  --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
 
 ## Step 3: Request Test Tokens
 
-Once the faucet is running, you can request test tokens through either the web interface or the REST API.
+Once the faucet is running, you can request test tokens through either the web interface, the operator CLI, or the REST API.
+
+### Via Client CLI
+
+Use the dedicated mint binary:
+
+```bash
+miden-faucet-client mint \
+  --url http://localhost:8000 \
+  --account <ACCOUNT_ID_OR_ADDRESS> \
+  --amount 1000
+```
+
+This solves the PoW challenge and mints a public P2ID note. (The legacy `miden-faucet mint` subcommand is removed.)
 
 ### Via Web Interface (if frontend is enabled)
 
@@ -57,14 +72,16 @@ You can also programmatically interact with the REST API to mint tokens. Check o
 If you have a Miden Node running locally, you can run the faucet against that node.
 
 ```bash
-miden-faucet init \
+miden-faucet-operator init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000
 
-miden-faucet start \
+miden-faucet-operator start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000
+  --api-url http://0.0.0.0:8000 \
+  --api-public-url http://localhost:8000 \
+  --network localhost
 ```
 
 ### Development
@@ -72,15 +89,16 @@ miden-faucet start \
 Connect to the node deployed in Miden Devnet.
 
 ```bash
-miden-faucet init \
+miden-faucet-operator init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
   --network devnet
 
-miden-faucet start \
+miden-faucet-operator start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
+  --api-url http://0.0.0.0:8000 \
+  --api-public-url http://localhost:8000 \
   --network devnet
 ```
 
@@ -89,15 +107,16 @@ miden-faucet start \
 Connect to the node deployed in Miden Testnet.
 
 ```bash
-miden-faucet init \
+miden-faucet-operator init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
   --network testnet
 
-miden-faucet start \
+miden-faucet-operator start \
   --frontend-url http://localhost:8080 \
-  --api-url http://localhost:8000 \
+  --api-url http://0.0.0.0:8000 \
+  --api-public-url http://localhost:8000 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ``` 
@@ -107,7 +126,8 @@ miden-faucet start \
 If you only need the API and don't want to serve the web interface:
 
 ```bash
-miden-faucet start \
-  --api-url http://localhost:8000 \
+miden-faucet-operator start \
+  --api-url http://0.0.0.0:8000 \
+  --api-public-url http://localhost:8000 \
   --network testnet
 ```
