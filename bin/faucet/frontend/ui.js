@@ -60,7 +60,7 @@ export class UIController {
         // Update modal content
         tokenAmount.textContent = amountAsTokens;
         recipientAddress.textContent = recipient;
-        noteType.textContent = isPrivateNote ? 'PRIVATE' : 'PUBLIC';
+        noteType.textContent = isPrivateNote ? 'Private' : 'Public';
 
         modal.classList.add('active');
     }
@@ -74,7 +74,7 @@ export class UIController {
         document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-private-recipient-address').textContent = recipient;
 
-        this.updateMintingTitle('TOKENS MINTED!');
+        this.updateMintingTitle('Tokens Minted!');
         const completedPrivateModal = document.getElementById('completed-private-modal');
         const completedPublicModal = document.getElementById('completed-public-modal');
 
