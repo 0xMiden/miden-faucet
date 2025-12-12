@@ -49,9 +49,10 @@ use crate::network::FaucetNetwork;
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
 
-const ENV_API_BIND_URL: &str = "MIDEN_FAUCET_API_BIND_URL";
+const ENV_API_BIND_PORT: &str = "MIDEN_FAUCET_API_BIND_PORT";
 const ENV_API_PUBLIC_URL: &str = "MIDEN_FAUCET_API_PUBLIC_URL";
-const ENV_FRONTEND_URL: &str = "MIDEN_FAUCET_FRONTEND_URL";
+const ENV_FRONTEND_BIND_PORT: &str = "MIDEN_FAUCET_FRONTEND_BIND_PORT";
+const ENV_NO_FRONTEND: &str = "MIDEN_FAUCET_NO_FRONTEND";
 const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";
 const ENV_TIMEOUT: &str = "MIDEN_FAUCET_TIMEOUT";
@@ -130,17 +131,22 @@ pub enum Command {
         #[clap(flatten)]
         config: ClientConfig,
 
-        /// URL to bind the API server.
-        #[arg(long = "api-bind-url", value_name = "URL", env = ENV_API_BIND_URL)]
-        api_bind_url: Url,
+        /// Port to bind the API server. The server will be started on `0.0.0.0:<api-bind-port>`.
+        #[arg(long = "api-bind-port", value_name = "PORT", env = ENV_API_BIND_PORT, default_value = "8000")]
+        api_bind_port: u16,
 
-        /// Public URL to access the API server. If not set, the bind url will be used.
-        #[arg(long = "api-public-url", value_name = "URL", env = ENV_API_PUBLIC_URL)]
-        api_public_url: Option<Url>,
+        /// Public URL to access the API server.
+        #[arg(long = "api-public-url", value_name = "URL", env = ENV_API_PUBLIC_URL, default_value = "http://localhost:8000")]
+        api_public_url: Url,
 
-        /// URL to bind the frontend server. If not set, the frontend will not be served.
-        #[arg(long = "frontend-url", value_name = "URL", env = ENV_FRONTEND_URL)]
-        frontend_url: Option<Url>,
+        /// Port to bind the frontend server. The server will be started on
+        /// `0.0.0.0:<frontend-bind-port>`.
+        #[arg(long = "frontend-bind-port", value_name = "PORT", env = ENV_FRONTEND_BIND_PORT, default_value = "8080")]
+        frontend_bind_port: u16,
+
+        /// Optionally disable the frontend server.
+        #[arg(long = "no-frontend", value_name = "BOOL", default_value_t = false, env = ENV_NO_FRONTEND)]
+        no_frontend: bool,
 
         /// The maximum amount of assets' base units that can be dispersed on each request.
         #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
@@ -328,9 +334,10 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     network,
                     store_path,
                 },
-            api_bind_url,
+            api_bind_port,
             api_public_url,
-            frontend_url,
+            no_frontend,
+            frontend_bind_port,
             max_claimable_amount,
             pow_secret,
             pow_challenge_lifetime,
@@ -407,16 +414,14 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let mut tasks = JoinSet::new();
             let mut tasks_ids = HashMap::new();
 
-            let api_id = tasks.spawn(api_server.serve(api_bind_url.clone())).id();
+            let api_url = Url::parse(&format!("http://0.0.0.0:{api_bind_port}"))?;
+            let api_id = tasks.spawn(api_server.serve(api_url.clone())).id();
             tasks_ids.insert(api_id, "api");
 
-            if let Some(frontend_url) = frontend_url {
+            if !no_frontend {
+                let frontend_url = Url::parse(&format!("http://0.0.0.0:{frontend_bind_port}"))?;
                 let frontend_id = tasks
-                    .spawn(serve_frontend(
-                        frontend_url,
-                        api_public_url.unwrap_or(api_bind_url),
-                        node_endpoint.to_string(),
-                    ))
+                    .spawn(serve_frontend(frontend_url, api_public_url, node_endpoint.to_string()))
                     .id();
                 tasks_ids.insert(frontend_id, "frontend");
             }
@@ -491,8 +496,8 @@ fn create_faucet_account(
     Ok((account, AuthSecretKey::RpoFalcon512(secret)))
 }
 
-// INTEGRATION TESTS
-// ================================================================================================
+// TESTS
+// =================================================================================================
 
 #[cfg(test)]
 mod tests {
@@ -501,17 +506,114 @@ mod tests {
     use std::str::FromStr;
     use std::time::{Duration, Instant};
 
+    use clap::Parser;
     use fantoccini::ClientBuilder;
-    use miden_client::account::{AccountId, Address, NetworkId};
+    use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
     use tokio::time::sleep;
     use url::Url;
+    use uuid::Uuid;
 
     use crate::network::FaucetNetwork;
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, ClientConfig, run_faucet_command};
+    use crate::{Cli, ClientConfig, create_faucet_account, run_faucet_command};
+
+    // CLI TESTS
+    // ---------------------------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn init_with_new_token() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--token-symbol",
+            "TEST",
+            "--decimals",
+            "6",
+            "--max-supply",
+            "100000000000000000",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn init_importing_account_file() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let account_path = temp_dir().join("test_account.mac");
+        let (account, secret) = create_faucet_account("TEST", 100_000_000, 3).unwrap();
+        let account_data = AccountFile::new(account, vec![secret]);
+        account_data.write(&account_path).unwrap();
+
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--import",
+            account_path.to_str().unwrap(),
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn init_with_deploy() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--token-symbol",
+            "TEST",
+            "--decimals",
+            "6",
+            "--max-supply",
+            "100000000000000000",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+            "--deploy",
+        ])))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn serve_fails_without_init() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "start",
+            "--api-bind-port",
+            "8000",
+            "--frontend-bind-port",
+            "8081",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_err());
+    }
+
+    // INTEGRATION TEST
+    // ---------------------------------------------------------------------------------------------
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
     /// to test the faucet website. It then loads the website, mints tokens, and checks that all the
@@ -588,7 +690,7 @@ mod tests {
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
 
-    async fn run_stub_node() -> Url {
+    pub async fn run_stub_node() -> Url {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let listener_addr = listener.local_addr().unwrap();
         let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
@@ -604,7 +706,7 @@ mod tests {
             node_url: Some(stub_node_url.clone()),
             timeout: Duration::from_millis(5000),
             network: FaucetNetwork::Localhost,
-            store_path: temp_dir().join("test_store.sqlite3"),
+            store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
             remote_tx_prover_url: None,
         };
 
@@ -621,7 +723,8 @@ mod tests {
         .await
         .expect("failed to create faucet account");
 
-        let api_url = "http://localhost:8000";
+        let api_bind_port = 8000;
+        let api_url = format!("http://localhost:{api_bind_port}");
         let frontend_url = "http://localhost:8080";
 
         // Use std::thread to launch faucet - avoids Send requirements
@@ -637,9 +740,11 @@ mod tests {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
                         config,
-                        api_bind_url: Url::try_from(api_url).unwrap(),
-                        api_public_url: None,
-                        frontend_url: Some(Url::parse(frontend_url).unwrap()),
+                        api_bind_port,
+                        api_public_url: Url::parse(&format!("http://localhost:{api_bind_port}"))
+                            .unwrap(),
+                        frontend_bind_port: 8080,
+                        no_frontend: false,
                         max_claimable_amount: 1_000_000_000,
                         api_keys: vec![],
                         pow_secret: "test".to_string(),
@@ -659,7 +764,7 @@ mod tests {
         });
 
         // Wait for faucet to be up
-        let api_url = Url::parse(api_url).unwrap();
+        let api_url = Url::parse(&api_url).unwrap();
         let addrs = api_url.socket_addrs(|| None).unwrap();
         let start = Instant::now();
         let timeout = Duration::from_secs(10);

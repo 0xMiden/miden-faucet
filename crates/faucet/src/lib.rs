@@ -39,7 +39,7 @@ pub mod types;
 
 use crate::note_screener::NoteScreener;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
-use crate::types::{AssetAmount, NoteType};
+use crate::types::AssetAmount;
 
 const COMPONENT: &str = "miden-faucet-client";
 
@@ -142,30 +142,8 @@ impl Faucet {
         if deploy {
             let mut faucet = Self::load(config).await?;
 
-            // TODO: This is a workaround to deploy the account on the chain. Ideally this would be
-            // done with an empty transaction, but that currently fails due to: https://github.com/0xMiden/miden-base/issues/2072
-            // Once that change is included in the next release, we can revert this workaround.
-            let mut rng = {
-                let auth_seed: [u64; 4] = rng().random();
-                let rng_seed = Word::from(auth_seed.map(Felt::new));
-                RpoRandomCoin::new(rng_seed)
-            };
-            let notes = build_p2id_notes(
-                &faucet.faucet_id(),
-                &[MintRequest {
-                    account_id: faucet.id.account_id,
-                    note_type: NoteType::Private,
-                    asset_amount: AssetAmount::new(1).unwrap(),
-                }],
-                &mut rng,
-            )?;
-
-            // Build and submit transaction
-            let tx_request = faucet
-                .create_transaction(notes)
-                .context("faucet failed to create transaction")?;
-
-            faucet.submit_new_transaction(tx_request).await?;
+            let empty_tx_request = TransactionRequestBuilder::new().build()?;
+            faucet.submit_new_transaction(empty_tx_request).await?;
         }
 
         Ok(())
@@ -558,6 +536,7 @@ mod tests {
     use miden_client::testing::mock::{MockClient, MockRpcApi};
     use miden_client_sqlite_store::SqliteStore;
     use tokio::sync::{mpsc, oneshot};
+    use uuid::Uuid;
 
     use super::*;
     use crate::types::NoteType;
@@ -583,8 +562,11 @@ mod tests {
             receivers.push(receiver);
         }
 
-        let store =
-            Arc::new(SqliteStore::new(temp_dir().join("batch_requests.sqlite3")).await.unwrap());
+        let store = Arc::new(
+            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
+                .await
+                .unwrap(),
+        );
         run_faucet(rx_mint_requests, batch_size, store.clone());
 
         for receiver in receivers {
