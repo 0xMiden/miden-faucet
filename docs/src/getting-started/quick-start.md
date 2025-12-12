@@ -28,6 +28,7 @@ miden-faucet-client start \
   --frontend-url http://localhost:8080 \
   --api-bind-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
+  --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
 
