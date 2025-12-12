@@ -16,7 +16,7 @@ workspace = true
 
 [dependencies]
 miden-faucet-lib       = { workspace = true }
-miden-pow-rate-limiter = { workspace = true }
+miden-pow-rate-limiter = { features = ["tokio"], workspace = true }
 
 # Miden dependencies.
 miden-client              = { features = ["tonic"], workspace = true }
