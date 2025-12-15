@@ -6,21 +6,21 @@
 sudo adduser --disabled-password --disabled-login --shell /usr/sbin/nologin --quiet --system --no-create-home --home /nonexistent miden-faucet
 
 # Working folder.
-if [ -d "/opt/miden-faucet" ]
+if [ -d "/opt/miden-faucet-operator" ]
 then
-    echo "Directory /opt/miden-faucet exists."
+    echo "Directory /opt/miden-faucet-operator exists."
 else
-    mkdir -p /opt/miden-faucet
+    mkdir -p /opt/miden-faucet-operator
 fi
-sudo chown -R miden-faucet /opt/miden-faucet
+sudo chown -R miden-faucet-operator /opt/miden-faucet-operator
 
 # Configuration folder
-if [ -d "/etc/opt/miden-faucet" ]
+if [ -d "/etc/opt/miden-faucet-operator" ]
 then
-    echo "Directory /etc/opt/miden-faucet exists."
+    echo "Directory /etc/opt/miden-faucet-operator exists."
 else
-    mkdir -p /etc/opt/miden-faucet
+    mkdir -p /etc/opt/miden-faucet-operator
 fi
-sudo chown -R miden-faucet /etc/opt/miden-faucet
+sudo chown -R miden-faucet-operator /etc/opt/miden-faucet-operator
 
 sudo systemctl daemon-reload
