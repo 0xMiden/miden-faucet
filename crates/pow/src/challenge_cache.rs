@@ -102,7 +102,7 @@ impl ChallengeCache {
         self.challenges_per_domain.get(domain).copied().unwrap_or(0)
     }
 
-    /// Cleanup expired challenges and update the number of challenges submitted per domain and
+    /// Removes expired challenges and update the number of challenges submitted per domain and
     /// requestor.
     ///
     /// # Arguments
@@ -112,7 +112,7 @@ impl ChallengeCache {
     /// # Panics
     /// Panics if any expired challenge has no corresponding entries on the requestor or domain
     /// maps.
-    pub fn cleanup_expired_challenges(&mut self, current_time: u64) {
+    pub fn drop_expired_challenges(&mut self, current_time: u64) {
         // Timestamps lower than this are expired. Add 1 since `BTreeMap::split_off` is inclusive.
         let limit_timestamp = current_time - self.challenge_lifetime.as_secs() + 1;
 
@@ -180,7 +180,7 @@ mod tests {
 
         // wait for expiration + cleanup
         let expiration_time = insertion_timestamp + challenge_lifetime.as_secs();
-        cache.cleanup_expired_challenges(expiration_time);
+        cache.drop_expired_challenges(expiration_time);
 
         // assert that the challenge was removed
         assert!(!cache.challenges.contains_key(&insertion_timestamp));

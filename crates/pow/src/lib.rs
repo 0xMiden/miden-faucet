@@ -54,15 +54,21 @@ impl PoWRateLimiter {
     pub fn new_with_cleanup(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
         let cleanup_interval = config.cleanup_interval;
         let rate_limiter = Self::new(secret, config);
+        let challenge_cache = rate_limiter.challenges.clone();
 
-        // Start the cleanup task
-        let cleanup_rate_limiter = rate_limiter.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(cleanup_interval);
 
             loop {
                 interval.tick().await;
-                cleanup_rate_limiter.cleanup_challenge_cache();
+                let current_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("current timestamp should be greater than unix epoch")
+                    .as_secs();
+                challenge_cache
+                    .write()
+                    .expect("challenge cache lock should not be poisoned")
+                    .drop_expired_challenges(current_time);
             }
         });
 
@@ -94,7 +100,7 @@ impl PoWRateLimiter {
         self.challenges
             .write()
             .expect("challenge cache lock should not be poisoned")
-            .cleanup_expired_challenges(current_time);
+            .drop_expired_challenges(current_time);
     }
 
     /// Generates a new challenge with a difficulty that will depend on the number of active
