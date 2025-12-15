@@ -2,6 +2,11 @@
 
 This guide shows the available commands and their configuration options to run with the Miden Faucet CLI.
 
+The faucet comes with two CLI tools:
+
+- **miden-faucet-operator**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
+
 ## Available Commands
 
 | Command | Description |
@@ -225,12 +230,14 @@ miden-faucet-operator start \
 
 For detailed options, run `miden-faucet-operator [COMMAND] --help`. The legacy alias `miden-faucet` is still available for backwards compatibility.
 
-To request tokens from a remote faucet, use the client mint CLI:
+## Requesting tokens from a live faucet
+
+You can use the `miden-faucet-client` binary to request tokens from any running faucet instance, whether it's your local faucet or the remote testnet faucet:
 ```bash
 miden-faucet-client mint --url <FAUCET_API_URL> --account <ACCOUNT_ID> --amount <BASE_UNITS>
 ```
 
 To see available options:
 ```bash
-miden-faucet-operator mint --help
+miden-faucet-client mint --help
 ```
