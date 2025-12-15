@@ -80,7 +80,7 @@ check: ## Check all targets and features for errors without code generation
 
 .PHONY: install-faucet
 install-faucet: ## Installs faucet
-	${BUILD_PROTO} cargo install --path bin/faucet --locked
+	${BUILD_PROTO} cargo install --path bin/faucet-client --locked
 	${BUILD_PROTO} cargo install --path bin/faucet-operator --locked
 
 .PHONY: check-tools

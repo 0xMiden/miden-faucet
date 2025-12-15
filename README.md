@@ -8,7 +8,11 @@ For comprehensive guides, API reference, and examples, see the [Miden Faucet Doc
 
 ## Running the faucet
 
-1. Install the faucet binaries:
+The faucet comes with two CLI tools:
+- **miden-faucet-operator**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
+
+1. Install both faucet binaries:
 ```bash
 make install-faucet
 ```
@@ -36,7 +40,9 @@ miden-faucet-operator start \
   --network testnet
 ```
 
-Requesting tokens from a faucet endpoint is handled by the separate `miden-faucet-client` binary:
+## Requesting tokens from a live faucet
+
+You can use the `miden-faucet-client` binary to request tokens from any running faucet instance, whether it's your local faucet or the remote testnet faucet:
 ```bash
 miden-faucet-client mint --url <FAUCET_API_URL> --account <ACCOUNT_ID> --amount <BASE_UNITS>
 ```

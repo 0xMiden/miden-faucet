@@ -5,7 +5,6 @@ edition.workspace      = true
 homepage.workspace     = true
 license.workspace      = true
 name                   = "miden-faucet-client"
-readme                 = "README.md"
 repository.workspace   = true
 rust-version.workspace = true
 version.workspace      = true

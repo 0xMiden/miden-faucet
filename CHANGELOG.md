@@ -2,7 +2,7 @@
 
 ## 0.12.5 (TBD)
 
-- Renamed the faucet CLI to `miden-faucet-client` and kept a `miden-faucet` alias for compatibility; added a new `miden-faucet-operator` binary with the `mint` command ([#195](https://github.com/0xMiden/miden-faucet/pull/195)).
+- Renamed the faucet CLI to `miden-faucet-operator`, added a new `miden-faucet-client` binary with the `mint` command ([#195](https://github.com/0xMiden/miden-faucet/pull/195)).
 
 ## 0.12.4 (2025-12-04)
 

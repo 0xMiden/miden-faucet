@@ -1,9 +1,9 @@
 [package]
 authors.workspace      = true
-description            = "Token faucet operator (init/start) for Miden faucet"
+description            = "Token faucet operator for Miden faucet"
 edition.workspace      = true
 homepage.workspace     = true
-keywords               = ["faucet", "miden", "node", "operator"]
+keywords               = ["faucet", "miden", "operator"]
 license.workspace      = true
 name                   = "miden-faucet-operator"
 readme                 = "README.md"
