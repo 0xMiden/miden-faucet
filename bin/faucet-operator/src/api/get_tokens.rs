@@ -4,12 +4,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
-use miden_faucet_lib::requests::{
-    GetTokensResponse,
-    MintError,
-    MintRequest,
-    MintRequestSender,
-};
+use miden_faucet_lib::requests::{GetTokensResponse, MintError, MintRequest, MintRequestSender};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
 use miden_pow_rate_limiter::ChallengeError;
 use serde::Deserialize;

@@ -3,11 +3,11 @@
 use std::time::Duration;
 
 use clap::Parser;
+use miden_client::Word;
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
 use miden_client::note::NoteId;
 use miden_client::transaction::TransactionId;
-use miden_client::Word;
 use miden_faucet_lib::requests::{GetPowResponse, GetTokensResponse, MintResponse};
 use rand::Rng;
 use reqwest::{Client as HttpClient, Url};
@@ -194,9 +194,8 @@ impl FaucetHttpClient {
             MintClientError::InvalidNoteId(parsed.note_id.clone(), err.to_string())
         })?;
 
-        let tx_id = Word::try_from(parsed.tx_id.as_str())
-            .map(TransactionId::from)
-            .map_err(|err| {
+        let tx_id =
+            Word::try_from(parsed.tx_id.as_str()).map(TransactionId::from).map_err(|err| {
                 MintClientError::InvalidTransactionId(parsed.tx_id.clone(), err.to_string())
             })?;
 

@@ -5,13 +5,13 @@ use http::StatusCode;
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
 use miden_client::utils::ToHex;
+use miden_faucet_lib::requests::GetPowResponse;
 use serde::Deserialize;
 use tracing::{info_span, instrument};
 
 use crate::COMPONENT;
 use crate::api::{AccountError, ApiServer};
 use crate::api_key::ApiKey;
-use miden_faucet_lib::requests::GetPowResponse;
 
 // ENDPOINT
 // ================================================================================================

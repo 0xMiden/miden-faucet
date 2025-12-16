@@ -52,8 +52,11 @@ async fn mint_command_requests_public_note() {
     let account_hex = "0xca8203e8e58cf72049b061afca78ce";
     let account_id = AccountId::from_hex(account_hex).unwrap();
     let expected_amount = 123_000;
-    let pow_response =
-        GetPowResponse { challenge: "00".repeat(32), target: u64::MAX, timestamp: 0 };
+    let pow_response = GetPowResponse {
+        challenge: "00".repeat(32),
+        target: u64::MAX,
+        timestamp: 0,
+    };
     let note_id_hex = format!("0x{}", "00".repeat(32));
     let _note_id = NoteId::try_from_hex(&note_id_hex).expect("hex string should produce a note id");
     // TransactionId requires a valid 32-byte Word (64 hex chars)
