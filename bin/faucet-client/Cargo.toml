@@ -13,11 +13,12 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-anyhow       = { workspace = true }
-clap         = { features = ["derive", "env", "string"], version = "4.5" }
-hex          = { version = "0.4" }
-miden-client = { workspace = true }
-rand         = { features = ["thread_rng"], workspace = true }
+anyhow           = { workspace = true }
+clap             = { features = ["derive", "env", "string"], version = "4.5" }
+hex              = { version = "0.4" }
+miden-client     = { workspace = true }
+miden-faucet-lib = { workspace = true }
+rand             = { features = ["thread_rng"], workspace = true }
 reqwest      = { default-features = false, features = ["json", "rustls-tls"], version = "0.12" }
 serde        = { workspace = true }
 serde_json   = { workspace = true }

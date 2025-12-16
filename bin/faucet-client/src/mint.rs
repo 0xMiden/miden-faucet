@@ -1,4 +1,4 @@
-//! CLI command to mint tokens from a remote faucet by solving its `PoW` challenge.
+//! CLI command to request a public P2ID note from a remote faucet by solving its `PoW` challenge.
 
 use std::time::Duration;
 
@@ -6,9 +6,11 @@ use clap::Parser;
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
 use miden_client::note::NoteId;
+use miden_client::transaction::TransactionId;
+use miden_client::Word;
+use miden_faucet_lib::requests::{GetPowResponse, GetTokensResponse, MintResponse};
 use rand::Rng;
 use reqwest::{Client as HttpClient, Url};
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::task;
 
@@ -16,7 +18,7 @@ use tokio::task;
 // =================================================================================================
 
 const DEFAULT_FAUCET_URL: &str = "https://faucet-api.testnet.miden.io";
-const DEFAULT_TIMEOUT_MS: u64 = 30_000;
+const REQUEST_TIMEOUT_MS: u64 = 30_000;
 
 // CLI
 // =================================================================================================
@@ -51,7 +53,7 @@ impl MintCmd {
 
         let account_id = parse_account_id(&self.account)?;
         let faucet_client =
-            FaucetHttpClient::new(&self.api_url, DEFAULT_TIMEOUT_MS, self.api_key.clone())?;
+            FaucetHttpClient::new(&self.api_url, REQUEST_TIMEOUT_MS, self.api_key.clone())?;
 
         println!(
             "Requesting PoW challenge for account {} from faucet at {}...",
@@ -65,12 +67,12 @@ impl MintCmd {
         let nonce = solve_challenge(&challenge, target).await?;
 
         println!("Submitting mint request for a public P2ID note...");
-        let minted_note = faucet_client
+        let mint_response = faucet_client
             .request_tokens(&challenge, nonce, &account_id, self.quantity)
             .await?;
 
-        println!("Mint request accepted. Transaction: {}", minted_note.tx_id);
-        println!("Public P2ID note commitment: {}", minted_note.note_id.to_hex());
+        println!("Mint request accepted. Transaction: {}", mint_response.tx_id.to_hex());
+        println!("Public P2ID note commitment: {}", mint_response.note_id.to_hex());
 
         Ok(())
     }
@@ -136,7 +138,7 @@ impl FaucetHttpClient {
 
         let body =
             response.text().await.map_err(|err| MintClientError::ResponseBody("pow", err))?;
-        let parsed = serde_json::from_str::<PowResponse>(&body)
+        let parsed = serde_json::from_str::<GetPowResponse>(&body)
             .map_err(|err| MintClientError::ParseResponse("PoW", err, body.clone()))?;
 
         Ok((parsed.challenge, parsed.target))
@@ -149,7 +151,7 @@ impl FaucetHttpClient {
         nonce: u64,
         account_id: &AccountId,
         amount: u64,
-    ) -> Result<MintNote, MintClientError> {
+    ) -> Result<MintResponse, MintClientError> {
         let url = self
             .base_url
             .join("get_tokens")
@@ -192,33 +194,18 @@ impl FaucetHttpClient {
             MintClientError::InvalidNoteId(parsed.note_id.clone(), err.to_string())
         })?;
 
-        Ok(MintNote { note_id, tx_id: parsed.tx_id })
+        let tx_id = Word::try_from(parsed.tx_id.as_str())
+            .map(TransactionId::from)
+            .map_err(|err| {
+                MintClientError::InvalidTransactionId(parsed.tx_id.clone(), err.to_string())
+            })?;
+
+        Ok(MintResponse { note_id, tx_id })
     }
 }
 
 // RESPONSES
 // =================================================================================================
-
-/// Response from the `/pow` endpoint.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct PowResponse {
-    pub challenge: String,
-    pub target: u64,
-}
-
-/// Response from the `/get_tokens` endpoint.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct GetTokensResponse {
-    pub note_id: String,
-    pub tx_id: String,
-}
-
-/// Represents a minted note with its ID and transaction ID.
-#[derive(Debug, Clone)]
-struct MintNote {
-    note_id: NoteId,
-    tx_id: String,
-}
 
 // ERRORS
 // =================================================================================================
@@ -250,6 +237,8 @@ pub enum MintClientError {
     PowTask(String),
     #[error("invalid note id `{0}`: {1}")]
     InvalidNoteId(String, String),
+    #[error("invalid transaction id `{0}`: {1}")]
+    InvalidTransactionId(String, String),
 }
 
 // HELPERS

@@ -4,10 +4,15 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
-use miden_faucet_lib::requests::{MintError, MintRequest, MintRequestSender};
+use miden_faucet_lib::requests::{
+    GetTokensResponse,
+    MintError,
+    MintRequest,
+    MintRequestSender,
+};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
 use miden_pow_rate_limiter::ChallengeError;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
 use tracing::{Instrument, info_span, instrument};
@@ -58,12 +63,6 @@ pub async fn get_tokens(
         tx_id: mint_response.tx_id.to_string(),
         note_id: mint_response.note_id.to_string(),
     }))
-}
-
-#[derive(Serialize, Debug)]
-pub struct GetTokensResponse {
-    tx_id: String,
-    note_id: String,
 }
 
 // STATE

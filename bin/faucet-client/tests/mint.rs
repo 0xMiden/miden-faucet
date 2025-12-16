@@ -6,7 +6,8 @@ use axum::{Json, Router};
 use clap::Parser;
 use miden_client::account::AccountId;
 use miden_client::note::NoteId;
-use miden_faucet_client::mint::{GetTokensResponse, MintCmd, PowResponse};
+use miden_faucet_client::mint::MintCmd;
+use miden_faucet_lib::requests::{GetPowResponse, GetTokensResponse};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -22,7 +23,7 @@ struct RecordedRequest {
 
 #[derive(Clone)]
 struct AppState {
-    pow_response: PowResponse,
+    pow_response: GetPowResponse,
     note_id_hex: String,
     tx_id: String,
     recorded: Arc<Mutex<RecordedRequest>>,
@@ -51,16 +52,16 @@ async fn mint_command_requests_public_note() {
     let account_hex = "0xca8203e8e58cf72049b061afca78ce";
     let account_id = AccountId::from_hex(account_hex).unwrap();
     let expected_amount = 123_000;
-    let pow_response = PowResponse {
-        challenge: "00".repeat(32),
-        target: u64::MAX,
-    };
+    let pow_response =
+        GetPowResponse { challenge: "00".repeat(32), target: u64::MAX, timestamp: 0 };
     let note_id_hex = format!("0x{}", "00".repeat(32));
     let _note_id = NoteId::try_from_hex(&note_id_hex).expect("hex string should produce a note id");
+    // TransactionId requires a valid 32-byte Word (64 hex chars)
+    let tx_id_hex = format!("0x{}", "ab".repeat(32));
     let app_state = AppState {
         pow_response,
         note_id_hex,
-        tx_id: "0xdeadbeef".to_string(),
+        tx_id: tx_id_hex,
         recorded: Arc::new(Mutex::new(RecordedRequest::default())),
     };
 
@@ -99,7 +100,7 @@ async fn mint_command_requests_public_note() {
 async fn pow_handler(
     State(state): State<AppState>,
     Query(params): Query<PowQuery>,
-) -> Json<PowResponse> {
+) -> Json<GetPowResponse> {
     {
         let mut recorded = state.recorded.lock().await;
         recorded.account_id = Some(params.account_id);

@@ -11,6 +11,15 @@ repository.workspace   = true
 rust-version.workspace = true
 version.workspace      = true
 
+# Define both binary names pointing to the same source for backwards compatibility
+[[bin]]
+name = "miden-faucet-operator"
+path = "src/main.rs"
+
+[[bin]]
+name = "miden-faucet"
+path = "src/main.rs"
+
 [lints]
 workspace = true
 

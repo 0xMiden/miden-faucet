@@ -5,12 +5,13 @@ use http::StatusCode;
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
 use miden_client::utils::ToHex;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tracing::{info_span, instrument};
 
 use crate::COMPONENT;
 use crate::api::{AccountError, ApiServer};
 use crate::api_key::ApiKey;
+use miden_faucet_lib::requests::GetPowResponse;
 
 // ENDPOINT
 // ================================================================================================
@@ -46,13 +47,6 @@ pub async fn get_pow(
         target: challenge.target(),
         timestamp: challenge.timestamp(),
     }))
-}
-
-#[derive(Serialize, Debug)]
-pub struct GetPowResponse {
-    challenge: String,
-    target: u64,
-    timestamp: u64,
 }
 
 // REQUEST VALIDATION
