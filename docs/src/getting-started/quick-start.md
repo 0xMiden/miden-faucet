@@ -47,7 +47,7 @@ miden-faucet-client mint \
   --amount 1000
 ```
 
-This solves the PoW challenge and mints a public P2ID note. (The legacy `miden-faucet mint` subcommand is removed.)
+Although the command is named `mint`, in technical terms it makes a request to the faucet, solves the PoW challenge and creates a public P2ID note.
 
 ### Via Web Interface (if frontend is enabled)
 

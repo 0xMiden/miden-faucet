@@ -38,7 +38,7 @@ miden-faucet-operator init \
 
 ```bash
 miden-faucet-operator start \
-  --api-url <URL> \
+  --api-bind-url <URL> \
   --frontend-url <URL> \
   --node-url <URL> \
   --network <NETWORK>
@@ -69,7 +69,7 @@ miden-faucet-operator start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--api-url` | URL to serve the faucet API | - | Yes |
+| `--api-bind-url` | URL to serve the faucet API | - | Yes |
 | `--api-public-url` | Public URL to access the faucet API. If not set, the bind url will be used. | - | No |
 | `--frontend-url` | URL to serve the Frontend API | - | No |
 | `--node-url` | Miden node RPC endpoint. If not set, it will be derived from the network | - | No |
@@ -236,6 +236,8 @@ You can use the `miden-faucet-client` binary to request tokens from any running 
 ```bash
 miden-faucet-client mint --url <FAUCET_API_URL> --account <ACCOUNT_ID> --amount <BASE_UNITS>
 ```
+
+Although the command is named `mint`, in technical terms it makes a request to the faucet to request a public P2ID note.
 
 To see available options:
 ```bash
