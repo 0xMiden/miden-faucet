@@ -61,14 +61,7 @@ impl PoWRateLimiter {
 
             loop {
                 interval.tick().await;
-                let current_time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("current timestamp should be greater than unix epoch")
-                    .as_secs();
-                challenge_cache
-                    .write()
-                    .expect("challenge cache lock should not be poisoned")
-                    .drop_expired_challenges(current_time);
+                remove_expired_challenges(&challenge_cache);
             }
         });
 
@@ -93,14 +86,7 @@ impl PoWRateLimiter {
 
     /// Cleans up the challenge cache, removing all the expired challenges.
     pub fn cleanup_challenge_cache(&self) {
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("current timestamp should be greater than unix epoch")
-            .as_secs();
-        self.challenges
-            .write()
-            .expect("challenge cache lock should not be poisoned")
-            .drop_expired_challenges(current_time);
+        remove_expired_challenges(&self.challenges);
     }
 
     /// Generates a new challenge with a difficulty that will depend on the number of active
@@ -214,6 +200,17 @@ impl PoWRateLimiter {
 
         Ok(())
     }
+}
+
+fn remove_expired_challenges(challenge_cache: &Arc<RwLock<ChallengeCache>>) {
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("current timestamp should be greater than unix epoch")
+        .as_secs();
+    challenge_cache
+        .write()
+        .expect("challenge cache lock should not be poisoned")
+        .drop_expired_challenges(current_time);
 }
 
 /// `PoW` challenge related errors.
