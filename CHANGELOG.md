@@ -2,6 +2,7 @@
 
 ## 0.13.0 (TBD)
 
+- Updated faucet optional deployment to use an empty transaction (#[182](https://github.com/0xMiden/miden-faucet/pull/182)).
 - Added a feature `tokio` for the `miden-pow-rate-limiter` crate ([#188](https://github.com/0xMiden/miden-faucet/pull/188).)
 - [BREAKING] Replaced the `api-bind-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
 - [BREAKING] Replaced the `frontend-url` param for `frontend-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
