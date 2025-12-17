@@ -8,7 +8,13 @@ use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
 use miden_client::note::NoteId;
 use miden_client::transaction::TransactionId;
-use miden_faucet_lib::requests::{GetPowResponse, GetTokensResponse, MintResponse};
+use miden_faucet_lib::requests::{
+    GetPowResponse,
+    GetTokensQueryParams,
+    GetTokensResponse,
+    MintResponse,
+    PowQueryParams,
+};
 use rand::Rng;
 use reqwest::{Client as HttpClient, Url};
 use sha2::{Digest, Sha256};
@@ -118,16 +124,19 @@ impl FaucetHttpClient {
             .join("pow")
             .map_err(|err| MintClientError::InvalidUrl(self.base_url.to_string(), err))?;
 
-        let mut request = self
+        let params = PowQueryParams {
+            account_id: account_id.to_hex(),
+            amount,
+            api_key: self.api_key.clone(),
+        };
+
+        let response = self
             .http_client
             .get(pow_url)
-            .query(&[("account_id", account_id.to_hex()), ("amount", amount.to_string())]);
-
-        if let Some(key) = &self.api_key {
-            request = request.query(&[("api_key", key)]);
-        }
-
-        let response = request.send().await.map_err(|err| MintClientError::Request("PoW", err))?;
+            .query(&params)
+            .send()
+            .await
+            .map_err(|err| MintClientError::Request("PoW", err))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -157,19 +166,19 @@ impl FaucetHttpClient {
             .join("get_tokens")
             .map_err(|err| MintClientError::InvalidUrl(self.base_url.to_string(), err))?;
 
-        let mut request = self.http_client.get(url).query(&[
-            ("account_id", account_id.to_hex()),
-            ("asset_amount", amount.to_string()),
-            ("is_private_note", false.to_string()),
-            ("challenge", challenge.to_owned()),
-            ("nonce", nonce.to_string()),
-        ]);
+        let params = GetTokensQueryParams {
+            account_id: account_id.to_hex(),
+            asset_amount: amount,
+            is_private_note: false,
+            challenge: challenge.to_owned(),
+            nonce,
+            api_key: self.api_key.clone(),
+        };
 
-        if let Some(key) = &self.api_key {
-            request = request.query(&[("api_key", key)]);
-        }
-
-        let response = request
+        let response = self
+            .http_client
+            .get(url)
+            .query(&params)
             .send()
             .await
             .map_err(|err| MintClientError::Request("get_tokens", err))?;

@@ -4,10 +4,15 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
-use miden_faucet_lib::requests::{GetTokensResponse, MintError, MintRequest, MintRequestSender};
+use miden_faucet_lib::requests::{
+    GetTokensQueryParams,
+    GetTokensResponse,
+    MintError,
+    MintRequest,
+    MintRequestSender,
+};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
 use miden_pow_rate_limiter::ChallengeError;
-use serde::Deserialize;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
 use tracing::{Instrument, info_span, instrument};
@@ -29,11 +34,12 @@ use crate::api_key::ApiKey;
 )]
 pub async fn get_tokens(
     State(server): State<ApiServer>,
-    Query(request): Query<RawMintRequest>,
+    Query(request): Query<GetTokensQueryParams>,
 ) -> Result<Json<GetTokensResponse>, GetTokenError> {
     let (mint_response_sender, mint_response_receiver) = oneshot::channel();
 
-    let validated_request = request.validate(&server).map_err(GetTokenError::InvalidRequest)?;
+    let validated_request =
+        validate_get_tokens_params(&request, &server).map_err(GetTokenError::InvalidRequest)?;
 
     let enqueue_span = info_span!(target: COMPONENT, "server.get_tokens.enqueue");
     {
@@ -78,19 +84,6 @@ impl GetTokensState {
 // REQUEST VALIDATION
 // ================================================================================================
 
-/// Used to receive the initial request from the user.
-///
-/// Further parsing is done to get the expected [`MintRequest`] expected by the faucet client.
-#[derive(Deserialize)]
-pub struct RawMintRequest {
-    pub account_id: String,
-    pub is_private_note: bool,
-    pub asset_amount: u64,
-    pub challenge: Option<String>,
-    pub nonce: Option<u64>,
-    pub api_key: Option<String>,
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum MintRequestError {
     #[error(transparent)]
@@ -103,8 +96,6 @@ pub enum MintRequestError {
     PowError(#[from] ChallengeError),
     #[error("API key {0} is invalid")]
     InvalidApiKey(String),
-    #[error("PoW parameters are missing")]
-    MissingPowParameters,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -183,69 +174,68 @@ impl IntoResponse for GetTokenError {
     }
 }
 
-impl RawMintRequest {
-    /// Further validates a raw request, turning it into a valid [`MintRequest`] which can be
-    /// submitted to the faucet client.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    ///   - the account ID is not a valid hex string
-    ///   - the asset amount is not one of the provided options
-    ///   - the API key is invalid
-    ///   - the challenge is missing or invalid
-    ///   - the nonce is missing or doesn't solve the challenge
-    ///   - the challenge timestamp is expired
-    ///   - the challenge has already been used
-    fn validate(self, server: &ApiServer) -> Result<MintRequest, MintRequestError> {
-        let note_type = if self.is_private_note {
-            NoteType::Private
-        } else {
-            NoteType::Public
-        };
+/// Further validates a raw request, turning it into a valid [`MintRequest`] which can be
+/// submitted to the faucet client.
+///
+/// # Errors
+///
+/// Returns an error if:
+///   - the account ID is not a valid hex string
+///   - the asset amount is not one of the provided options
+///   - the API key is invalid
+///   - the challenge is invalid
+///   - the nonce doesn't solve the challenge
+///   - the challenge timestamp is expired
+///   - the challenge has already been used
+fn validate_get_tokens_params(
+    params: &GetTokensQueryParams,
+    server: &ApiServer,
+) -> Result<MintRequest, MintRequestError> {
+    let note_type = if params.is_private_note {
+        NoteType::Private
+    } else {
+        NoteType::Public
+    };
 
-        let account_id = if self.account_id.starts_with("0x") {
-            AccountId::from_hex(&self.account_id).map_err(AccountError::ParseId)
-        } else {
-            Address::decode(&self.account_id).map_err(AccountError::ParseAddress).and_then(
-                |(_, address)| match address.id() {
-                    AddressId::AccountId(account_id) => Ok(account_id),
-                    _ => Err(AccountError::AddressNotIdBased),
-                },
-            )
-        }
-        .map_err(MintRequestError::AccountError)?;
-
-        let asset_amount =
-            AssetAmount::new(self.asset_amount).map_err(MintRequestError::InvalidAssetAmount)?;
-        if asset_amount > server.mint_state.max_claimable_amount {
-            return Err(MintRequestError::AssetAmountTooBig(
-                asset_amount,
-                server.mint_state.max_claimable_amount,
-            ));
-        }
-
-        // Check the API key, if provided
-        let api_key = self.api_key.as_deref().map(ApiKey::decode).transpose()?;
-        if let Some(api_key) = &api_key
-            && !server.api_keys.contains(api_key)
-        {
-            return Err(MintRequestError::InvalidApiKey(api_key.encode()));
-        }
-
-        // Validate Challenge and nonce
-        let challenge_str = self.challenge.ok_or(MintRequestError::MissingPowParameters)?;
-        let nonce = self.nonce.ok_or(MintRequestError::MissingPowParameters)?;
-        let request_complexity = server.compute_request_complexity(asset_amount.base_units());
-
-        server.submit_challenge(
-            &challenge_str,
-            nonce,
-            account_id,
-            api_key.unwrap_or_default(),
-            request_complexity,
-        )?;
-
-        Ok(MintRequest { account_id, note_type, asset_amount })
+    let account_id = if params.account_id.starts_with("0x") {
+        AccountId::from_hex(&params.account_id).map_err(AccountError::ParseId)
+    } else {
+        Address::decode(&params.account_id)
+            .map_err(AccountError::ParseAddress)
+            .and_then(|(_, address)| match address.id() {
+                AddressId::AccountId(account_id) => Ok(account_id),
+                _ => Err(AccountError::AddressNotIdBased),
+            })
     }
+    .map_err(MintRequestError::AccountError)?;
+
+    let asset_amount =
+        AssetAmount::new(params.asset_amount).map_err(MintRequestError::InvalidAssetAmount)?;
+    if asset_amount > server.mint_state.max_claimable_amount {
+        return Err(MintRequestError::AssetAmountTooBig(
+            asset_amount,
+            server.mint_state.max_claimable_amount,
+        ));
+    }
+
+    // Check the API key, if provided
+    let api_key = params.api_key.as_deref().map(ApiKey::decode).transpose()?;
+    if let Some(api_key) = &api_key
+        && !server.api_keys.contains(api_key)
+    {
+        return Err(MintRequestError::InvalidApiKey(api_key.encode()));
+    }
+
+    // Validate Challenge and nonce
+    let request_complexity = server.compute_request_complexity(asset_amount.base_units());
+
+    server.submit_challenge(
+        &params.challenge,
+        params.nonce,
+        account_id,
+        api_key.unwrap_or_default(),
+        request_complexity,
+    )?;
+
+    Ok(MintRequest { account_id, note_type, asset_amount })
 }

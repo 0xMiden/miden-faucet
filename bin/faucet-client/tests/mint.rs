@@ -7,18 +7,19 @@ use clap::Parser;
 use miden_client::account::AccountId;
 use miden_client::note::NoteId;
 use miden_faucet_client::mint::MintCmd;
-use miden_faucet_lib::requests::{GetPowResponse, GetTokensResponse};
-use serde::Deserialize;
+use miden_faucet_lib::requests::{
+    GetPowResponse,
+    GetTokensQueryParams,
+    GetTokensResponse,
+    PowQueryParams,
+};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
 #[derive(Clone, Default)]
 struct RecordedRequest {
-    account_id: Option<String>,
-    amount: Option<u64>,
-    is_private_note: Option<String>,
-    api_key: Option<String>,
-    challenge: Option<String>,
+    pow_params: Option<PowQueryParams>,
+    tokens_params: Option<GetTokensQueryParams>,
 }
 
 #[derive(Clone)]
@@ -27,24 +28,6 @@ struct AppState {
     note_id_hex: String,
     tx_id: String,
     recorded: Arc<Mutex<RecordedRequest>>,
-}
-
-#[derive(Deserialize)]
-struct PowQuery {
-    amount: u64,
-    account_id: String,
-    api_key: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct TokensQuery {
-    account_id: String,
-    is_private_note: String,
-    asset_amount: u64,
-    challenge: String,
-    #[allow(dead_code)]
-    nonce: u64,
-    api_key: Option<String>,
 }
 
 #[tokio::test]
@@ -93,37 +76,40 @@ async fn mint_command_requests_public_note() {
     cli.execute().await.unwrap();
 
     let recorded = app_state.recorded.lock().await.clone();
-    assert_eq!(recorded.account_id, Some(account_id.to_hex()));
-    assert_eq!(recorded.amount, Some(expected_amount));
-    assert_eq!(recorded.is_private_note.as_deref(), Some("false"));
-    assert_eq!(recorded.api_key.as_deref(), Some("test-key"));
-    assert_eq!(recorded.challenge, Some("00".repeat(32)));
+
+    // Verify PoW request params
+    let pow_params = recorded.pow_params.expect("pow_params should be recorded");
+    assert_eq!(pow_params.account_id, account_id.to_hex());
+    assert_eq!(pow_params.amount, expected_amount);
+    assert_eq!(pow_params.api_key.as_deref(), Some("test-key"));
+
+    // Verify get_tokens request params
+    let tokens_params = recorded.tokens_params.expect("tokens_params should be recorded");
+    assert_eq!(tokens_params.account_id, account_id.to_hex());
+    assert_eq!(tokens_params.asset_amount, expected_amount);
+    assert!(!tokens_params.is_private_note);
+    assert_eq!(tokens_params.api_key.as_deref(), Some("test-key"));
+    assert_eq!(tokens_params.challenge, "00".repeat(32));
 }
 
 async fn pow_handler(
     State(state): State<AppState>,
-    Query(params): Query<PowQuery>,
+    Query(params): Query<PowQueryParams>,
 ) -> Json<GetPowResponse> {
     {
         let mut recorded = state.recorded.lock().await;
-        recorded.account_id = Some(params.account_id);
-        recorded.amount = Some(params.amount);
-        recorded.api_key = params.api_key;
+        recorded.pow_params = Some(params);
     }
     Json(state.pow_response.clone())
 }
 
 async fn tokens_handler(
     State(state): State<AppState>,
-    Query(params): Query<TokensQuery>,
+    Query(params): Query<GetTokensQueryParams>,
 ) -> Json<GetTokensResponse> {
     {
         let mut recorded = state.recorded.lock().await;
-        recorded.account_id = Some(params.account_id.clone());
-        recorded.amount = Some(params.asset_amount);
-        recorded.is_private_note = Some(params.is_private_note.clone());
-        recorded.api_key.clone_from(&params.api_key);
-        recorded.challenge = Some(params.challenge);
+        recorded.tokens_params = Some(params);
     }
     Json(GetTokensResponse {
         note_id: state.note_id_hex.clone(),

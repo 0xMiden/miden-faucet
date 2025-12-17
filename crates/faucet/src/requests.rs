@@ -9,6 +9,37 @@ use crate::types::{AssetAmount, NoteType};
 pub type MintResponseSender = oneshot::Sender<Result<MintResponse, MintError>>;
 pub type MintRequestSender = mpsc::Sender<(MintRequest, MintResponseSender)>;
 
+// QUERY PARAMETERS
+// ================================================================================================
+
+/// Query parameters for the `/pow` endpoint.
+///
+/// Used by both the client (to serialize) and the server (to deserialize).
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PowQueryParams {
+    pub account_id: String,
+    pub amount: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+}
+
+/// Query parameters for the `/get_tokens` endpoint.
+///
+/// Used by both the client (to serialize) and the server (to deserialize).
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct GetTokensQueryParams {
+    pub account_id: String,
+    pub asset_amount: u64,
+    pub is_private_note: bool,
+    pub challenge: String,
+    pub nonce: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+}
+
+// RESPONSES
+// ================================================================================================
+
 /// Response from the `/pow` endpoint.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GetPowResponse {
