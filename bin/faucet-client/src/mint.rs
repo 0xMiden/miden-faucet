@@ -15,9 +15,9 @@ use miden_faucet_lib::requests::{
     MintResponse,
     PowQueryParams,
 };
+use miden_pow_rate_limiter::{Challenge, ChallengeError};
 use rand::Rng;
 use reqwest::{Client as HttpClient, Url};
-use sha2::{Digest, Sha256};
 use tokio::task;
 
 // CONSTANTS
@@ -239,8 +239,10 @@ pub enum MintClientError {
     ResponseBody(&'static str, #[source] reqwest::Error),
     #[error("faucet returned a PoW target of 0")]
     ZeroTarget,
-    #[error("invalid challenge bytes returned by faucet: {0}")]
-    InvalidChallenge(#[source] hex::FromHexError),
+    #[error("invalid challenge hex returned by faucet: {0}")]
+    InvalidChallengeHex(#[source] hex::FromHexError),
+    #[error("invalid challenge returned by faucet: {0}")]
+    InvalidChallenge(#[source] ChallengeError),
     #[error("PoW solving task failed: {0}")]
     PowTask(String),
     #[error("invalid note id `{0}`: {1}")]
@@ -272,35 +274,28 @@ fn parse_account_id(input: &str) -> Result<AccountId, MintClientError> {
 
 /// Solves the `PoW` challenge and returns the nonce that satisfies the target.
 ///
-/// The faucet expects the first 8 bytes of the SHA-256 digest (big endian) to be lower than
-/// the target.
-///
-/// Heavy work runs on a blocking thread so we don't stall the async runtime
+/// Heavy work runs on a blocking thread so we don't stall the async runtime.
 async fn solve_challenge(challenge_hex: &str, target: u64) -> Result<u64, MintClientError> {
     if target == 0 {
         return Err(MintClientError::ZeroTarget);
     }
 
-    let challenge_bytes = hex::decode(challenge_hex).map_err(MintClientError::InvalidChallenge)?;
+    let challenge_bytes =
+        hex::decode(challenge_hex).map_err(MintClientError::InvalidChallengeHex)?;
+    let challenge = Challenge::try_from(challenge_bytes.as_slice())
+        .map_err(MintClientError::InvalidChallenge)?;
 
-    task::spawn_blocking(move || -> Result<u64, MintClientError> {
+    task::spawn_blocking(move || {
         let mut rng = rand::rng();
 
         loop {
             let nonce: u64 = rng.random();
 
-            let mut hasher = Sha256::new();
-            hasher.update(&challenge_bytes);
-            hasher.update(nonce.to_be_bytes());
-            let hash = hasher.finalize();
-            let digest =
-                u64::from_be_bytes(hash[..8].try_into().expect("hash should be 32 bytes long"));
-
-            if digest < target {
-                return Ok(nonce);
+            if challenge.validate_pow(nonce) {
+                return nonce;
             }
         }
     })
     .await
-    .map_err(|err| MintClientError::PowTask(err.to_string()))?
+    .map_err(|err| MintClientError::PowTask(err.to_string()))
 }

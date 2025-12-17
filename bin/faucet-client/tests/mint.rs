@@ -6,6 +6,7 @@ use axum::{Json, Router};
 use clap::Parser;
 use miden_client::account::AccountId;
 use miden_client::note::NoteId;
+use miden_client::utils::ToHex;
 use miden_faucet_client::mint::MintCmd;
 use miden_faucet_lib::requests::{
     GetPowResponse,
@@ -13,6 +14,7 @@ use miden_faucet_lib::requests::{
     GetTokensResponse,
     PowQueryParams,
 };
+use miden_pow_rate_limiter::Challenge;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
@@ -28,6 +30,7 @@ struct AppState {
     note_id_hex: String,
     tx_id: String,
     recorded: Arc<Mutex<RecordedRequest>>,
+    challenge_hex: String,
 }
 
 #[tokio::test]
@@ -35,8 +38,20 @@ async fn mint_command_requests_public_note() {
     let account_hex = "0xca8203e8e58cf72049b061afca78ce";
     let account_id = AccountId::from_hex(account_hex).unwrap();
     let expected_amount = 123_000;
+
+    // Create a valid Challenge with target = u64::MAX so any nonce will solve it
+    let challenge = Challenge::from_parts(
+        u64::MAX,  // target - any nonce will pass
+        0,         // timestamp
+        1,         // request_complexity
+        [0u8; 32], // requestor
+        [0u8; 32], // domain
+        [0u8; 32], // signature (doesn't matter for client-side validation)
+    );
+    let challenge_hex = challenge.to_bytes().to_hex();
+
     let pow_response = GetPowResponse {
-        challenge: "00".repeat(32),
+        challenge: challenge_hex.clone(),
         target: u64::MAX,
         timestamp: 0,
     };
@@ -49,6 +64,7 @@ async fn mint_command_requests_public_note() {
         note_id_hex,
         tx_id: tx_id_hex,
         recorded: Arc::new(Mutex::new(RecordedRequest::default())),
+        challenge_hex,
     };
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -89,7 +105,7 @@ async fn mint_command_requests_public_note() {
     assert_eq!(tokens_params.asset_amount, expected_amount);
     assert!(!tokens_params.is_private_note);
     assert_eq!(tokens_params.api_key.as_deref(), Some("test-key"));
-    assert_eq!(tokens_params.challenge, "00".repeat(32));
+    assert_eq!(tokens_params.challenge, app_state.challenge_hex);
 }
 
 async fn pow_handler(
