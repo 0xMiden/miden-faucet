@@ -21,13 +21,13 @@ use reqwest::{Client as HttpClient, Url};
 use tokio::task;
 
 // CONSTANTS
-// =================================================================================================
+// ================================================================================================
 
 const DEFAULT_FAUCET_URL: &str = "https://faucet-api.testnet.miden.io";
 const REQUEST_TIMEOUT_MS: u64 = 30_000;
 
 // CLI
-// =================================================================================================
+// ================================================================================================
 
 /// Mint tokens from a remote faucet by solving its `PoW` challenge and requesting a **public**
 /// P2ID note.
@@ -38,12 +38,12 @@ pub struct MintCmd {
     api_url: String,
 
     /// Account ID or address to receive the minted tokens.
-    #[arg(short = 'a', long = "account", value_name = "ACCOUNT")]
-    account: String,
+    #[arg(short = 't', long = "target-account", value_name = "ACCOUNT")]
+    target_account: String,
 
-    /// Quantity to mint (in base units).
-    #[arg(short = 'q', long = "quantity", value_name = "U64", alias = "amount")]
-    quantity: u64,
+    /// Amount to mint (in base units).
+    #[arg(short = 'a', long = "amount", value_name = "U64")]
+    amount: u64,
 
     /// Optional faucet API key.
     #[arg(long = "api-key", value_name = "STRING")]
@@ -53,11 +53,11 @@ pub struct MintCmd {
 impl MintCmd {
     /// Executes the mint command.
     pub async fn execute(&self) -> Result<(), MintClientError> {
-        if self.quantity == 0 {
+        if self.amount == 0 {
             return Err(MintClientError::AmountZero);
         }
 
-        let account_id = parse_account_id(&self.account)?;
+        let account_id = parse_account_id(&self.target_account)?;
         let faucet_client =
             FaucetHttpClient::new(&self.api_url, REQUEST_TIMEOUT_MS, self.api_key.clone())?;
 
@@ -67,14 +67,14 @@ impl MintCmd {
             faucet_client.base_url
         );
 
-        let (challenge, target) = faucet_client.request_pow(&account_id, self.quantity).await?;
+        let (challenge, target) = faucet_client.request_pow(&account_id, self.amount).await?;
 
         println!("Solving faucet PoW challenge, this can take some time...");
         let nonce = solve_challenge(&challenge, target).await?;
 
         println!("Submitting mint request for a public P2ID note...");
         let mint_response = faucet_client
-            .request_tokens(&challenge, nonce, &account_id, self.quantity)
+            .request_tokens(&challenge, nonce, &account_id, self.amount)
             .await?;
 
         println!("Mint request accepted. Transaction: {}", mint_response.tx_id.to_hex());
@@ -85,7 +85,7 @@ impl MintCmd {
 }
 
 // HTTP CLIENT
-// =================================================================================================
+// ================================================================================================
 
 /// HTTP client for interacting with the faucet API.
 #[derive(Clone)]
@@ -212,11 +212,8 @@ impl FaucetHttpClient {
     }
 }
 
-// RESPONSES
-// =================================================================================================
-
 // ERRORS
-// =================================================================================================
+// ================================================================================================
 
 /// Errors that can occur while interacting with the faucet API.
 #[derive(Debug, thiserror::Error)]
@@ -252,7 +249,7 @@ pub enum MintClientError {
 }
 
 // HELPERS
-// =================================================================================================
+// ================================================================================================
 
 /// Parses a user provided account ID string and returns the corresponding `AccountId`
 fn parse_account_id(input: &str) -> Result<AccountId, MintClientError> {

@@ -43,7 +43,7 @@ Use the dedicated mint command:
 ```bash
 miden-faucet-client mint \
   --url http://localhost:8000 \
-  --account <ACCOUNT_ID_OR_ADDRESS> \
+  --target-account <ACCOUNT_ID_OR_ADDRESS> \
   --amount 1000
 ```
 

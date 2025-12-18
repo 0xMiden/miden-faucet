@@ -234,7 +234,7 @@ For detailed options, run `miden-faucet-operator [COMMAND] --help`. The legacy a
 
 You can use the `miden-faucet-client` binary to request tokens from any running faucet instance, whether it's your local faucet or the remote testnet faucet:
 ```bash
-miden-faucet-client mint --url <FAUCET_API_URL> --account <ACCOUNT_ID> --amount <BASE_UNITS>
+miden-faucet-client mint --url <FAUCET_API_URL> --target-account <ACCOUNT_ID> --amount <BASE_UNITS>
 ```
 
 Although the command is named `mint`, in technical terms it makes a request to the faucet to request a public P2ID note.

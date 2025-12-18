@@ -44,7 +44,7 @@ miden-faucet-operator start \
 
 You can use the `miden-faucet-client` binary to request tokens from any running faucet instance, whether it's your local faucet or the remote testnet faucet:
 ```bash
-miden-faucet-client mint --url <FAUCET_API_URL> --account <ACCOUNT_ID> --amount <BASE_UNITS>
+miden-faucet-client mint --url <FAUCET_API_URL> --target-account <ACCOUNT_ID> --amount <BASE_UNITS>
 ```
 
 After a few seconds you may go to `http://localhost:8080` and see the faucet UI.
