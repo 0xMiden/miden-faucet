@@ -87,10 +87,7 @@ export class MidenFaucetApp {
             if (isPrivateNote) {
                 this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.note_id, getTokensResponse.tx_id, (noteId) => this.downloadNote(noteId));
             } else {
-                this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id, () => {
-                    this.ui.hideModals();
-                    this.ui.resetForm();
-                });
+                this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id);
             }
         } catch (error) {
             this.ui.hideMintingModal();

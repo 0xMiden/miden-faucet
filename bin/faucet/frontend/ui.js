@@ -87,7 +87,7 @@ export class UIController {
         }
     }
 
-    showCompletedPublicModal(recipient, amountAsTokens, txId, onClose) {
+    showCompletedPublicModal(recipient, amountAsTokens, txId) {
         document.getElementById('completed-public-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-public-recipient-address').textContent = recipient;
         const completedPublicModal = document.getElementById('completed-public-modal');
@@ -97,7 +97,8 @@ export class UIController {
         this.setupExplorerButton(publicExplorerButton, txId);
         completedPublicModal.onclick = (e) => {
             if (e.target !== publicExplorerButton) {
-                onClose();
+                this.hideModals();
+                this.resetForm();
             }
         };
     }
@@ -198,6 +199,7 @@ export class UIController {
 
     setupDownloadButton(noteId, onDownloadNote) {
         const downloadButton = document.getElementById('download-button');
+        document.getElementById('download-button-text').textContent = 'Download Note';
         downloadButton.onclick = async () => {
             this.hideErrors();
             this.showDownloadedNoteHints();

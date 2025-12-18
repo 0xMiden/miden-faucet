@@ -71,6 +71,7 @@ body {
 .form-label {
     display: block;
     font-size: 15px;
+    font-weight: 400;
     margin-bottom: 8px;
     color: rgba(0, 0, 0, 1);
 }
@@ -199,7 +200,7 @@ body {
     text-align: center;
     transform: scale(0.9);
     position: absolute;
-    top: 44%;
+    top: 40%;
     translate: 0 -121px;
     opacity: 0;
     display: flex;
@@ -270,7 +271,7 @@ body {
 .token-info {
     font-family: "SF Pro Display", sans-serif;
     color: #000000;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 400;
     background-color: rgba(0, 0, 0, 0.02);
     padding: 13px;
@@ -319,8 +320,8 @@ body {
 
 .minting-hint {
     font-family: "SF Pro Display", sans-serif;
-    font-size: 11px;
-    color: rgba(0, 0, 0, 0.3);
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.5);
 }
 
 .minting-subtitle {
@@ -422,6 +423,7 @@ body {
     position: relative;
     margin-top: -15px;
     background-color: #FFE8E9;
+    border: 0.5px solid #e0e0e0;
     color: black;
     padding: 12px 16px;
     border-radius: 6px;
@@ -516,10 +518,10 @@ body {
     display: none;
     width: 100vw;
     font-family: "SF Pro Display", sans-serif;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 400;
     color: rgba(0, 0, 0, 1);
-    margin-top: 35px;
+    margin-top: 20px;
 }
 
 .download-button {
@@ -547,7 +549,7 @@ body {
 .next-steps {
     display: none;
     margin-top: 15px;
-    font-size: 10px;
+    font-size: 13px;
     color: #000000;
     font-weight: 400;
     text-align: left;
@@ -563,7 +565,7 @@ body {
 }
 
 .next-steps .highlight {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     background-color: rgba(0, 0, 0, 0.02);
 }
@@ -658,53 +660,5 @@ body {
 
     .modal-placeholder {
         top: 25%;
-    }
-
-    .modal-title {
-        font-size: 16px;
-    }
-
-    .token-info {
-        font-size: 10px;
-    }
-
-    .continue-text {
-        font-size: 10px;
-    }
-
-    .minting-title {
-        font-size: 13px;
-    }
-
-    .minting-hint {
-        font-size: 10px;
-    }
-
-    .minting-subtitle {
-        font-size: 10px;
-    }
-
-    .explorer-button {
-        font-size: 11px;
-    }
-
-    .form-label {
-        font-size: 13px;
-    }
-
-    .token-amount-hint {
-        font-size: 11px;
-    }
-
-    .note {
-        font-size: 11px;
-    }
-
-    .button {
-        font-size: 13px;
-    }
-
-    .warning-text {
-        font-size: 11px;
     }
 }
