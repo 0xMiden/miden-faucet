@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Miden Faucet</title>
     <link rel="stylesheet" href="index.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Geist&family=Geist+Mono:wght@100..900&display=swap"
+        rel="stylesheet">
     <script type="module" src="bundle.js"></script>
 </head>
 
@@ -120,6 +125,7 @@
 
                         <div class="minting-text">
                             <div class="minting-title" id="minting-title">Minting Tokens</div>
+                            <div class="minting-separator"></div>
                             <div class="minting-hint">This may take a few seconds depending
                                 on server load.
                             </div>
@@ -151,6 +157,7 @@
 
                         <div class="minting-text">
                             <div class="minting-title">Tokens Minted!</div>
+                            <div class="minting-separator"></div>
                             <div class="minting-subtitle" style="color: #000000;">Go to your <span class="highlight"
                                     style="color: #ff5500;">Miden Wallet</span> to claim.
                             </div>
@@ -167,80 +174,79 @@
                 </div>
             </div>
 
-            <div style="position: relative;">
-                <div class="modal-overlay" id="completed-private-modal">
-                    <div class="modal-placeholder">
-                        <div class="modal-content completed-modal">
-                            <h2 class="modal-title">
-                                <span class="highlight">Private</span> Note Request Complete!
-                            </h2>
+            <div class="modal-overlay" id="completed-private-modal">
+                <div class="modal-placeholder">
+                    <div class="modal-content completed-modal">
+                        <h2 class="modal-title">
+                            <span class="highlight">Private</span> Note Request Complete!
+                        </h2>
 
-                            <div class="token-info">
-                                <span id="completed-private-token-amount"></span> Tokens to: <span
-                                    id="completed-private-recipient-address"></span>
-                            </div>
+                        <div class="token-info">
+                            <span id="completed-private-token-amount"></span> Tokens to: <span
+                                id="completed-private-recipient-address"></span>
                         </div>
+                    </div>
 
-                        <div class="modal-content completed-modal">
-                            <button id="private-close-button">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="24" y1="0" x2="0" y2="24"></line>
-                                    <line x1="0" y1="0" x2="24" y2="24"></line>
-                                </svg>
-                            </button>
-
-                            <div class="loading-section">
-                                <button class="download-button" id="download-button">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                                        xmlns="http://www.w3.org/2000/svg">
-                                        <path
-                                            d="M11 5C11 4.44772 11.4477 4 12 4C12.5523 4 13 4.44772 13 5V12.1578L16.2428 8.91501L17.657 10.3292L12.0001 15.9861L6.34326 10.3292L7.75748 8.91501L11 12.1575V5Z"
-                                            fill="currentColor" />
-                                        <path
-                                            d="M4 14H6V18H18V14H20V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V14Z"
-                                            fill="currentColor" />
-                                    </svg>
-                                    <span id="download-button-text">Download Note</span>
-                                </button>
-                            </div>
-
-                            <div class="minting-text">
-                                <div class="minting-title">Tokens Minted!</div>
-                                <div class="minting-subtitle" style="color: #000000;">Go to your <span class="highlight"
-                                        style="color: #ff5500;">Miden Wallet</span> to claim.
-                                </div>
-                            </div>
-
-                            <div class="progress-bar"></div>
-                        </div>
-
-                        <button class="explorer-button" id="private-explorer-button">
-                            View Transaction on Explorer
+                    <div class="modal-content completed-modal">
+                        <button id="private-close-button">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="24" y1="0" x2="0" y2="24"></line>
+                                <line x1="0" y1="0" x2="24" y2="24"></line>
+                            </svg>
                         </button>
 
-                        <div class="next-steps" id="next-steps">
-                            <div class="step">
-                                <div class="highlight">Next Steps</div>
-                            </div>
-                            <div class="step">
-                                <strong>Step 1:</strong> Save the downloaded note file somewhere safe. You'll need
-                                this
-                                file to import the note into your wallet.
-                            </div>
-                            <div class="step">
-                                <strong>Step 2:</strong> Open your wallet and go to the "Import Note" section.
-                            </div>
-                            <div class="step">
-                                <strong>Step 3:</strong> Upload the note file to make the tokens available in your
-                                wallet.
+                        <div class="loading-section">
+                            <button class="download-button" id="download-button">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path
+                                        d="M11 5C11 4.44772 11.4477 4 12 4C12.5523 4 13 4.44772 13 5V12.1578L16.2428 8.91501L17.657 10.3292L12.0001 15.9861L6.34326 10.3292L7.75748 8.91501L11 12.1575V5Z"
+                                        fill="currentColor" />
+                                    <path
+                                        d="M4 14H6V18H18V14H20V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V14Z"
+                                        fill="currentColor" />
+                                </svg>
+                                <span id="download-button-text">Download Note</span>
+                            </button>
+                        </div>
+
+                        <div class="minting-text">
+                            <div class="minting-title">Tokens Minted!</div>
+                            <div class="minting-separator"></div>
+                            <div class="minting-subtitle" style="color: #000000;">Go to your <span class="highlight"
+                                    style="color: #ff5500;">Miden Wallet</span> to claim.
                             </div>
                         </div>
 
-                        <div class="warning-text" id="warning-text">
-                            ⚠️ Important: If you lose this note file, your tokens cannot be recovered. Keep it safe and
-                            do
-                            not share it.
+                        <div class="progress-bar"></div>
+                    </div>
+
+                    <button class="explorer-button" id="private-explorer-button">
+                        View Transaction on Explorer
+                    </button>
+
+                    <div class="next-steps" id="next-steps">
+                        <div class="step">
+                            <div class="highlight">Next Steps</div>
                         </div>
+                        <div class="step">
+                            <strong>Step 1:</strong> Save the downloaded note file somewhere safe. You'll need
+                            this
+                            file to import the note into your wallet.
+                        </div>
+                        <div class="step">
+                            <strong>Step 2:</strong> Open your wallet and go to the "Import Note" section.
+                        </div>
+                        <div class="step">
+                            <strong>Step 3:</strong> Upload the note file to make the tokens available in your
+                            wallet.
+                        </div>
+                    </div>
+
+                    <div class="warning-text" id="warning-text">
+                        ⚠️ Important: If you lose this note file, your tokens cannot be recovered. Keep it safe and
+                        do
+                        not share it.
                     </div>
                 </div>
             </div>
