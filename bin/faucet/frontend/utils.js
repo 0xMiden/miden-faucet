@@ -33,4 +33,8 @@ export const Utils = {
     tokensToBaseUnits: (tokens, decimals) => {
         return tokens * (10 ** decimals);
     },
+
+    idFromBech32: (address) => {
+        return address.split('_')[0];
+    },
 };
