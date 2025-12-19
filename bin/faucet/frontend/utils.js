@@ -25,7 +25,9 @@ export const Utils = {
     },
 
     baseUnitsToTokens: (baseUnits, decimals) => {
-        return (baseUnits / 10 ** decimals).toLocaleString();
+        return (baseUnits / 10 ** decimals).toLocaleString(undefined, {
+            maximumFractionDigits: 0,
+        });
     },
 
     tokensToBaseUnits: (tokens, decimals) => {
