@@ -272,7 +272,7 @@ body {
 .token-info {
     font-family: "SF Pro Display", sans-serif;
     color: #000000;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 400;
     background-color: rgba(0, 0, 0, 0.02);
     padding: 13px;
@@ -661,53 +661,5 @@ body {
 
     .modal-placeholder {
         top: 25%;
-    }
-
-    .modal-title {
-        font-size: 16px;
-    }
-
-    .token-info {
-        font-size: 10px;
-    }
-
-    .continue-text {
-        font-size: 10px;
-    }
-
-    .minting-title {
-        font-size: 13px;
-    }
-
-    .minting-hint {
-        font-size: 11px;
-    }
-
-    .minting-subtitle {
-        font-size: 11px;
-    }
-
-    .explorer-button {
-        font-size: 11px;
-    }
-
-    .form-label {
-        font-size: 13px;
-    }
-
-    .token-amount-hint {
-        font-size: 11px;
-    }
-
-    .note {
-        font-size: 11px;
-    }
-
-    .button {
-        font-size: 13px;
-    }
-
-    .warning-text {
-        font-size: 11px;
     }
 }

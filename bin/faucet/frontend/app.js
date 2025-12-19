@@ -121,11 +121,7 @@ export class MidenFaucetApp {
                     },
                 );
             } else {
-                this.ui.showCompletedPublicModal(
-                    recipient,
-                    amountAsTokens,
-                    getTokensResponse.tx_id,
-                );
+                this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id);
             }
         } catch (error) {
             this.ui.hideMintingModal();
