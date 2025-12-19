@@ -68,9 +68,9 @@ export class UIController {
         mintingTitle.textContent = title;
     }
 
-    setMintingHint(hint) {
-        const mintingHint = document.getElementById('minting-hint');
-        mintingHint.textContent = hint;
+    setPrivateMintedSubtitle(subtitle) {
+        const privateMintedSubtitle = document.getElementById('private-minted-subtitle');
+        privateMintedSubtitle.innerHTML = subtitle;
     }
 
     hideMintingModal() {
@@ -86,6 +86,7 @@ export class UIController {
         this.setupDownloadButton(noteId, onDownloadNote);
         const privateExplorerButton = document.getElementById('private-explorer-button');
         this.setupExplorerButton(privateExplorerButton, txId);
+        this.showPrivateSucessTick();
     }
 
     setupExplorerButton(explorerButton, txId) {
@@ -170,7 +171,7 @@ export class UIController {
 
     showError(title, description) {
         this.hideIcons();
-        this.hideNoteHints();
+        this.hideNextSteps();
 
         const errorTitle = document.getElementById('home-error-message-title');
         errorTitle.textContent = title;
@@ -203,57 +204,95 @@ export class UIController {
             this.hideErrors();
             this.hideModals();
             this.resetForm();
-            const downloadButton = document.getElementById('download-button');
-            downloadButton.classList.remove('pressed')
-            this.hideNoteHints();
+            const bigDownloadButton = document.getElementById('private-download-button');
+            bigDownloadButton.classList.remove('pressed')
+
+            const instructionsDownloadButton = document.getElementById('instructions-download-button');
+            instructionsDownloadButton.classList.remove('pressed')
+
+            this.hideNextSteps();
         };
     }
 
     setupDownloadButton(noteId, onDownloadNote) {
-        const downloadButton = document.getElementById('download-button');
-        document.getElementById('download-button-text').textContent = 'Download Note';
-        downloadButton.onclick = async () => {
+        const bigDownloadButton = document.getElementById('private-download-button');
+        bigDownloadButton.onclick = async () => {
             this.hideErrors();
-            downloadButton.classList.add('pressed');
-            document.getElementById('download-button-text').textContent = 'Download Again';
+            bigDownloadButton.classList.add('pressed');
             this.showCloseButton();
+            this.showWarningText();
+
+            await onDownloadNote(noteId);
+        };
+
+        const instructionsDownloadButton = document.getElementById('instructions-download-button');
+        instructionsDownloadButton.onclick = async () => {
+            this.hideErrors();
+            instructionsDownloadButton.classList.add('pressed');
+            this.showCloseButton();
+            this.showWarningText();
 
             await onDownloadNote(noteId);
         };
     }
 
-    showDownloadedNoteHints() {
+    showPrivateSucessTick() {
+        const checkmark = document.getElementById('private-success-tick');
+        checkmark.style.display = 'flex';
+    }
+
+    hidePrivateSucessTick() {
+        const checkmark = document.getElementById('private-success-tick');
+        checkmark.style.display = 'none';
+    }
+
+    showOptionalDownload() {
+        this.showNextSteps();
+        this.setNextStepsTitle('Or if you have trouble claiming, you can do it manually:');
+        const bigDownloadButton = document.getElementById('private-download-button');
+        bigDownloadButton.style.display = 'none';
+
+        document.getElementById('save-note-step').style.display = 'none';
+        document.getElementById('download-note-step').style.display = 'block';
+
+        this.showPrivateSucessTick();
+    }
+
+    showDownload() {
+        this.showNextSteps();
+        this.setNextStepsTitle('Next Steps');
+        const bigDownloadButton = document.getElementById('private-download-button');
+        bigDownloadButton.style.display = 'flex';
+
+        document.getElementById('save-note-step').style.display = 'block';
+        document.getElementById('download-note-step').style.display = 'none';
+
+        this.hidePrivateSucessTick();
+    }
+
+    showNextSteps() {
         const nextSteps = document.getElementById('next-steps');
         nextSteps.style.display = 'block';
+
         const nextStepsList = document.getElementById('next-steps-list');
         nextStepsList.display = 'block';
+    }
+
+    setNextStepsTitle(title) {
+        const nextStepsTitle = document.getElementById('next-steps-title');
+        nextStepsTitle.textContent = title;
+    }
+
+    showWarningText() {
         const warningText = document.getElementById('warning-text');
         warningText.style.display = 'block';
     }
 
-    showNoteSentHints() {
-        const nextSteps = document.getElementById('next-steps');
-        nextSteps.style.display = 'block';
-
-        const step = document.getElementById('single-next-step');
-        step.textContent = 'Note has been sent to your client, sync and consume'; //TODO: write properly
-        // 1. sync 2. consume. if note does not appear, download an import manually
-    }
-
-    showNoteImportedHints() {
-        const nextSteps = document.getElementById('next-steps');
-        nextSteps.style.display = 'block';
-
-        const step = document.getElementById('single-next-step');
-        step.textContent = 'Note has been imported to your wallet, it\'s ready to claim'; //TODO: write properly
-    }
-
-    hideNoteHints() {
+    hideNextSteps() {
         const nextSteps = document.getElementById('next-steps');
         nextSteps.style.display = 'none';
         const warningText = document.getElementById('warning-text');
         warningText.style.display = 'none';
-
     }
 
     setTokenOptions(tokenAmountOptions, decimals) {

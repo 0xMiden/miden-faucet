@@ -87,39 +87,42 @@ export class MidenFaucetApp {
 
             const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
 
-            this.ui.setMintingTitle('Tokens Minted!'); // TODO: update subtitle mostrando que se esta enviando a la wallet
-            this.ui.setMintingHint('Importing note to your wallet...');
-
             if (isPrivateNote) {
-                await this.connectWallet();
-                // if the recipient's wallet is connected, import note directly
-                let noteImported = false;
-                if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
-                    noteImported = await this.importNoteToWallet(getTokensResponse.note_id); // TODO:Add a timeout in case user doesn see popup
-                    if (noteImported) {
-                        // this.ui.showNoteImportedHints();
-                    }
-                }
-
-                if (!noteImported) {
-                    this.ui.setMintingHint('Sending note to your client...');
-                    // if the note did not get imported to the wallet, send it through the note transport layer
-                    const noteSent = await this.sendNoteToClient(getTokensResponse.note_id);
-                    if (noteSent) {
-                        // this.ui.showNoteSentHints();
-                    }
-                }
-
                 this.ui.showCompletedPrivateModal(
                     recipient,
                     amountAsTokens,
                     getTokensResponse.note_id,
                     getTokensResponse.tx_id,
-                    (noteId) => {
-                        this.downloadNote(noteId);
-                        this.ui.showDownloadedNoteHints();
-                    },
+                    (noteId) => this.downloadNote(noteId),
                 );
+                this.ui.setPrivateMintedSubtitle('Importing note to your wallet...');
+
+                await this.connectWallet();
+
+                // if the recipient's wallet is connected, import note directly
+                let noteImported = false;
+                if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
+                    this.ui.setPrivateMintedSubtitle('Please check your <strong>Miden Wallet</strong> to accept the import...');
+                    noteImported = await this.importNoteToWallet(getTokensResponse.note_id);
+                    if (noteImported) {
+                        this.ui.setPrivateMintedSubtitle('Go to your <strong>Miden Wallet</strong> to claim.');
+                        this.ui.showCloseButton();
+                    }
+                }
+
+                if (!noteImported) {
+                    // if the note did not get imported to the wallet, send it through the note transport layer
+                    this.ui.setPrivateMintedSubtitle('Sending note to your wallet...');
+                    const noteSent = await this.sendNoteToClient(getTokensResponse.note_id);
+                    if (noteSent) {
+                        this.ui.setPrivateMintedSubtitle('Go to your <strong>Miden Wallet</strong> to claim.');
+                        this.ui.showOptionalDownload();
+                    } else {
+                        // if note transport failed, show the download button
+                        this.ui.setPrivateMintedSubtitle('Follow the instructions to claim.');
+                        this.ui.showDownload();
+                    }
+                }
             } else {
                 this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id);
             }
@@ -200,11 +203,19 @@ export class MidenFaucetApp {
     async importNoteToWallet(noteId) {
         try {
             const data = await get_note(this.apiUrl, noteId);
-            await this.walletAdapter.importPrivateNote(data);
+
+            // Prevent hanging if the user doesn't see or respond to the wallet popup
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Import timeout')), 60000);
+            });
+
+            await Promise.race([
+                this.walletAdapter.importPrivateNote(data),
+                timeoutPromise
+            ]);
             return true;
-        } catch {
-            console.error("Failed to import private note to wallet");
-            this.ui.showRequestFailedError("Wallet import failed", "Failed to import private note to wallet.");
+        } catch (error) {
+            console.error("Failed to import private note to wallet:", error);
             return false;
         }
     }
@@ -214,8 +225,6 @@ export class MidenFaucetApp {
             await send_note(this.apiUrl, noteId);
             return true;
         } catch (error) {
-            // fails if the faucet server has not activated the note transport layer
-            // TODO: should be shown in UI? maybe stack up errors? since this implies note could not be imported to wallet either
             console.error("Failed to send note through note transport layer", error);
             return false;
         }
