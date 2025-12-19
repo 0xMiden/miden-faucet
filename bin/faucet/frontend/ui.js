@@ -245,7 +245,7 @@ export class UIController {
 
     showOptionalDownload() {
         this.showNextSteps();
-        this.setNextStepsTitle('Or if you have trouble claiming, you can do it manually:');
+        this.setNextStepsTitle('If you don\'t see the note in your wallet, you can import it manually:');
         const bigDownloadButton = document.getElementById('private-download-button');
         bigDownloadButton.style.display = 'none';
 

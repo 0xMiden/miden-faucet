@@ -45,9 +45,7 @@ pub async fn send_note(
     let header = *note.header();
     let details: NoteDetails = note.into();
 
-    let res = note_transport_client.send_note(header, details.to_bytes()).await; // TODO: check that errors are being logged to jaegger
-    dbg!(&res);
-    res?;
+    note_transport_client.send_note(header, details.to_bytes()).await?;
     Ok(())
 }
 
