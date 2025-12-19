@@ -117,6 +117,7 @@ export class MidenFaucetApp {
                     if (noteSent) {
                         this.ui.setPrivateMintedSubtitle('Go to your <strong>Miden Wallet</strong> to claim.');
                         this.ui.showOptionalDownload();
+                        this.ui.showCloseButton();
                     } else {
                         // if note transport failed, show the download button
                         this.ui.setPrivateMintedSubtitle('Follow the instructions to claim.');

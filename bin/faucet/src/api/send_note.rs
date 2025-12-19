@@ -23,7 +23,7 @@ use crate::api::get_note::RawNoteRequest;
 pub async fn send_note(
     State(server): State<ApiServer>,
     Query(request): Query<RawNoteRequest>,
-) -> Result<impl IntoResponse, SendNoteError> {
+) -> Result<(), SendNoteError> {
     let note_transport_client = server
         .note_transport_client
         .ok_or(SendNoteError::NoteTransportError(NoteTransportError::Disabled))?;
@@ -45,7 +45,9 @@ pub async fn send_note(
     let header = *note.header();
     let details: NoteDetails = note.into();
 
-    note_transport_client.send_note(header, details.to_bytes()).await?; // TODO: check that errors are being logged to jaegger
+    let res = note_transport_client.send_note(header, details.to_bytes()).await; // TODO: check that errors are being logged to jaegger
+    dbg!(&res);
+    res?;
     Ok(())
 }
 

@@ -86,7 +86,7 @@ export class UIController {
         this.setupDownloadButton(noteId, onDownloadNote);
         const privateExplorerButton = document.getElementById('private-explorer-button');
         this.setupExplorerButton(privateExplorerButton, txId);
-        this.showPrivateSucessTick();
+        this.showPrivateSuccessTick();
     }
 
     setupExplorerButton(explorerButton, txId) {
@@ -229,19 +229,16 @@ export class UIController {
         instructionsDownloadButton.onclick = async () => {
             this.hideErrors();
             instructionsDownloadButton.classList.add('pressed');
-            this.showCloseButton();
-            this.showWarningText();
-
             await onDownloadNote(noteId);
         };
     }
 
-    showPrivateSucessTick() {
+    showPrivateSuccessTick() {
         const checkmark = document.getElementById('private-success-tick');
         checkmark.style.display = 'flex';
     }
 
-    hidePrivateSucessTick() {
+    hidePrivateSuccessTick() {
         const checkmark = document.getElementById('private-success-tick');
         checkmark.style.display = 'none';
     }
@@ -255,7 +252,7 @@ export class UIController {
         document.getElementById('save-note-step').style.display = 'none';
         document.getElementById('download-note-step').style.display = 'block';
 
-        this.showPrivateSucessTick();
+        this.showPrivateSuccessTick();
     }
 
     showDownload() {
@@ -267,7 +264,7 @@ export class UIController {
         document.getElementById('save-note-step').style.display = 'block';
         document.getElementById('download-note-step').style.display = 'none';
 
-        this.hidePrivateSucessTick();
+        this.hidePrivateSuccessTick();
     }
 
     showNextSteps() {
