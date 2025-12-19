@@ -28,7 +28,6 @@ pub async fn serve_frontend(url: Url, api_public_url: Url, node_url: String) -> 
         .route("/index.css", get(get_index_css))
         .route("/wallet-icon.png", get(get_wallet_icon))
         .route("/header.png", get(get_header))
-        .route("/background.png", get(get_background))
         .route("/favicon.ico", get(get_favicon))
         .route("/config.json", get(config_json))
         .fallback(get(get_not_found_html));
@@ -73,14 +72,6 @@ pub async fn get_header() -> Response {
     (
         [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/png"))],
         include_bytes!(concat!(env!("OUT_DIR"), "/frontend/header.png"),),
-    )
-        .into_response()
-}
-
-pub async fn get_background() -> Response {
-    (
-        [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/png"))],
-        include_bytes!(concat!(env!("OUT_DIR"), "/frontend/background.png"),),
     )
         .into_response()
 }
