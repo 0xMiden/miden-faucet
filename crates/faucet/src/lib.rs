@@ -20,7 +20,6 @@ use miden_client::transaction::{
     TransactionRequestBuilder, TransactionRequestError, TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
-use miden_client::vm::Package;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
 use rand::rngs::StdRng;
@@ -183,9 +182,7 @@ impl Faucet {
         let issuance =
             Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
 
-        let package = Package::read_from_bytes(TX_PACKAGE)?.unwrap_program();
-        let script =
-            TransactionScript::from_parts(package.mast_forest().clone(), package.entrypoint());
+        let script = TransactionScript::read_from_bytes(TX_PACKAGE)?;
 
         let note_screener =
             NoteScreener::new(Arc::new(SqliteStore::new(config.store_path.clone()).await?));
