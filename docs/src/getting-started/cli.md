@@ -2,6 +2,11 @@
 
 This guide shows the available commands and their configuration options to run with the Miden Faucet CLI.
 
+The faucet comes with two CLI tools:
+
+- **miden-faucet-operator**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
+
 ## Available Commands
 
 | Command | Description |
@@ -23,7 +28,7 @@ The Miden Faucet can be configured using:
 ### Basic Configuration
 
 ```bash
-miden-faucet init \
+miden-faucet-operator init \
   --token-symbol <SYMBOL> \
   --decimals <U8> \
   --max-supply <U64> \
@@ -32,7 +37,7 @@ miden-faucet init \
 ```
 
 ```bash
-miden-faucet start \
+miden-faucet-operator start \
   --api-bind-url <URL> \
   --frontend-url <URL> \
   --node-url <URL> \
@@ -177,7 +182,7 @@ export MIDEN_FAUCET_API_KEYS=key1,key2,key3
 ### Generate API Keys
 
 ```bash
-miden-faucet create-api-key
+miden-faucet-operator create-api-key
 ```
 
 This generates an API key that can be used for authentication. It is printed to stdout.
@@ -210,17 +215,31 @@ Enable OpenTelemetry for production monitoring:
 ## Configuration Example
 
 ```bash
-miden-faucet init \
+miden-faucet-operator init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
   --node-url http://localhost:57291
 
-miden-faucet start \
+miden-faucet-operator start \
   --frontend-url http://localhost:8080 \
   --api-bind-url http://localhost:8000 \
   --node-url http://localhost:57291 \
   --network localhost
 ```
 
-For detailed options, run `miden-faucet [COMMAND] --help`. 
+For detailed options, run `miden-faucet-operator [COMMAND] --help`. The legacy alias `miden-faucet` is still available for backwards compatibility.
+
+## Requesting tokens from a live faucet
+
+You can use the `miden-faucet-client` binary to request tokens from any running faucet instance, whether it's your local faucet or the remote testnet faucet:
+```bash
+miden-faucet-client mint --url <FAUCET_API_URL> --target-account <ACCOUNT_ID> --amount <BASE_UNITS>
+```
+
+Although the command is named `mint`, in technical terms it makes a request to the faucet to request a public P2ID note.
+
+To see available options:
+```bash
+miden-faucet-client mint --help
+```

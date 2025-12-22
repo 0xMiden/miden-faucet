@@ -19,19 +19,19 @@ inputs:
     description: Name of binary crate being packaged.
     type: choice
     options:
-      - miden-faucet
+      - miden-faucet-operator
   crate_dir:
     required: true
     description: Name of crate being packaged.
     type: choice
     options:
-      - miden-faucet
+      - faucet-operator
   service:
     required: true
     description: The service to build the packages for.
     type: choice
     options:
-      - miden-faucet
+      - miden-faucet-operator
   package:
     required: true
     description: Name of packaging directory.
