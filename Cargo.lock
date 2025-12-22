@@ -2245,6 +2245,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "miden-faucet-mint-script"
+version = "0.13.0"
+dependencies = [
+ "miden",
+]
+
+[[package]]
 name = "miden-formatting"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2674,13 +2681,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
 dependencies = [
  "adler2",
-]
-
-[[package]]
-name = "mint-script"
-version = "0.13.0"
-dependencies = [
- "miden",
 ]
 
 [[package]]

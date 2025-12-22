@@ -1,7 +1,13 @@
 [package]
-name = "mint-script"
+name = "miden-faucet-mint-script"
 version.workspace = true
 edition.workspace = true
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
 
 [lib]
 # Build this crate as a self-contained, C-style dynamic library

@@ -20,6 +20,7 @@ use miden_client::transaction::{
     TransactionRequestBuilder, TransactionRequestError, TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
+use miden_client::vm::Package;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
 use rand::rngs::StdRng;
@@ -40,6 +41,7 @@ const COMPONENT: &str = "miden-faucet-client";
 
 const KEYSTORE_PATH: &str = "keystore";
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
+const TX_PACKAGE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/mint.txs"));
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -181,7 +183,9 @@ impl Faucet {
         let issuance =
             Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
 
-        let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
+        let package = Package::read_from_bytes(TX_PACKAGE)?.unwrap_program();
+        let script =
+            TransactionScript::from_parts(package.mast_forest().clone(), package.entrypoint());
 
         let note_screener =
             NoteScreener::new(Arc::new(SqliteStore::new(config.store_path.clone()).await?));
@@ -627,7 +631,7 @@ mod tests {
                     tx_prover: Arc::new(LocalTransactionProver::default()),
                     issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
                     max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
-                    script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
+                    script: TransactionScript::read_from_bytes(TX_PACKAGE).unwrap(),
                 };
                 faucet.run(rx_mint_requests, batch_size).await.unwrap();
             });
