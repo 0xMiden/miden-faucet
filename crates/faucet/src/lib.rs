@@ -16,13 +16,8 @@ use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequest,
-    TransactionRequestBuilder,
-    TransactionRequestError,
-    TransactionScript,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
+    TransactionRequestBuilder, TransactionRequestError, TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -43,7 +38,6 @@ use crate::types::AssetAmount;
 
 const COMPONENT: &str = "miden-faucet-client";
 
-const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 const KEYSTORE_PATH: &str = "keystore";
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 
@@ -390,16 +384,12 @@ impl Faucet {
     ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
-        let n = notes.len() as u64;
-        let mut note_data = vec![Felt::new(n)];
+        let mut note_data = vec![];
         for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
-            let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
-
-            note_data.extend(note.recipient().digest().iter());
-            note_data.push(Felt::from(note.metadata().note_type()));
-            note_data.push(Felt::from(note.metadata().tag()));
-            note_data.push(Felt::new(amount));
+            let asset = note.assets().iter().next().unwrap();
+            let word: Word = asset.into();
+            note_data.extend(word.as_slice());
         }
         let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
