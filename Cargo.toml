@@ -1,5 +1,5 @@
 [workspace]
-members = ["bin/faucet", "crates/faucet", "crates/pow", "crates/mint-script"]
+members = ["bin/faucet", "crates/faucet", "crates/pow", "crates/mint-tx"]
 
 resolver = "2"
 
@@ -21,7 +21,7 @@ opt-level = 2
 [workspace.dependencies]
 miden-faucet-lib       = { path = "crates/faucet", version = "0.13" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.13" }
-miden-faucet-mint-script           = { path = "crates/mint-script", version = "0.13" }
+miden-faucet-mint-tx           = { path = "crates/mint-script", version = "0.13" }
 
 # Miden dependencies.
 miden-client              = { version = "0.12" }
