@@ -21,7 +21,8 @@ fix: ## Runs Fix with configs
 
 .PHONY: build
 build: ## By default we should build in release mode
-	cargo build --release
+	cd crates/mint-tx && cargo miden build --release && cd -
+	cargo build --workspace --exclude miden-faucet-mint-tx --release
 
 .PHONY: format
 format: ## Runs Format using nightly toolchain

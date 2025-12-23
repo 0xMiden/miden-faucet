@@ -16,15 +16,11 @@ use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequest,
-    TransactionRequestBuilder,
-    TransactionRequestError,
-    TransactionScript,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
+    TransactionRequestBuilder, TransactionRequestError, TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
+use miden_client::vm::Package;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
 use rand::rngs::StdRng;
@@ -43,9 +39,14 @@ use crate::types::AssetAmount;
 
 const COMPONENT: &str = "miden-faucet-client";
 
-const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 const KEYSTORE_PATH: &str = "keystore";
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
+
+// TODO: improve this
+const TX_PACKAGE: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../target/miden/release/miden_faucet_mint_tx.masp"
+));
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -187,7 +188,11 @@ impl Faucet {
         let issuance =
             Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
 
-        let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
+        let package = Package::read_from_bytes(TX_PACKAGE)?;
+        let script = TransactionScript::from_parts(
+            package.unwrap_program().mast_forest().clone(),
+            package.unwrap_program().entrypoint(),
+        );
 
         let note_screener =
             NoteScreener::new(Arc::new(SqliteStore::new(config.store_path.clone()).await?));
@@ -390,16 +395,12 @@ impl Faucet {
     ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
-        let n = notes.len() as u64;
-        let mut note_data = vec![Felt::new(n)];
+        let mut note_data = vec![];
         for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
-            let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
-
-            note_data.extend(note.recipient().digest().iter());
-            note_data.push(Felt::from(note.metadata().note_type()));
-            note_data.push(Felt::from(note.metadata().tag()));
-            note_data.push(Felt::new(amount));
+            let asset = note.assets().iter().next().unwrap();
+            let word: Word = asset.into();
+            note_data.extend(word.as_slice());
         }
         let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
@@ -637,7 +638,7 @@ mod tests {
                     tx_prover: Arc::new(LocalTransactionProver::default()),
                     issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
                     max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
-                    script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
+                    script: TransactionScript::read_from_bytes(TX_PACKAGE).unwrap(),
                 };
                 faucet.run(rx_mint_requests, batch_size).await.unwrap();
             });
