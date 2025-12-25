@@ -45,15 +45,20 @@ export class MidenFaucetApp {
 
 
     async handleWalletConnect() {
+        await this.connectWallet();
+
+        if (this.walletAdapter.address) {
+            this.ui.setRecipientAddress(this.walletAdapter.address);
+        } else {
+            this.ui.showError("Failed to connect wallet.");
+        }
+    }
+
+    async connectWallet() {
         try {
             await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
-
-            if (this.walletAdapter.address) {
-                this.ui.setRecipientAddress(this.walletAdapter.address);
-            }
         } catch (error) {
             console.error("WalletConnectionError:", error);
-            this.ui.showError("Failed to connect wallet.");
         }
     }
 
@@ -93,7 +98,7 @@ export class MidenFaucetApp {
                 isPrivateNote,
                 getTokensResponse.tx_id,
                 getTokensResponse.note_id,
-                (noteId) => this.downloadNote(noteId),
+                (noteId) => this.downloadNote(noteId, recipient),
                 () => {
                     this.ui.hideModals();
                     this.ui.resetForm();
@@ -170,7 +175,7 @@ export class MidenFaucetApp {
         return estimatedTime;
     }
 
-    async downloadNote(noteId) {
+    async downloadNote(noteId, recipient) {
         this.ui.hidePrivateModalError();
         try {
             const data = await get_note(this.apiUrl, noteId);
@@ -182,10 +187,15 @@ export class MidenFaucetApp {
                 byteArray[i] = binaryString.charCodeAt(i);
             }
 
-            const blob = new Blob([byteArray], { type: 'application/octet-stream' });
-            Utils.downloadBlob(blob, 'note.mno');
-
-            this.ui.showNoteDownloadedMessage();
+            await this.connectWallet();
+            if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
+                await this.walletAdapter.importPrivateNote(byteArray);
+                this.ui.showNoteImportedMessage();
+            } else {
+                const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+                Utils.downloadBlob(blob, 'note.mno');
+                this.ui.showNoteDownloadedMessage();
+            }
         } catch (error) {
             console.error('Error downloading note:', error);
             this.ui.showPrivateModalError('Failed to download note: ' + error.message);
