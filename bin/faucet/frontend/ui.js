@@ -169,6 +169,13 @@ export class UIController {
 
     showNoteDownloadedMessage() {
         const continueText = document.getElementById('private-continue-text');
+        continueText.textContent = 'YOUR NOTE HAS BEEN DOWNLOADED. CLICK X TO CONTINUE';
+        continueText.style.visibility = 'visible';
+    }
+
+    showNoteImportedMessage() {
+        const continueText = document.getElementById('private-continue-text');
+        continueText.textContent = 'YOUR NOTE HAS BEEN IMPORTED TO YOUR WALLET. CLICK X TO CONTINUE';
         continueText.style.visibility = 'visible';
     }
 
