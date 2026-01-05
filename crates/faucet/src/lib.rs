@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,11 +16,15 @@ use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
-    TransactionRequestBuilder, TransactionRequestError, TransactionScript,
+    LocalTransactionProver,
+    TransactionId,
+    TransactionProver,
+    TransactionRequest,
+    TransactionRequestBuilder,
+    TransactionRequestError,
+    TransactionScript,
 };
-use miden_client::utils::{Deserializable, RwLock};
-use miden_client::vm::Package;
+use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
 use rand::rngs::StdRng;
@@ -30,10 +34,12 @@ use tracing::{Instrument, error, info, info_span, instrument, warn};
 use url::Url;
 
 mod note_screener;
+mod package;
 pub mod requests;
 pub mod types;
 
 use crate::note_screener::NoteScreener;
+use crate::package::build_project_in_dir;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
@@ -41,13 +47,7 @@ const COMPONENT: &str = "miden-faucet-client";
 
 const KEYSTORE_PATH: &str = "keystore";
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
-
-// TODO: improve this
-// use `MIDEN_PACKAGE_EXTENSION` from client
-const TX_PACKAGE: &[u8] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../target/miden/release/miden_faucet_mint_tx.masp"
-));
+const MINT_TX_SCRIPT_SETTING: &str = "mint_tx_script";
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -141,6 +141,14 @@ impl Faucet {
         }
         client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
 
+        // Compile the mint tx script
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let package = build_project_in_dir(&workspace_root.join("../contracts/mint-tx"), true)?;
+        let program = package.unwrap_program();
+        let script =
+            TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());
+        client.set_setting(MINT_TX_SCRIPT_SETTING.to_string(), script).await?;
+
         if deploy {
             let mut faucet = Self::load(config).await?;
 
@@ -189,11 +197,10 @@ impl Faucet {
         let issuance =
             Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
 
-        let package = Package::read_from_bytes(TX_PACKAGE)?;
-        let script = TransactionScript::from_parts(
-            package.unwrap_program().mast_forest().clone(),
-            package.unwrap_program().entrypoint(),
-        );
+        let script = client
+            .get_setting(MINT_TX_SCRIPT_SETTING.to_string())
+            .await?
+            .context("client db should contain the mint tx script")?;
 
         let note_screener =
             NoteScreener::new(Arc::new(SqliteStore::new(config.store_path.clone()).await?));

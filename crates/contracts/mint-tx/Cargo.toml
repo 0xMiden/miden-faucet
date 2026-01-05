@@ -1,0 +1,16 @@
+[package]
+name = "miden-faucet-mint-tx"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+miden = { workspace = true }
+
+[package.metadata.component]
+package = "miden:mint-tx"
+
+[package.metadata.miden]
+project-kind = "transaction-script"

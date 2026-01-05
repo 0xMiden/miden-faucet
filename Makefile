@@ -21,10 +21,7 @@ fix: ## Runs Fix with configs
 
 .PHONY: build
 build: ## By default we should build in release mode
-## TODO: this requires cargo-miden v0.6 installed locally
-# do it from a build.rs with a build dependency
-	cd crates/mint-tx && cargo miden build --release && cd -
-	cargo build --workspace --exclude miden-faucet-mint-tx --release
+	cargo build --workspace --release 
 
 .PHONY: format
 format: ## Runs Format using nightly toolchain
@@ -70,7 +67,7 @@ book: ## Builds the book & serves documentation site
 # --- testing -------------------------------------------------------------------------------------
 
 .PHONY: test
-test:  ## Runs all tests
+test: ## Runs all tests
 	cargo nextest run --release --all-features --workspace
 
 # --- checking ------------------------------------------------------------------------------------
