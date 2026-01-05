@@ -21,6 +21,8 @@ fix: ## Runs Fix with configs
 
 .PHONY: build
 build: ## By default we should build in release mode
+## TODO: this requires cargo-miden v0.6 installed locally
+# do it from a build.rs with a build dependency
 	cd crates/mint-tx && cargo miden build --release && cd -
 	cargo build --workspace --exclude miden-faucet-mint-tx --release
 

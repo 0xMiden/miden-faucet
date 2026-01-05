@@ -43,6 +43,7 @@ const KEYSTORE_PATH: &str = "keystore";
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 
 // TODO: improve this
+// use `MIDEN_PACKAGE_EXTENSION` from client
 const TX_PACKAGE: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../target/miden/release/miden_faucet_mint_tx.masp"
