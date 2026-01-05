@@ -21,7 +21,7 @@ fix: ## Runs Fix with configs
 
 .PHONY: build
 build: ## By default we should build in release mode
-	cargo build --workspace --release 
+	cargo build --release 
 
 .PHONY: format
 format: ## Runs Format using nightly toolchain

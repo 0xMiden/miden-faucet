@@ -1,6 +1,6 @@
 [workspace]
 members = ["bin/faucet", "crates/faucet", "crates/pow", "crates/contracts/mint-tx"]
-exclude = ["crates/contracts/mint-tx"]
+default-members = ["bin/faucet", "crates/faucet", "crates/pow"]
 
 resolver = "2"
 

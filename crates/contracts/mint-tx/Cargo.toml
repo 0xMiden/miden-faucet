@@ -1,7 +1,15 @@
 [package]
 name = "miden-faucet-mint-tx"
-version.workspace = true
-edition.workspace = true
+authors.workspace      = true
+description            = "Miden faucet's mint transaction script"
+edition.workspace      = true
+homepage.workspace     = true
+keywords               = ["mint", "miden", "faucet"]
+license.workspace      = true
+readme                 = "README.md"
+repository.workspace   = true
+rust-version.workspace = true
+version.workspace      = true
 
 [lib]
 crate-type = ["cdylib"]
