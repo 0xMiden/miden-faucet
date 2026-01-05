@@ -30,9 +30,13 @@ pub fn build_project_in_dir(dir: &Path, release: bool) -> anyhow::Result<Package
     let artifact_path = match output {
         cargo_miden::CommandOutput::BuildCommandOutput { output } => match output {
             cargo_miden::BuildOutput::Masm { artifact_path } => artifact_path,
-            other => bail!("Expected Masm output, got {:?}", other),
+            other @ cargo_miden::BuildOutput::Wasm { .. } => {
+                bail!("Expected Masm output, got {other:?}")
+            },
         },
-        other => bail!("Expected BuildCommandOutput, got {:?}", other),
+        other @ cargo_miden::CommandOutput::NewCommandOutput { .. } => {
+            bail!("Expected BuildCommandOutput, got {other:?}")
+        },
     };
 
     let package_bytes = std::fs::read(&artifact_path)

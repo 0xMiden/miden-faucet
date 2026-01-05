@@ -635,6 +635,13 @@ mod tests {
                 .unwrap();
                 client.ensure_genesis_in_place().await.unwrap();
                 client.add_account(&account, false).await.unwrap();
+                let package =
+                    build_project_in_dir(Path::new("../contracts/mint-tx"), true).unwrap();
+                let program = package.unwrap_program();
+                let script = TransactionScript::from_parts(
+                    program.mast_forest().clone(),
+                    program.entrypoint(),
+                );
                 let faucet = Faucet {
                     id: FaucetId::new(account.id(), NetworkId::Testnet),
                     client,
@@ -646,7 +653,7 @@ mod tests {
                     tx_prover: Arc::new(LocalTransactionProver::default()),
                     issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
                     max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
-                    script: TransactionScript::read_from_bytes(TX_PACKAGE).unwrap(),
+                    script,
                 };
                 faucet.run(rx_mint_requests, batch_size).await.unwrap();
             });
