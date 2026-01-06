@@ -406,9 +406,12 @@ impl Faucet {
         let mut note_data = vec![];
         for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
-            let asset = note.assets().iter().next().unwrap();
-            let word: Word = asset.into();
-            note_data.extend(word.as_slice());
+            let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
+
+            note_data.extend(note.recipient().digest().iter());
+            note_data.push(Felt::from(note.metadata().note_type()));
+            note_data.push(Felt::from(note.metadata().tag()));
+            note_data.push(Felt::new(amount));
         }
         let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
