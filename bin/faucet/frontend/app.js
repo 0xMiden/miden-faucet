@@ -5,6 +5,9 @@ import { Utils } from './utils.js';
 import { UIController } from './ui.js';
 import { getConfig, getMetadata, getPowChallenge, getTokens, get_note } from "./api.js";
 
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+
 export class MidenFaucetApp {
     constructor() {
         this.ui = new UIController();
@@ -119,7 +122,7 @@ export class MidenFaucetApp {
         // Poll every 4 seconds
         this.metadataInterval = setInterval(() => {
             this.fetchMetadata();
-        }, 4000);
+        }, 4 * SECOND);
     }
 
     async fetchMetadata() {
@@ -203,11 +206,11 @@ export class MidenFaucetApp {
     pollNote(noteId) {
         return new Promise((resolve, reject) => {
             // Poll every 500ms for the first 10 seconds, then every 1s for the next 30 seconds, then every 5s.
-            let currentInterval = 500;
-            let pollInterval;
+            let currentInterval = 0.5 * SECOND;
+            let pollInterval = 0.5 * SECOND;
             let elapsedTime = 0;
             // Timeout after 5 minutes
-            const timeout = 300000;
+            const timeout = 5 * MINUTE;
             let timeoutId;
 
             const poll = async () => {
@@ -222,12 +225,12 @@ export class MidenFaucetApp {
 
                     elapsedTime += currentInterval;
 
-                    if (elapsedTime <= 10000) {
-                        currentInterval = 500;
-                    } else if (elapsedTime <= 40000) {
-                        currentInterval = 1000;
+                    if (elapsedTime <= 10 * SECOND) {
+                        currentInterval = 0.5 * SECOND;
+                    } else if (elapsedTime <= 40 * SECOND) {
+                        currentInterval = 1 * SECOND;
                     } else {
-                        currentInterval = 5000;
+                        currentInterval = 5 * SECOND;
                     }
 
                     // Update the interval

@@ -512,7 +512,6 @@ mod tests {
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
-    use tokio::time::sleep;
     use url::Url;
     use uuid::Uuid;
 
@@ -636,7 +635,11 @@ mod tests {
         let address_bech32 = address.encode(network_id);
 
         // Wait for the website to be fully loaded
-        sleep(Duration::from_secs(1)).await;
+        client
+            .wait()
+            .for_element(fantoccini::Locator::Css("#token-amount option"))
+            .await
+            .unwrap();
 
         // Fill in the account address
         client
