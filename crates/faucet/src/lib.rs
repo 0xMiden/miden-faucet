@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,7 +24,7 @@ use miden_client::transaction::{
     TransactionRequestError,
     TransactionScript,
 };
-use miden_client::utils::{Deserializable, RwLock};
+use miden_client::utils::RwLock;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
 use rand::rngs::StdRng;
@@ -34,18 +34,20 @@ use tracing::{Instrument, error, info, info_span, instrument, warn};
 use url::Url;
 
 mod note_screener;
+mod package;
 pub mod requests;
 pub mod types;
 
 use crate::note_screener::NoteScreener;
+use crate::package::build_project_in_dir;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
 const COMPONENT: &str = "miden-faucet-client";
 
-const TX_SCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/assets/tx_scripts/mint.txs"));
 const KEYSTORE_PATH: &str = "keystore";
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
+const MINT_TX_SCRIPT_SETTING: &str = "mint_tx_script";
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -139,6 +141,14 @@ impl Faucet {
         }
         client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
 
+        // Compile the mint tx script
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let package = build_project_in_dir(&workspace_root.join("../contracts/mint-tx"), true)?;
+        let program = package.unwrap_program();
+        let script =
+            TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());
+        client.set_setting(MINT_TX_SCRIPT_SETTING.to_string(), script).await?;
+
         if deploy {
             let mut faucet = Self::load(config).await?;
 
@@ -187,7 +197,10 @@ impl Faucet {
         let issuance =
             Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
 
-        let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
+        let script = client
+            .get_setting(MINT_TX_SCRIPT_SETTING.to_string())
+            .await?
+            .context("client db should contain the mint tx script")?;
 
         let note_screener =
             NoteScreener::new(Arc::new(SqliteStore::new(config.store_path.clone()).await?));
@@ -390,8 +403,7 @@ impl Faucet {
     ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
-        let n = notes.len() as u64;
-        let mut note_data = vec![Felt::new(n)];
+        let mut note_data = vec![];
         for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
             let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
@@ -626,6 +638,13 @@ mod tests {
                 .unwrap();
                 client.ensure_genesis_in_place().await.unwrap();
                 client.add_account(&account, false).await.unwrap();
+                let package =
+                    build_project_in_dir(Path::new("../contracts/mint-tx"), true).unwrap();
+                let program = package.unwrap_program();
+                let script = TransactionScript::from_parts(
+                    program.mast_forest().clone(),
+                    program.entrypoint(),
+                );
                 let faucet = Faucet {
                     id: FaucetId::new(account.id(), NetworkId::Testnet),
                     client,
@@ -637,7 +656,7 @@ mod tests {
                     tx_prover: Arc::new(LocalTransactionProver::default()),
                     issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
                     max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
-                    script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
+                    script,
                 };
                 faucet.run(rx_mint_requests, batch_size).await.unwrap();
             });

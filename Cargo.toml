@@ -1,5 +1,6 @@
 [workspace]
-members = ["bin/faucet", "crates/faucet"]
+members = ["bin/faucet", "crates/faucet", "crates/pow", "crates/contracts/mint-tx"]
+default-members = ["bin/faucet", "crates/faucet", "crates/pow"]
 
 resolver = "2"
 
@@ -25,6 +26,8 @@ miden-pow-rate-limiter = { path = "crates/pow", version = "0.13" }
 # Miden dependencies.
 miden-client              = { version = "0.12" }
 miden-client-sqlite-store = { version = "0.12" }
+miden = { version = "0.8" }
+cargo-miden = { version = "0.6" }
 
 # External dependencies
 anyhow                = { version = "1.0" }

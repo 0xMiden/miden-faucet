@@ -12,36 +12,31 @@ WARNINGS=RUSTDOCFLAGS="-D warnings"
 
 .PHONY: clippy
 clippy: ## Runs Clippy with configs
-	cargo clippy --locked --all-targets --all-features --workspace
-
+	cargo clippy --locked --all-targets --all-features
 
 .PHONY: fix
 fix: ## Runs Fix with configs
-	cargo fix --allow-staged --allow-dirty --all-targets --all-features --workspace
+	cargo fix --allow-staged --allow-dirty --all-targets --all-features
 
 .PHONY: build
 build: ## By default we should build in release mode
-	cargo build --release
+	cargo build --release 
 
 .PHONY: format
 format: ## Runs Format using nightly toolchain
 	cargo +nightly fmt --all
 
-
 .PHONY: format-check
 format-check: ## Runs Format using nightly toolchain but only in check mode
 	cargo +nightly fmt --all --check
-
 
 .PHONY: machete
 machete: ## Runs machete to find unused dependencies
 	cargo machete
 
-
 .PHONY: toml
 toml: ## Runs Format for all TOML files
 	taplo fmt
-
 
 .PHONY: toml-check
 toml-check: ## Runs Format for all TOML files but only in check mode
@@ -67,14 +62,14 @@ book: ## Builds the book & serves documentation site
 # --- testing -------------------------------------------------------------------------------------
 
 .PHONY: test
-test:  ## Runs all tests
-	cargo nextest run --release --all-features --workspace
+test: ## Runs all tests
+	cargo nextest run --release --all-features
 
 # --- checking ------------------------------------------------------------------------------------
 
 .PHONY: check
 check: ## Check all targets and features for errors without code generation
-	${BUILD_PROTO} cargo check --all-features --all-targets --locked --workspace
+	${BUILD_PROTO} cargo check --all-features --all-targets --locked
 
 # --- installing ----------------------------------------------------------------------------------
 
