@@ -2,12 +2,13 @@
 
 ## 0.13.0 (TBD)
 
-- Updated faucet optional deployment to use an empty transaction (#[182](https://github.com/0xMiden/miden-faucet/pull/182)).
-- Added a feature `tokio` for the `miden-pow-rate-limiter` crate ([#188](https://github.com/0xMiden/miden-faucet/pull/188).)
 - [BREAKING] Replaced the `api-bind-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
 - [BREAKING] Replaced the `frontend-url` param for `frontend-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
 - [BREAKING] Added `no-frontend` param to optionally disable the frontend server ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
 - Redesigned the frontend ([#201](https://github.com/0xMiden/miden-faucet/pull/201)).
+- Updated faucet optional deployment to use an empty transaction (#[182](https://github.com/0xMiden/miden-faucet/pull/182)).
+- Added a feature `tokio` for the `miden-pow-rate-limiter` crate ([#188](https://github.com/0xMiden/miden-faucet/pull/188).)
+- Added integration to import mint private notes directly to the wallet ([#189](https://github.com/0xMiden/miden-faucet/pull/189)).
 
 ## 0.12.4 (2025-12-04)
 

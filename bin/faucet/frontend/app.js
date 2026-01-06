@@ -46,12 +46,18 @@ export class MidenFaucetApp {
 
 
     async handleWalletConnect() {
+        await this.connectWallet();
+
+        if (this.walletAdapter.address) {
+            this.ui.setRecipientAddress(this.walletAdapter.address);
+        } else {
+            this.ui.showError("Failed to connect wallet.");
+        }
+    }
+
+    async connectWallet() {
         try {
             await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
-
-            if (this.walletAdapter.address) {
-                this.ui.setRecipientAddress(this.walletAdapter.address);
-            }
         } catch (error) {
             console.error("WalletConnectionError:", error);
             this.ui.showConnectionError("Connection failed", "Failed to connect wallet.");
@@ -85,7 +91,7 @@ export class MidenFaucetApp {
 
             this.ui.hideMintingModal();
             if (isPrivateNote) {
-                this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.note_id, getTokensResponse.tx_id, (noteId) => this.downloadNote(noteId));
+                this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.note_id, getTokensResponse.tx_id, (noteId) => this.downloadNote(noteId, recipient));
             } else {
                 this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id);
             }
@@ -163,7 +169,7 @@ export class MidenFaucetApp {
         return estimatedTime;
     }
 
-    async downloadNote(noteId) {
+    async downloadNote(noteId, recipient) {
         try {
             const data = await get_note(this.apiUrl, noteId);
 
@@ -174,8 +180,15 @@ export class MidenFaucetApp {
                 byteArray[i] = binaryString.charCodeAt(i);
             }
 
-            const blob = new Blob([byteArray], { type: 'application/octet-stream' });
-            Utils.downloadBlob(blob, 'note.mno');
+            await this.connectWallet();
+            if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
+                await this.walletAdapter.importPrivateNote(byteArray);
+                this.ui.showNoteImportedMessage();
+            } else {
+                const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+                Utils.downloadBlob(blob, 'note.mno');
+                this.ui.showNoteDownloadedMessage();
+            }
         } catch (error) {
             console.error('Error downloading note:', error);
             this.handleApiError(error, 'Download failed', error.message);
