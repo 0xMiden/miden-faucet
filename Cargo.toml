@@ -23,8 +23,8 @@ miden-faucet-lib       = { path = "crates/faucet", version = "0.13" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.13" }
 
 # Miden dependencies.
-miden-client              = { version = "0.12" }
-miden-client-sqlite-store = { version = "0.12" }
+miden-client              = { git = "https://github.com/0xMiden/miden-client", rev = "17fd76c64bfc3b313bb2b2126a53e4a7088f0df8" }
+miden-client-sqlite-store = { git = "https://github.com/0xMiden/miden-client", rev = "17fd76c64bfc3b313bb2b2126a53e4a7088f0df8" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
