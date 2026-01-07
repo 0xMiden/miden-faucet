@@ -16,8 +16,13 @@ use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
-    TransactionRequestBuilder, TransactionRequestError, TransactionScript,
+    LocalTransactionProver,
+    TransactionId,
+    TransactionProver,
+    TransactionRequest,
+    TransactionRequestBuilder,
+    TransactionRequestError,
+    TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
