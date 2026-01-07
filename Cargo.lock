@@ -1946,7 +1946,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-client?rev=17fd76c64bfc3b313bb2b2126a53e4a7088f0df8#17fd76c64bfc3b313bb2b2126a53e4a7088f0df8"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#d8dee63e64e7fc9223e7dbc51dbd4c2669e05b85"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1964,13 +1964,10 @@ dependencies = [
  "miden-tx",
  "miette",
  "prost",
- "prost-build",
  "prost-types",
- "protox",
  "rand",
  "thiserror 2.0.17",
  "tonic",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
  "tonic-prost-build",
@@ -1983,7 +1980,7 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-client?rev=17fd76c64bfc3b313bb2b2126a53e4a7088f0df8#17fd76c64bfc3b313bb2b2126a53e4a7088f0df8"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#d8dee63e64e7fc9223e7dbc51dbd4c2669e05b85"
 dependencies = [
  "anyhow",
  "async-trait",
