@@ -1,4 +1,5 @@
 use anyhow::Context;
+use miden_client::crypto::{Forest, MmrDelta};
 use miden_node_proto::generated::rpc::api_server;
 use miden_node_proto::generated::{self as proto};
 use miden_testing::MockChain;
@@ -8,36 +9,25 @@ use tonic::{Request, Response, Status};
 use tonic_web::GrpcWebLayer;
 use url::Url;
 
-#[derive(Clone)]
 pub struct StubRpcApi;
 
 #[tonic::async_trait]
 impl api_server::Api for StubRpcApi {
     async fn check_nullifiers(
         &self,
-        _request: Request<proto::rpc_store::NullifierList>,
-    ) -> Result<Response<proto::rpc_store::CheckNullifiersResponse>, Status> {
-        unimplemented!();
-    }
-
-    async fn check_nullifiers_by_prefix(
-        &self,
-        _request: Request<proto::rpc_store::CheckNullifiersByPrefixRequest>,
-    ) -> Result<Response<proto::rpc_store::CheckNullifiersByPrefixResponse>, Status> {
+        _request: Request<proto::rpc::NullifierList>,
+    ) -> Result<Response<proto::rpc::CheckNullifiersResponse>, Status> {
         unimplemented!();
     }
 
     async fn get_block_header_by_number(
         &self,
-        _request: Request<proto::shared::BlockHeaderByNumberRequest>,
-    ) -> Result<Response<proto::shared::BlockHeaderByNumberResponse>, Status> {
+        _request: Request<proto::rpc::BlockHeaderByNumberRequest>,
+    ) -> Result<Response<proto::rpc::BlockHeaderByNumberResponse>, Status> {
         let mock_chain = MockChain::new();
 
-        let block_header =
-            proto::blockchain::BlockHeader::from(mock_chain.latest_block_header()).into();
-
-        Ok(Response::new(proto::shared::BlockHeaderByNumberResponse {
-            block_header,
+        Ok(Response::new(proto::rpc::BlockHeaderByNumberResponse {
+            block_header: Some(mock_chain.latest_block_header().into()),
             mmr_path: None,
             chain_length: None,
         }))
@@ -45,12 +35,23 @@ impl api_server::Api for StubRpcApi {
 
     async fn sync_state(
         &self,
-        _request: Request<proto::rpc_store::SyncStateRequest>,
-    ) -> Result<Response<proto::rpc_store::SyncStateResponse>, Status> {
-        Ok(Response::new(proto::rpc_store::SyncStateResponse {
+        _request: Request<proto::rpc::SyncStateRequest>,
+    ) -> Result<Response<proto::rpc::SyncStateResponse>, Status> {
+        let mock_chain = MockChain::new();
+        let mmr_peaks = mock_chain
+            .blockchain()
+            .peaks_at(mock_chain.latest_block_header().block_num())
+            .unwrap();
+        let mmr_delta: MmrDelta = mock_chain
+            .blockchain()
+            .as_mmr()
+            .get_delta(Forest::empty(), mmr_peaks.forest())
+            .unwrap();
+
+        Ok(Response::new(proto::rpc::SyncStateResponse {
             chain_tip: 0,
-            block_header: None,
-            mmr_delta: None,
+            block_header: Some(mock_chain.latest_block_header().into()),
+            mmr_delta: Some(mmr_delta.into()),
             accounts: vec![],
             transactions: vec![],
             notes: vec![],
@@ -59,8 +60,8 @@ impl api_server::Api for StubRpcApi {
 
     async fn sync_notes(
         &self,
-        _request: Request<proto::rpc_store::SyncNotesRequest>,
-    ) -> Result<Response<proto::rpc_store::SyncNotesResponse>, Status> {
+        _request: Request<proto::rpc::SyncNotesRequest>,
+    ) -> Result<Response<proto::rpc::SyncNotesResponse>, Status> {
         unimplemented!();
     }
 
@@ -74,16 +75,14 @@ impl api_server::Api for StubRpcApi {
     async fn submit_proven_transaction(
         &self,
         _request: Request<proto::transaction::ProvenTransaction>,
-    ) -> Result<Response<proto::block_producer::SubmitProvenTransactionResponse>, Status> {
-        Ok(Response::new(proto::block_producer::SubmitProvenTransactionResponse {
-            block_height: 0,
-        }))
+    ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
+        Ok(Response::new(proto::blockchain::BlockNumber { block_num: 0 }))
     }
 
     async fn submit_proven_batch(
         &self,
         _request: Request<proto::transaction::ProvenTransactionBatch>,
-    ) -> Result<Response<proto::block_producer::SubmitProvenBatchResponse>, Status> {
+    ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
         unimplemented!()
     }
 
@@ -101,13 +100,6 @@ impl api_server::Api for StubRpcApi {
         unimplemented!()
     }
 
-    async fn get_account_proofs(
-        &self,
-        _request: Request<proto::rpc_store::AccountProofsRequest>,
-    ) -> Result<Response<proto::rpc_store::AccountProofs>, Status> {
-        unimplemented!()
-    }
-
     async fn status(
         &self,
         _request: Request<()>,
@@ -117,15 +109,53 @@ impl api_server::Api for StubRpcApi {
 
     async fn sync_account_vault(
         &self,
-        _request: Request<proto::rpc_store::SyncAccountVaultRequest>,
-    ) -> Result<Response<proto::rpc_store::SyncAccountVaultResponse>, Status> {
+        _request: Request<proto::rpc::SyncAccountVaultRequest>,
+    ) -> Result<Response<proto::rpc::SyncAccountVaultResponse>, Status> {
         unimplemented!()
     }
 
     async fn sync_storage_maps(
         &self,
-        _request: Request<proto::rpc_store::SyncStorageMapsRequest>,
-    ) -> Result<Response<proto::rpc_store::SyncStorageMapsResponse>, Status> {
+        _request: Request<proto::rpc::SyncStorageMapsRequest>,
+    ) -> Result<Response<proto::rpc::SyncStorageMapsResponse>, Status> {
+        unimplemented!()
+    }
+
+    async fn get_account_proof(
+        &self,
+        _request: Request<proto::rpc::AccountProofRequest>,
+    ) -> Result<Response<proto::rpc::AccountProofResponse>, Status> {
+        unimplemented!()
+    }
+
+    async fn get_note_script_by_root(
+        &self,
+        _request: Request<proto::note::NoteRoot>,
+    ) -> Result<Response<proto::rpc::MaybeNoteScript>, Status> {
+        unimplemented!()
+    }
+
+    async fn sync_nullifiers(
+        &self,
+        _request: Request<proto::rpc::SyncNullifiersRequest>,
+    ) -> Result<Response<proto::rpc::SyncNullifiersResponse>, Status> {
+        Ok(Response::new(proto::rpc::SyncNullifiersResponse {
+            nullifiers: vec![],
+            pagination_info: None,
+        }))
+    }
+
+    async fn sync_transactions(
+        &self,
+        _request: Request<proto::rpc::SyncTransactionsRequest>,
+    ) -> Result<Response<proto::rpc::SyncTransactionsResponse>, Status> {
+        unimplemented!()
+    }
+
+    async fn get_limits(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<proto::rpc::RpcLimits>, Status> {
         unimplemented!()
     }
 }

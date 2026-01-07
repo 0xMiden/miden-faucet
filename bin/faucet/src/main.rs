@@ -1,12 +1,12 @@
 mod api;
 mod api_key;
-mod error_report;
+mod frontend;
 mod logging;
 mod network;
 #[cfg(test)]
 mod testing;
 
-use std::num::NonZeroUsize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,22 +14,32 @@ use std::time::Duration;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
-use miden_client::account::{AccountBuilder, AccountFile, AccountStorageMode, AccountType};
+use miden_client::account::{
+    Account,
+    AccountBuilder,
+    AccountFile,
+    AccountStorageMode,
+    AccountType,
+};
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
-use miden_client::crypto::{RpoRandomCoin, SecretKey};
-use miden_client::store::sqlite_store::SqliteStore;
+use miden_client::crypto::RpoRandomCoin;
+use miden_client::crypto::rpo_falcon512::SecretKey;
+use miden_client::rpc::Endpoint;
 use miden_client::{Felt, Word};
-use miden_faucet_lib::Faucet;
+use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
+use miden_faucet_lib::{Faucet, FaucetConfig};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 use url::Url;
 
-use crate::api::Server;
+use crate::api::{ApiServer, Metadata};
 use crate::api_key::ApiKey;
+use crate::frontend::serve_frontend;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
 
@@ -39,10 +49,13 @@ use crate::network::FaucetNetwork;
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
 
-const ENV_ENDPOINT: &str = "MIDEN_FAUCET_ENDPOINT";
+const ENV_API_BIND_PORT: &str = "MIDEN_FAUCET_API_BIND_PORT";
+const ENV_API_PUBLIC_URL: &str = "MIDEN_FAUCET_API_PUBLIC_URL";
+const ENV_FRONTEND_BIND_PORT: &str = "MIDEN_FAUCET_FRONTEND_BIND_PORT";
+const ENV_NO_FRONTEND: &str = "MIDEN_FAUCET_NO_FRONTEND";
+const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";
 const ENV_TIMEOUT: &str = "MIDEN_FAUCET_TIMEOUT";
-const ENV_ACCOUNT_PATH: &str = "MIDEN_FAUCET_ACCOUNT_PATH";
 const ENV_MAX_CLAIMABLE_AMOUNT: &str = "MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT";
 const ENV_REMOTE_TX_PROVER_URL: &str = "MIDEN_FAUCET_REMOTE_TX_PROVER_URL";
 const ENV_POW_SECRET: &str = "MIDEN_FAUCET_POW_SECRET";
@@ -50,12 +63,17 @@ const ENV_POW_CHALLENGE_LIFETIME: &str = "MIDEN_FAUCET_POW_CHALLENGE_LIFETIME";
 const ENV_POW_CLEANUP_INTERVAL: &str = "MIDEN_FAUCET_POW_CLEANUP_INTERVAL";
 const ENV_POW_GROWTH_RATE: &str = "MIDEN_FAUCET_POW_GROWTH_RATE";
 const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
+const ENV_BASE_AMOUNT: &str = "MIDEN_FAUCET_BASE_AMOUNT";
 const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
-const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
+const ENV_IMPORT_ACCOUNT_PATH: &str = "MIDEN_FAUCET_IMPORT_ACCOUNT_PATH";
+const ENV_DEPLOY: &str = "MIDEN_FAUCET_DEPLOY";
+const ENV_TOKEN_SYMBOL: &str = "MIDEN_FAUCET_TOKEN_SYMBOL";
+const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
+const ENV_MAX_SUPPLY: &str = "MIDEN_FAUCET_MAX_SUPPLY";
 
 // COMMANDS
 // ================================================================================================
@@ -70,36 +88,69 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum Command {
+    /// Initialize the faucet with a new or existing account.
+    Init {
+        #[clap(flatten)]
+        config: ClientConfig,
+
+        /// Symbol of the new token.
+        #[arg(
+            short,
+            long,
+            value_name = "STRING",
+            required_unless_present = "import_account_path", 
+            env = ENV_TOKEN_SYMBOL
+        )]
+        token_symbol: Option<String>,
+
+        /// Decimals of the new token.
+        #[arg(short, long, value_name = "U8", required_unless_present = "import_account_path", env = ENV_DECIMALS)]
+        decimals: Option<u8>,
+
+        /// Max supply of the new token (in base units).
+        #[arg(short, long, value_name = "U64", required_unless_present = "import_account_path", env = ENV_MAX_SUPPLY)]
+        max_supply: Option<u64>,
+
+        /// Set an existing faucet account file to use, instead of creating a new account.
+        #[arg(long = "import", value_name = "FILE", conflicts_with_all = ["token_symbol", "decimals", "max_supply"], env = ENV_IMPORT_ACCOUNT_PATH)]
+        import_account_path: Option<PathBuf>,
+
+        /// Whether to deploy the faucet account to the node.
+        #[arg(long, value_name = "BOOL", default_value_t = false, env = ENV_DEPLOY)]
+        deploy: bool,
+    },
+
+    /// Generate an API key that can be used by the faucet.
+    ///
+    /// Prints out the generated API key to stdout. Keys can then be supplied to the faucet via the
+    /// `--api-keys` flag or `MIDEN_FAUCET_API_KEYS` env var of the `start` command.
+    CreateApiKey,
+
     /// Start the faucet server
     Start {
-        /// Endpoint of the faucet in the format `<ip>:<port>`.
-        #[arg(long = "endpoint", value_name = "URL", env = ENV_ENDPOINT)]
-        endpoint: Url,
+        #[clap(flatten)]
+        config: ClientConfig,
 
-        /// Node RPC gRPC endpoint in the format `http://<host>[:<port>]`.
-        #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
-        node_url: Url,
+        /// Port to bind the API server. The server will be started on `0.0.0.0:<api-bind-port>`.
+        #[arg(long = "api-bind-port", value_name = "PORT", env = ENV_API_BIND_PORT, default_value = "8000")]
+        api_bind_port: u16,
 
-        /// Timeout for RPC requests.
-        #[arg(long = "timeout", value_name = "DURATION", default_value = "5s", env = ENV_TIMEOUT, value_parser = humantime::parse_duration)]
-        timeout: Duration,
+        /// Public URL to access the API server.
+        #[arg(long = "api-public-url", value_name = "URL", env = ENV_API_PUBLIC_URL, default_value = "http://localhost:8000")]
+        api_public_url: Url,
 
-        /// Path to the faucet account file.
-        #[arg(long = "account", value_name = "FILE", env = ENV_ACCOUNT_PATH)]
-        faucet_account_path: PathBuf,
+        /// Port to bind the frontend server. The server will be started on
+        /// `0.0.0.0:<frontend-bind-port>`.
+        #[arg(long = "frontend-bind-port", value_name = "PORT", env = ENV_FRONTEND_BIND_PORT, default_value = "8080")]
+        frontend_bind_port: u16,
 
-        /// The maximum amount of assets base units that can be dispersed on each request.
+        /// Optionally disable the frontend server.
+        #[arg(long = "no-frontend", value_name = "BOOL", default_value_t = false, env = ENV_NO_FRONTEND)]
+        no_frontend: bool,
+
+        /// The maximum amount of assets' base units that can be dispersed on each request.
         #[arg(long = "max-claimable-amount", value_name = "U64", env = ENV_MAX_CLAIMABLE_AMOUNT, default_value = "1000000000")]
         max_claimable_amount: u64,
-
-        /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
-        #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
-        remote_tx_prover_url: Option<Url>,
-
-        /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
-        /// network. It is used to display the correct bech32 addresses in the UI.
-        #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
-        network: FaucetNetwork,
 
         /// The secret to be used by the server to sign the `PoW` challenges. This should NOT be
         /// shared.
@@ -112,10 +163,14 @@ pub enum Command {
         #[arg(long = "pow-challenge-lifetime", value_name = "DURATION", env = ENV_POW_CHALLENGE_LIFETIME, default_value = "30s", value_parser = humantime::parse_duration)]
         pow_challenge_lifetime: Duration,
 
-        /// A measure of how quickly the `PoW` difficult grows with the number of requests. When
-        /// set to 1, the difficulty will roughly double when the number of requests doubles.
-        #[arg(long = "pow-growth-rate", value_name = "NON_ZERO_USIZE", env = ENV_POW_GROWTH_RATE, default_value = "1")]
-        pow_growth_rate: NonZeroUsize,
+        /// Defines how quickly the `PoW` difficulty grows with the number of requests. The number
+        /// of active challenges gets multiplied by the growth rate to compute the load
+        /// difficulty.
+        ///
+        /// Meaning, the difficulty bits of the challenge will increase approximately by
+        /// `log2(growth_rate * num_active_challenges)`.
+        #[arg(long = "pow-growth-rate", value_name = "F64", env = ENV_POW_GROWTH_RATE, default_value = "0.1")]
+        pow_growth_rate: f64,
 
         /// The interval at which the `PoW` challenge cache is cleaned up.
         #[arg(long = "pow-cleanup-interval", value_name = "DURATION", env = ENV_POW_CLEANUP_INTERVAL, default_value = "2s", value_parser = humantime::parse_duration)]
@@ -125,8 +180,16 @@ pub enum Command {
         /// a challenge will have when there are no requests against the faucet. It must be between
         /// 0 and 32.
         #[arg(value_parser = clap::value_parser!(u8).range(0..=32))]
-        #[arg(long = "pow-baseline", value_name = "U8", env = ENV_POW_BASELINE, default_value = "12")]
+        #[arg(long = "pow-baseline", value_name = "U8", env = ENV_POW_BASELINE, default_value = "16")]
         pow_baseline: u8,
+
+        /// The baseline amount for token requests (in base units). Requests for greater amounts
+        /// would require higher level of `PoW`.
+        ///
+        /// The request complexity for challenges is computed as: `request_complexity = (amount /
+        /// base_amount) + 1`
+        #[arg(long = "base-amount", value_name = "U64", env = ENV_BASE_AMOUNT, default_value = "100000000")]
+        base_amount: u64,
 
         /// Comma-separated list of API keys.
         #[arg(long = "api-keys", value_name = "STRING", env = ENV_API_KEYS, num_args = 1.., value_delimiter = ',')]
@@ -139,10 +202,6 @@ pub enum Command {
         #[arg(long = "enable-otel", value_name = "BOOL", default_value_t = false, env = ENV_ENABLE_OTEL)]
         open_telemetry: bool,
 
-        /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
-        store_path: PathBuf,
-
         /// Explorer URL.
         #[arg(long = "explorer-url", value_name = "URL", env = ENV_EXPLORER_URL)]
         explorer_url: Option<Url>,
@@ -152,28 +211,32 @@ pub enum Command {
         #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
         batch_size: usize,
     },
+}
 
-    /// Create a new public faucet account and save to the specified file.
-    CreateFaucetAccount {
-        #[arg(short, long, value_name = "FILE")]
-        output_path: PathBuf,
-        #[arg(short, long, value_name = "STRING")]
-        token_symbol: String,
-        #[arg(short, long, value_name = "U8")]
-        decimals: u8,
-        #[arg(short, long, value_name = "U64")]
-        max_supply: u64,
-    },
+/// Configuration for the faucet client.
+#[derive(Parser, Debug, Clone)]
+pub struct ClientConfig {
+    /// Path to the `SQLite` store.
+    #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
+    store_path: PathBuf,
 
-    /// Generate API keys that can be used by the faucet.
-    ///
-    /// Prints out the specified number of API keys to stdout as a comma-separated list.
-    /// This list can be supplied to the faucet via the `--api-keys` flag or `MIDEN_FAUCET_API_KEYS`
-    /// env var of the start command.
-    CreateApiKeys {
-        #[arg()]
-        count: u8,
-    },
+    /// Timeout for attempting to connect to the node.
+    #[arg(long = "timeout", value_name = "DURATION", default_value = "5s", env = ENV_TIMEOUT, value_parser = humantime::parse_duration)]
+    timeout: Duration,
+
+    /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
+    /// network. It is used to display the correct bech32 addresses in the UI.
+    #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
+    network: FaucetNetwork,
+
+    /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
+    #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
+    remote_tx_prover_url: Option<Url>,
+
+    /// Node RPC gRPC endpoint in the format `http://<host>[:<port>]`. If not set, the url is derived
+    /// from the specified network.
+    #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
+    node_url: Option<Url>,
 }
 
 impl Command {
@@ -197,52 +260,105 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Configure tracing with optional OpenTelemetry exporting support.
-    logging::setup_tracing(cli.command.open_telemetry()).context("failed to initialize logging")?;
+    let _otel_guard = logging::setup_tracing(cli.command.open_telemetry())
+        .context("failed to initialize logging")?;
 
     Box::pin(run_faucet_command(cli)).await
 }
 
 #[allow(clippy::too_many_lines)]
 async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
+    // Note: open-telemetry is handled in main.
     match cli.command {
-        // Note: open-telemetry is handled in main.
+        Command::Init {
+            config:
+                ClientConfig {
+                    node_url,
+                    timeout,
+                    remote_tx_prover_url,
+                    network,
+                    store_path,
+                },
+            token_symbol,
+            decimals,
+            max_supply,
+            import_account_path,
+            deploy,
+        } => {
+            let (account, secret) = if let Some(account_path) = import_account_path {
+                // Import existing faucet account
+                let account_data = AccountFile::read(account_path)
+                    .context("failed to read account data from file")?;
+                let secret = account_data
+                    .auth_secret_keys
+                    .first()
+                    .context("auth secret key is required")?
+                    .clone();
+                (account_data.account, secret)
+            } else {
+                println!("Generating new faucet account. This may take a few seconds...");
+                let token_symbol =
+                    token_symbol.expect("token_symbol should be present when not importing");
+                let decimals = decimals.expect("decimals should be present when not importing");
+                let max_supply =
+                    max_supply.expect("max_supply should be present when not importing");
+                create_faucet_account(token_symbol.as_str(), max_supply, decimals)?
+            };
+            let node_endpoint = parse_node_endpoint(node_url, &network)?;
+            let faucet_config = FaucetConfig {
+                store_path,
+                node_endpoint,
+                network_id: network.to_network_id()?,
+                timeout,
+                remote_tx_prover_url,
+            };
+            Box::pin(Faucet::init(&faucet_config, account, &secret, deploy))
+                .await
+                .context("failed to initialize faucet")?;
+
+            println!("Faucet account successfully initialized");
+        },
+
+        Command::CreateApiKey => {
+            let mut rng = ChaCha20Rng::from_seed(rand::random());
+            let key = ApiKey::generate(&mut rng).encode();
+            println!("{key}");
+        },
+
         Command::Start {
-            endpoint,
-            node_url,
-            timeout,
-            faucet_account_path,
-            remote_tx_prover_url,
-            network,
+            config:
+                ClientConfig {
+                    node_url,
+                    timeout,
+                    remote_tx_prover_url,
+                    network,
+                    store_path,
+                },
+            api_bind_port,
+            api_public_url,
+            no_frontend,
+            frontend_bind_port,
             max_claimable_amount,
             pow_secret,
             pow_challenge_lifetime,
             pow_cleanup_interval,
             pow_growth_rate,
             pow_baseline,
+            base_amount,
             api_keys,
             open_telemetry: _,
-            store_path,
             explorer_url,
             batch_size,
         } => {
-            let account_file = AccountFile::read(&faucet_account_path).context(format!(
-                "failed to load faucet account from file ({})",
-                faucet_account_path.display()
-            ))?;
-            let faucet_component = BasicFungibleFaucet::try_from(&account_file.account)?;
-            let max_supply = AssetAmount::new(faucet_component.max_supply().as_int())?;
-            let decimals = faucet_component.decimals();
-
-            let faucet = Faucet::load(
-                store_path.clone(),
-                network.to_network_id()?,
-                account_file,
-                &node_url,
+            let node_endpoint = parse_node_endpoint(node_url, &network)?;
+            let config = FaucetConfig {
+                store_path: store_path.clone(),
+                node_endpoint: node_endpoint.clone(),
+                network_id: network.to_network_id()?,
                 timeout,
                 remote_tx_prover_url,
-            )
-            .await
-            .context("failed to load faucet")?;
+            };
+            let faucet = Faucet::load(&config).await.context("failed to load faucet")?;
 
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
@@ -262,37 +378,63 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
             };
+            let faucet_account = faucet.faucet_account().await?;
+            let faucet_component = BasicFungibleFaucet::try_from(&faucet_account)?;
+            let max_supply = AssetAmount::new(faucet_component.max_supply().as_int())?;
+            let decimals = faucet_component.decimals();
 
-            let server = Server::new(
-                faucet.faucet_id(),
-                decimals,
+            let metadata = Metadata {
+                id: faucet.faucet_id(),
+                issuance: faucet.issuance(),
                 max_supply,
-                faucet.issuance(),
+                decimals,
+                explorer_url,
+                base_amount,
+            };
+
+            // We keep a channel sender open in the main thread to avoid the faucet closing before
+            // servers can propagate any errors.
+            let tx_mint_requests_clone = tx_mint_requests.clone();
+            let api_server = ApiServer::new(
+                metadata,
                 max_claimable_amount,
-                tx_mint_requests,
+                tx_mint_requests_clone,
                 pow_secret.as_str(),
                 rate_limiter_config,
                 &api_keys,
                 store,
-                explorer_url,
             );
 
             // Use select to concurrently:
             // - Run and wait for the faucet (on current thread)
-            // - Run and wait for server (in a spawned task)
+            // - Run and wait for API server (in a spawned task)
+            // - Run and wait for frontend server (in a spawned task, only if set)
             let faucet_future = faucet.run(rx_mint_requests, batch_size);
-            let server_future = async {
-                let server_handle =
-                    tokio::spawn(
-                        async move { server.serve(endpoint).await.context("server failed") },
-                    );
-                server_handle.await.context("failed to join server task")?
-            };
+
+            let mut tasks = JoinSet::new();
+            let mut tasks_ids = HashMap::new();
+
+            let api_url = Url::parse(&format!("http://0.0.0.0:{api_bind_port}"))?;
+            let api_id = tasks.spawn(api_server.serve(api_url.clone())).id();
+            tasks_ids.insert(api_id, "api");
+
+            if !no_frontend {
+                let frontend_url = Url::parse(&format!("http://0.0.0.0:{frontend_bind_port}"))?;
+                let frontend_id = tasks
+                    .spawn(serve_frontend(frontend_url, api_public_url, node_endpoint.to_string()))
+                    .id();
+                tasks_ids.insert(frontend_id, "frontend");
+            }
 
             tokio::select! {
-                server_result = server_future => {
-                    // If server completes first, return its result
-                    server_result.context("server failed")
+                serve_result = tasks.join_next_with_id() => {
+                    let (id, err) = match serve_result.unwrap() {
+                        Ok((id, Ok(_))) => (id, Err(anyhow::anyhow!("completed unexpectedly"))),
+                        Ok((id, Err(err))) => (id, Err(err)),
+                        Err(join_err) => (join_err.id(), Err(join_err).context("failed to join task")),
+                    };
+                    let component = tasks_ids.get(&id).unwrap_or(&"unknown");
+                    err.context(format!("{component} server failed"))
                 },
                 faucet_result = faucet_future => {
                     // Faucet completed, return its result
@@ -300,97 +442,186 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 },
             }?;
         },
-
-        Command::CreateFaucetAccount {
-            output_path,
-            token_symbol,
-            decimals,
-            max_supply,
-        } => {
-            println!("Generating new faucet account. This may take a few minutes...");
-
-            let current_dir =
-                std::env::current_dir().context("failed to open current directory")?;
-
-            let mut rng = ChaCha20Rng::from_seed(rand::random());
-            let secret = {
-                let auth_seed: [u64; 4] = rng.random();
-                let rng_seed = Word::from(auth_seed.map(Felt::new));
-                SecretKey::with_rng(&mut RpoRandomCoin::new(rng_seed))
-            };
-
-            let symbol = TokenSymbol::try_from(token_symbol.as_str())
-                .context("failed to parse token symbol")?;
-            let max_supply = Felt::try_from(max_supply)
-                .map_err(anyhow::Error::msg)
-                .context("max supply value is greater than or equal to the field modulus")?;
-
-            let (account, account_seed) = AccountBuilder::new(rng.random())
-                .account_type(AccountType::FungibleFaucet)
-                .storage_mode(AccountStorageMode::Public)
-                .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
-                .with_auth_component(AuthRpoFalcon512::new(secret.public_key()))
-                .build()
-                .context("failed to create basic fungible faucet account")?;
-
-            let account_data = AccountFile::new(
-                account,
-                Some(account_seed),
-                vec![AuthSecretKey::RpoFalcon512(secret)],
-            );
-
-            let output_path = current_dir.join(output_path);
-            account_data.write(&output_path).with_context(|| {
-                format!("failed to write account data to file: {}", output_path.display())
-            })?;
-
-            println!("Faucet account file successfully created at: {}", output_path.display());
-        },
-
-        Command::CreateApiKeys { count: key_count } => {
-            let mut rng = ChaCha20Rng::from_seed(rand::random());
-            let keys = (0..key_count)
-                .map(|_| ApiKey::generate(&mut rng).encode())
-                .collect::<Vec<_>>()
-                .join(",");
-            println!("{keys}");
-        },
     }
 
     Ok(())
 }
 
+// UTILITIES
+// =================================================================================================
+
+/// Parses the node endpoint from the cli arguments. If an explicit url is provided, it is used.
+/// Otherwise, it is derived from the specified network.
+fn parse_node_endpoint(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow::Result<Endpoint> {
+    let url = if let Some(node_url) = node_url {
+        node_url.to_string()
+    } else {
+        network
+            .to_rpc_endpoint()
+            .context("no node url provided for the custom network")?
+    };
+
+    Endpoint::try_from(url.as_str())
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("failed to parse node url: {url}"))
+}
+
+/// Creates a new faucet account from the given parameters.
+fn create_faucet_account(
+    token_symbol: &str,
+    max_supply: u64,
+    decimals: u8,
+) -> anyhow::Result<(Account, AuthSecretKey)> {
+    let mut rng = ChaCha20Rng::from_seed(rand::random());
+    let secret = {
+        let auth_seed: [u64; 4] = rng.random();
+        let rng_seed = Word::from(auth_seed.map(Felt::new));
+        SecretKey::with_rng(&mut RpoRandomCoin::new(rng_seed))
+    };
+
+    let symbol = TokenSymbol::try_from(token_symbol).context("failed to parse token symbol")?;
+    let max_supply = Felt::try_from(max_supply)
+        .map_err(anyhow::Error::msg)
+        .context("max supply value is greater than or equal to the field modulus")?;
+    let auth_component = AuthRpoFalcon512::new(secret.public_key().to_commitment().into());
+
+    let account = AccountBuilder::new(rng.random())
+        .account_type(AccountType::FungibleFaucet)
+        .storage_mode(AccountStorageMode::Public)
+        .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
+        .with_auth_component(auth_component)
+        .build()
+        .context("failed to create basic fungible faucet account")?;
+
+    Ok((account, AuthSecretKey::RpoFalcon512(secret)))
+}
+
+// TESTS
+// =================================================================================================
+
 #[cfg(test)]
-mod test {
+mod tests {
     use std::env::temp_dir;
-    use std::num::NonZeroUsize;
     use std::process::Stdio;
     use std::str::FromStr;
     use std::time::{Duration, Instant};
 
+    use clap::Parser;
     use fantoccini::ClientBuilder;
-    use miden_client::account::{
-        AccountId,
-        AccountIdAddress,
-        Address,
-        AddressInterface,
-        NetworkId,
-    };
+    use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
+    use tokio::net::TcpListener;
     use tokio::time::sleep;
     use url::Url;
+    use uuid::Uuid;
 
     use crate::network::FaucetNetwork;
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, run_faucet_command};
+    use crate::{Cli, ClientConfig, create_faucet_account, run_faucet_command};
+
+    // CLI TESTS
+    // ---------------------------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn init_with_new_token() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--token-symbol",
+            "TEST",
+            "--decimals",
+            "6",
+            "--max-supply",
+            "100000000000000000",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn init_importing_account_file() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let account_path = temp_dir().join("test_account.mac");
+        let (account, secret) = create_faucet_account("TEST", 100_000_000, 3).unwrap();
+        let account_data = AccountFile::new(account, vec![secret]);
+        account_data.write(&account_path).unwrap();
+
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--import",
+            account_path.to_str().unwrap(),
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn init_with_deploy() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--token-symbol",
+            "TEST",
+            "--decimals",
+            "6",
+            "--max-supply",
+            "100000000000000000",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+            "--deploy",
+        ])))
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn serve_fails_without_init() {
+        let stub_node_url = run_stub_node().await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "start",
+            "--api-bind-port",
+            "8000",
+            "--frontend-bind-port",
+            "8081",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_err());
+    }
+
+    // INTEGRATION TEST
+    // ---------------------------------------------------------------------------------------------
 
     /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
-    /// to test the faucet website. It then loads the website and checks that all the requests
-    /// made return status 200.
+    /// to test the faucet website. It then loads the website, mints tokens, and checks that all the
+    /// requests returned status 200.
     #[tokio::test]
-    async fn test_website() {
-        let website_url = Box::pin(start_test_faucet()).await;
+    async fn frontend_mint_tokens() {
+        let stub_node_url = run_stub_node().await;
+        let website_url = run_faucet_server(stub_node_url).await;
         let client = start_fantoccini_client().await;
 
         // Open the website
@@ -401,9 +632,8 @@ mod test {
 
         let network_id = NetworkId::Testnet;
         let account_id = AccountId::try_from(0).unwrap();
-        let address =
-            Address::from(AccountIdAddress::new(account_id, AddressInterface::BasicWallet));
-        let address_bech32 = address.to_bech32(network_id);
+        let address = Address::new(account_id);
+        let address_bech32 = address.encode(network_id);
 
         // Fill in the account address
         client
@@ -457,32 +687,47 @@ mod test {
         client.close().await.unwrap();
     }
 
-    async fn start_test_faucet() -> Url {
-        let stub_node_url = Url::from_str("http://localhost:50051").unwrap();
+    // TESTING HELPERS
+    // ---------------------------------------------------------------------------------------------
 
-        // Start the stub node
+    pub async fn run_stub_node() -> Url {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener_addr = listener.local_addr().unwrap();
+        let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
         tokio::spawn({
             let stub_node_url = stub_node_url.clone();
             async move { serve_stub(&stub_node_url).await.unwrap() }
         });
+        stub_node_url
+    }
 
-        let faucet_account_path = temp_dir().join("faucet.mac");
+    async fn run_faucet_server(stub_node_url: Url) -> String {
+        let config = ClientConfig {
+            node_url: Some(stub_node_url.clone()),
+            timeout: Duration::from_millis(5000),
+            network: FaucetNetwork::Localhost,
+            store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
+            remote_tx_prover_url: None,
+        };
 
-        // Create faucet account
         Box::pin(run_faucet_command(Cli {
-            command: crate::Command::CreateFaucetAccount {
-                output_path: faucet_account_path.clone(),
-                token_symbol: "TEST".to_string(),
-                decimals: 6,
-                max_supply: 1_000_000_000_000,
+            command: crate::Command::Init {
+                config: config.clone(),
+                token_symbol: Some("TEST".to_owned()),
+                decimals: Some(6),
+                max_supply: Some(1_000_000_000_000),
+                import_account_path: None,
+                deploy: false,
             },
         }))
         .await
-        .unwrap();
+        .expect("failed to create faucet account");
 
-        // Start the faucet connected to the stub
+        let api_bind_port = 8000;
+        let api_url = format!("http://localhost:{api_bind_port}");
+        let frontend_url = "http://localhost:8080";
+
         // Use std::thread to launch faucet - avoids Send requirements
-        let endpoint_clone = Url::parse("http://localhost:8080").unwrap();
         std::thread::spawn(move || {
             // Create a new runtime for this thread
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -494,33 +739,33 @@ mod test {
             rt.block_on(async {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
-                        endpoint: endpoint_clone,
-                        node_url: stub_node_url,
-                        timeout: Duration::from_millis(5000),
+                        config,
+                        api_bind_port,
+                        api_public_url: Url::parse(&format!("http://localhost:{api_bind_port}"))
+                            .unwrap(),
+                        frontend_bind_port: 8080,
+                        no_frontend: false,
                         max_claimable_amount: 1_000_000_000,
-                        network: FaucetNetwork::Localhost,
                         api_keys: vec![],
                         pow_secret: "test".to_string(),
                         pow_challenge_lifetime: Duration::from_secs(30),
                         pow_cleanup_interval: Duration::from_secs(1),
-                        pow_growth_rate: NonZeroUsize::new(1).unwrap(),
+                        pow_growth_rate: 1.0,
                         pow_baseline: 12,
-                        faucet_account_path: faucet_account_path.clone(),
-                        remote_tx_prover_url: None,
+                        base_amount: 100_000,
                         open_telemetry: false,
-                        store_path: temp_dir().join("test_store.sqlite3"),
                         explorer_url: None,
                         batch_size: 8,
                     },
                 }))
                 .await
-                .unwrap();
+                .expect("failed to start faucet");
             });
         });
 
         // Wait for faucet to be up
-        let endpoint = Url::parse("http://localhost:8080").unwrap();
-        let addrs = endpoint.socket_addrs(|| None).unwrap();
+        let api_url = Url::parse(&api_url).unwrap();
+        let addrs = api_url.socket_addrs(|| None).unwrap();
         let start = Instant::now();
         let timeout = Duration::from_secs(10);
         loop {
@@ -533,7 +778,7 @@ mod test {
             }
         }
 
-        endpoint
+        frontend_url.to_string()
     }
 
     async fn start_fantoccini_client() -> fantoccini::Client {

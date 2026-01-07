@@ -1,5 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2.js';
-import { utf8ToBytes } from '@noble/hashes/utils.js';
+import { hexToBytes } from '@noble/hashes/utils.js';
 import fs from 'fs';
 
 async function sendPowRequest(baseUrl: string, accountId: string): Promise<{ challenge: string, target: bigint }> {
@@ -15,13 +15,14 @@ async function sendPowRequest(baseUrl: string, accountId: string): Promise<{ cha
 
 async function solveChallenge(challenge: string, target: bigint): Promise<number> {
     let nonce = 0;
+    let challengeBytes = hexToBytes(challenge);
     while (true) {
         nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
         try {
             // Compute hash using SHA-256 with the challenge and nonce
             let hash = sha256.create();
-            hash.update(utf8ToBytes(challenge)); // Use the hex-encoded challenge string directly
+            hash.update(challengeBytes);
 
             // Convert nonce to 8-byte big-endian format to match backend
             const nonceBytes = new ArrayBuffer(8);
@@ -80,7 +81,7 @@ async function downloadNote(baseUrl: string, noteId: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-    const baseUrl = 'http://localhost:8080';
+    const baseUrl = 'http://localhost:8000';
     const accountId = '0xca8203e8e58cf72049b061afca78ce';
 
     let { challenge, target } = await sendPowRequest(baseUrl, accountId);

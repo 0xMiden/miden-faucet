@@ -15,10 +15,12 @@ async fn request_challenge(
 
 fn solve_challenge(challenge: &str, target: u64) -> u64 {
     let mut found_nonce = None;
+    let challenge_bytes = hex::decode(challenge).unwrap();
+
     for nonce in 0..u64::MAX {
         // Create SHA-256 hash
         let mut hasher = Sha256::new();
-        hasher.update(challenge.as_bytes());
+        hasher.update(challenge_bytes);
         hasher.update(nonce.to_be_bytes());
         let hash = hasher.finalize();
 
@@ -74,11 +76,11 @@ async fn request_note(base_url: &str, note_id: &str) -> anyhow::Result<Vec<u8>> 
 
 #[tokio::main]
 async fn main() {
-    // This example assumes you have the faucet running on http://localhost:8080
+    // This example assumes you have the faucet running on http://localhost:8000
     let account_address = "0xca8203e8e58cf72049b061afca78ce";
     let asset_amount = 100;
     let is_private_note = true;
-    let url = "http://localhost:8080";
+    let url = "http://localhost:8000";
 
     // Step 1: request challenge
     let challenge_response = request_challenge(url, account_address).await.unwrap();

@@ -1,14 +1,12 @@
-use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use tokio::time::Duration;
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::challenge_cache::ChallengeCache;
 
 mod challenge;
 mod challenge_cache;
-mod utils;
+#[cfg(test)]
+mod tests;
 
 pub use challenge::Challenge;
 
@@ -23,7 +21,7 @@ pub struct PoWRateLimiter {
     /// The server secret used to sign and validate challenges.
     secret: [u8; 32],
     /// The cache used to store submitted challenges.
-    challenges: Arc<Mutex<ChallengeCache>>,
+    challenges: Arc<RwLock<ChallengeCache>>,
     /// The settings of the rate limiter.
     config: PoWRateLimiterConfig,
 }
@@ -40,11 +38,9 @@ type Domain = [u8; 32];
 pub struct PoWRateLimiterConfig {
     /// The lifetime for challenges. After this time, challenges are considered expired.
     pub challenge_lifetime: Duration,
-    /// Determines how much the difficulty increases with the amount of active challenges. The
-    /// difficulty is computed as `num_active_challenges << growth_rate`.
-    pub growth_rate: NonZeroUsize,
-    /// Sets the `max_target` used for challenges. The initial target (with difficulty = 1) for
-    /// challenges will be `u64::MAX >> baseline`.
+    /// Determines how much the difficulty increases with the number of active challenges.
+    pub growth_rate: f64,
+    /// Sets the baseline difficulty bits when there are no active challenges.
     pub baseline: u8,
     /// The interval at which the challenge cache is cleaned up. Only expired challenges are
     /// removed during cleanup.
@@ -52,21 +48,35 @@ pub struct PoWRateLimiterConfig {
 }
 
 impl PoWRateLimiter {
-    /// Creates a new `PoW` instance.
-    pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
-        let challenge_cache = Arc::new(Mutex::new(ChallengeCache::default()));
+    /// Creates a new `PoW` instance and starts a `tokio` task that periodically cleans up expired
+    /// challenges.
+    #[cfg(feature = "tokio")]
+    pub fn new_with_cleanup(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
+        let cleanup_interval = config.cleanup_interval;
+        let rate_limiter = Self::new(secret, config);
+        let challenge_cache = rate_limiter.challenges.clone();
 
-        // Start the cleanup task
-        let cleanup_state = challenge_cache.clone();
         tokio::spawn(async move {
-            ChallengeCache::run_cleanup(
-                cleanup_state,
-                config.challenge_lifetime,
-                config.cleanup_interval,
-            )
-            .await;
+            let mut interval = tokio::time::interval(cleanup_interval);
+
+            loop {
+                interval.tick().await;
+                remove_expired_challenges(&challenge_cache);
+            }
         });
 
+        rate_limiter
+    }
+
+    /// Creates a new `PoW` instance.
+    ///
+    /// Note: You need to manually run the cleanup task by calling `ChallengeCache::run_cleanup`
+    /// periodically.
+    ///
+    /// See `PoWRateLimiter::new_with_cleanup` to instantiate the rate limiter with the cleanup task
+    /// started automatically. It requires to enable the `tokio` feature.
+    pub fn new(secret: [u8; 32], config: PoWRateLimiterConfig) -> Self {
+        let challenge_cache = Arc::new(RwLock::new(ChallengeCache::new(config.challenge_lifetime)));
         Self {
             secret,
             challenges: challenge_cache,
@@ -74,11 +84,26 @@ impl PoWRateLimiter {
         }
     }
 
-    /// Generates a new challenge.
+    /// Cleans up the challenge cache, removing all the expired challenges.
+    pub fn cleanup_challenge_cache(&self) {
+        remove_expired_challenges(&self.challenges);
+    }
+
+    /// Generates a new challenge with a difficulty that will depend on the number of active
+    /// challenges for the given domain and the request complexity.
+    ///
+    /// # Arguments
+    /// * `requestor` - A unique identifier for the user that is requesting the challenge.
+    /// * `domain` - A unique identifier for the service that is requesting the challenge.
+    /// * `request_complexity` - A measure of the complexity of the request. Must be greater than 0.
+    ///
+    /// # Panics
+    /// Panics if the request complexity is 0.
     pub fn build_challenge(
         &self,
         requestor: impl Into<Requestor>,
         domain: impl Into<Domain>,
+        request_complexity: u64,
     ) -> Challenge {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -86,30 +111,44 @@ impl PoWRateLimiter {
             .as_secs();
         let requestor = requestor.into();
         let domain = domain.into();
-        let target = self.get_challenge_target(&domain);
+        let target = self.get_challenge_target(&domain, request_complexity);
 
-        Challenge::new(target, current_time, requestor, domain, self.secret)
+        Challenge::new(target, current_time, request_complexity, requestor, domain, self.secret)
+    }
+
+    /// Returns the load difficulty for a given domain.
+    ///
+    /// The load difficulty is computed as:
+    /// `2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
+    pub fn get_load_difficulty(&self, domain: impl Into<Domain>) -> u64 {
+        let num_challenges = self
+            .challenges
+            .read()
+            .expect("challenge cache lock should not be poisoned")
+            .num_challenges_for_domain(&domain.into());
+
+        #[allow(clippy::cast_precision_loss, reason = "num_challenges is smaller than f64::MAX")]
+        #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
+        let growth_multiplier =
+            ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
+        2_u64.pow(self.config.baseline.into()).saturating_mul(growth_multiplier)
     }
 
     /// Computes the target for a given domain by checking the amount of active challenges in the
-    /// cache. This sets the difficulty of the challenge.
+    /// cache and the given request complexity.
     ///
-    /// It is computed as:
-    /// `max_target / difficulty`
+    /// The target is computed as: `target = u64::MAX / request_difficulty`
     ///
     /// Where:
-    /// * `max_target = u64::MAX >> baseline`
-    /// * `difficulty = max(num_active_challenges << growth_rate, 1)`
-    fn get_challenge_target(&self, domain: &Domain) -> u64 {
-        let num_challenges = self
-            .challenges
-            .lock()
-            .expect("challenge cache lock should not be poisoned")
-            .num_challenges_for_domain(domain);
-
-        let max_target = u64::MAX >> self.config.baseline;
-        let difficulty = usize::max(num_challenges << self.config.growth_rate.get(), 1);
-        max_target / difficulty as u64
+    /// * `request_difficulty = load_difficulty * request_complexity`
+    /// * `load_difficulty = 2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
+    fn get_challenge_target(&self, domain: &Domain, request_complexity: u64) -> u64 {
+        if request_complexity == 0 {
+            return u64::MAX;
+        }
+        let load_difficulty = self.get_load_difficulty(*domain);
+        let request_difficulty = load_difficulty.saturating_mul(request_complexity);
+        u64::MAX / request_difficulty
     }
 
     /// Submits a challenge.
@@ -129,11 +168,13 @@ impl PoWRateLimiter {
         &self,
         requestor: impl Into<Requestor>,
         domain: impl Into<Domain>,
-        challenge: &str,
+        challenge: &Challenge,
         nonce: u64,
         current_time: u64,
+        request_complexity: u64,
     ) -> Result<(), ChallengeError> {
-        let challenge = Challenge::decode(challenge, self.secret)?;
+        challenge.verify_signature(self.secret)?;
+
         let requestor = requestor.into();
         let domain = domain.into();
 
@@ -146,201 +187,45 @@ impl PoWRateLimiter {
         let valid_requestor = requestor == challenge.requestor;
         let valid_domain = domain == challenge.domain;
         let valid_nonce = challenge.validate_pow(nonce);
-        if !(valid_nonce && valid_requestor && valid_domain) {
+        let valid_request_complexity = challenge.request_complexity == request_complexity;
+        if !(valid_nonce && valid_requestor && valid_domain && valid_request_complexity) {
             return Err(ChallengeError::InvalidPoW);
         }
 
-        let mut challenge_cache =
-            self.challenges.lock().expect("challenge cache lock should not be poisoned");
-
-        // Check if requestor has recently submitted a challenge.
-        if challenge_cache.has_challenge_for_requestor(requestor) {
-            return Err(ChallengeError::RateLimited);
-        }
-
-        // Check if the cache already contains the challenge. If not, it is inserted.
-        if !challenge_cache.insert_challenge(&challenge) {
-            return Err(ChallengeError::ChallengeAlreadyUsed);
-        }
+        // Insert the challenge into the cache
+        self.challenges
+            .write()
+            .expect("challenge cache lock should not be poisoned")
+            .insert_challenge(challenge, current_time)?;
 
         Ok(())
     }
 }
 
+fn remove_expired_challenges(challenge_cache: &Arc<RwLock<ChallengeCache>>) {
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("current timestamp should be greater than unix epoch")
+        .as_secs();
+    challenge_cache
+        .write()
+        .expect("challenge cache lock should not be poisoned")
+        .drop_expired_challenges(current_time);
+}
+
 /// `PoW` challenge related errors.
 #[derive(Debug, thiserror::Error)]
 pub enum ChallengeError {
-    #[error("server timestamp expired, received: {0}, current time: {1}")]
+    #[error("challenge timestamp expired, received: {0}, current time: {1}")]
     ExpiredServerTimestamp(u64, u64),
     #[error("invalid PoW solution")]
     InvalidPoW,
-    #[error("requestor is rate limited")]
-    RateLimited,
-    #[error("challenge already used")]
-    ChallengeAlreadyUsed,
-    #[error("server signatures do not match")]
-    ServerSignaturesDoNotMatch,
-    #[error("invalid challenge size")]
-    InvalidChallengeSize,
+    #[error("requestor is rate limited for {0} more seconds")]
+    RateLimited(u64),
+    #[error("invalid challenge signature")]
+    InvalidSignature,
+    #[error("invalid challenge serialization")]
+    InvalidSerialization,
     #[error("domain {0} is invalid")]
     InvalidDomain(String),
-}
-
-// TESTS
-// ================================================================================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn find_pow_solution(challenge: &Challenge, max_iterations: u64) -> Option<u64> {
-        (0..max_iterations).find(|&nonce| challenge.validate_pow(nonce))
-    }
-
-    fn create_test_pow() -> PoWRateLimiter {
-        let mut secret = [0u8; 32];
-        secret[..12].copy_from_slice(b"miden-faucet");
-
-        PoWRateLimiter::new(
-            secret,
-            PoWRateLimiterConfig {
-                challenge_lifetime: Duration::from_secs(30),
-                cleanup_interval: Duration::from_millis(500),
-                growth_rate: NonZeroUsize::new(2).unwrap(),
-                baseline: 0,
-            },
-        )
-    }
-
-    #[tokio::test]
-    async fn test_pow_validation() {
-        let pow = create_test_pow();
-        let domain = [1u8; 32];
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-
-        let requestor = [0u8; 32];
-        let challenge = pow.build_challenge(requestor, domain);
-        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-
-        // Submit challenge with correct nonce - should succeed
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
-        assert!(result.is_ok());
-
-        // Try to use the same challenge again with another requestor - should fail
-        let requestor = [1u8; 32];
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_timestamp_validation() {
-        let pow = create_test_pow();
-        let domain = [1u8; 32];
-        let requestor = [0u8; 32];
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-
-        let challenge = pow.build_challenge(requestor, domain);
-        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-
-        // Submit challenge with expired timestamp - should fail
-        let result = pow.submit_challenge(
-            requestor,
-            domain,
-            &challenge.encode(),
-            nonce,
-            current_time + pow.config.challenge_lifetime.as_secs() + 1,
-        );
-        assert!(result.is_err());
-
-        // Submit challenge with correct timestamp - should succeed
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn requestor_is_rate_limited() {
-        let pow = create_test_pow();
-        let domain = [1u8; 32];
-        let requestor = [0u8; 32];
-
-        // Solve first challenge
-        let challenge = pow.build_challenge(requestor, domain);
-        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
-        assert!(result.is_ok());
-
-        // Try to submit second challenge - should fail because of rate limiting
-        tokio::time::sleep(pow.config.cleanup_interval).await;
-        let challenge = pow.build_challenge(requestor, domain);
-        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let result =
-            pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time);
-        assert!(result.is_err());
-        assert!(matches!(result.err(), Some(ChallengeError::RateLimited)));
-    }
-
-    #[tokio::test]
-    async fn submit_challenge_and_check_difficulty() {
-        let mut pow = create_test_pow();
-        pow.config.growth_rate = NonZeroUsize::new(1).unwrap();
-        let domain = [1u8; 32];
-        let requestor = [0u8; 32];
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-
-        assert_eq!(pow.get_challenge_target(&domain), u64::MAX >> pow.config.baseline);
-
-        let challenge = pow.build_challenge(requestor, domain);
-        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-
-        pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
-            .unwrap();
-
-        assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
-        assert_eq!(pow.get_challenge_target(&domain), (u64::MAX >> pow.config.baseline) / 2);
-    }
-
-    #[tokio::test]
-    async fn test_cleanup_expired_challenges() {
-        let pow = create_test_pow();
-        let domain = [1u8; 32];
-        let requestor = [0u8; 32];
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let target = u64::MAX;
-
-        // build challenge manually with past timestamp to ensure that expires in 1 second
-        let timestamp = current_time - pow.config.challenge_lifetime.as_secs();
-        let signature =
-            Challenge::compute_signature(pow.secret, target, timestamp, &requestor, &domain);
-        let challenge = Challenge::from_parts(target, timestamp, requestor, domain, signature);
-        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-
-        pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
-            .unwrap();
-
-        // wait for cleanup
-        tokio::time::sleep(pow.config.cleanup_interval + Duration::from_secs(1)).await;
-
-        // check that the challenge is removed from the cache
-        assert!(!pow.challenges.lock().unwrap().has_challenge_for_requestor(requestor));
-        assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 0);
-
-        // submit second challenge - should succeed
-        let challenge = pow.build_challenge(requestor, domain);
-        let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
-
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        pow.submit_challenge(requestor, domain, &challenge.encode(), nonce, current_time)
-            .unwrap();
-
-        assert!(pow.challenges.lock().unwrap().has_challenge_for_requestor(requestor));
-        assert_eq!(pow.challenges.lock().unwrap().num_challenges_for_domain(&domain), 1);
-    }
 }

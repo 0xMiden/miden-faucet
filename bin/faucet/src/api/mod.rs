@@ -6,83 +6,68 @@ use anyhow::Context;
 use axum::Router;
 use axum::extract::FromRef;
 use axum::routing::get;
-use http::{HeaderValue, Request};
+use http::HeaderValue;
 use miden_client::account::{AccountId, AccountIdError, AddressError};
 use miden_client::store::Store;
-use miden_client::utils::RwLock;
-use miden_faucet_lib::FaucetId;
+use miden_client::utils::hex_to_bytes;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
-use miden_pow_rate_limiter::{PoWRateLimiter, PoWRateLimiterConfig};
+use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
 use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
-use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
-use crate::api::get_metadata::{Metadata, get_metadata};
+use crate::api::get_metadata::get_metadata;
 use crate::api::get_note::get_note;
 use crate::api::get_pow::get_pow;
 use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::api_key::ApiKey;
 
-mod frontend;
 mod get_metadata;
 mod get_note;
 mod get_pow;
 mod get_tokens;
 
+pub use get_metadata::Metadata;
+
 // FAUCET STATE
 // ================================================================================================
 
-/// Serves the faucet's website and handles token requests.
+/// Serves the faucet's API server that handles token requests.
 #[derive(Clone)]
-pub struct Server {
+pub struct ApiServer {
     mint_state: GetTokensState,
-    metadata: &'static Metadata,
+    metadata: Metadata,
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
     store: Arc<dyn Store>,
 }
 
-impl Server {
-    #[allow(clippy::too_many_arguments)]
+impl ApiServer {
     pub fn new(
-        faucet_id: FaucetId,
-        decimals: u8,
-        max_supply: AssetAmount,
-        issuance: Arc<RwLock<AssetAmount>>,
+        metadata: Metadata,
         max_claimable_amount: AssetAmount,
         mint_request_sender: MintRequestSender,
         pow_secret: &str,
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
-        explorer_url: Option<Url>,
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
-        let metadata = Metadata {
-            id: faucet_id,
-            issuance,
-            max_supply,
-            decimals,
-            explorer_url,
-        };
-        // SAFETY: Leaking is okay because we want it to live as long as the application.
-        let metadata = Box::leak(Box::new(metadata));
 
         // Hash the string secret to [u8; 32] for PoW
         let mut hasher = Sha256::new();
         hasher.update(pow_secret.as_bytes());
         let secret_bytes: [u8; 32] = hasher.finalize().into();
 
-        let rate_limiter = PoWRateLimiter::new(secret_bytes, rate_limiter_config);
+        let rate_limiter = PoWRateLimiter::new_with_cleanup(secret_bytes, rate_limiter_config);
 
-        Server {
+        ApiServer {
             mint_state,
             metadata,
             rate_limiter,
@@ -91,58 +76,27 @@ impl Server {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
+    /// Serves the faucet API endpoints.
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
-                .route("/", get(frontend::get_index_html))
-                .route("/index.js", get(frontend::get_index_js))
-                .route("/index.css", get(frontend::get_index_css))
-                .route("/background.png", get(frontend::get_background))
-                .route("/favicon.ico", get(frontend::get_favicon))
-                .fallback(get(frontend::get_not_found_html))
-                .route("/get_metadata", get(get_metadata))
-                .route("/pow", get(get_pow))
-                // TODO: This feels rather ugly, and would be nice to move but I can't figure out the types.
-                .route(
-                    "/get_tokens",
-                    get(get_tokens)
-                        .route_layer(
-                            ServiceBuilder::new()
-                                .layer(
-                                    // The other routes are serving static files and are therefore less interesting to log.
-                                    TraceLayer::new_for_http()
-                                        // Pre-register the account and amount so we can fill them in in the request.
-                                        //
-                                        // TODO: switch input from json to query params so we can fill in here.
-                                        .make_span_with(|_request: &Request<_>| {
-                                            use tracing::field::Empty;
-                                            tracing::info_span!(
-                                                "token_request",
-                                                account = Empty,
-                                                note_type = Empty,
-                                                amount = Empty
-                                            )
-                                        })
-                                        .on_response(DefaultOnResponse::new().level(Level::INFO))
-                                        // Disable failure logs since we already trace errors in the method.
-                                        .on_failure(())
-                                ))
-                )
-                .route("/get_note", get(get_note))
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(SetResponseHeaderLayer::if_not_present(
-                            http::header::CACHE_CONTROL,
-                            HeaderValue::from_static("no-cache"),
-                        ))
-                        .layer(
-                            CorsLayer::new()
-                                .allow_origin(tower_http::cors::Any)
-                                .allow_methods(tower_http::cors::Any)
-                                .allow_headers([http::header::CONTENT_TYPE]),
-                        ),
-                )
-                .with_state(self);
+            .route("/get_metadata", get(get_metadata))
+            .route("/pow", get(get_pow))
+            .route("/get_tokens", get(get_tokens))
+            .route("/get_note", get(get_note))
+            .layer(
+                ServiceBuilder::new()
+                    .layer(SetResponseHeaderLayer::if_not_present(
+                        http::header::CACHE_CONTROL,
+                        HeaderValue::from_static("no-cache"),
+                    ))
+                    .layer(
+                        CorsLayer::new()
+                            .allow_origin(tower_http::cors::Any)
+                            .allow_methods(tower_http::cors::Any)
+                            .allow_headers([http::header::CONTENT_TYPE]),
+                    ),
+            )
+            .with_state(self);
 
         let listener = url
             .socket_addrs(|| None)
@@ -151,7 +105,7 @@ impl Server {
             .await
             .with_context(|| format!("failed to bind TCP listener on {url}"))?;
 
-        tracing::info!(target: COMPONENT, address = %url, "Server started");
+        tracing::info!(target: COMPONENT, address = %url, "API server started");
 
         axum::serve(listener, app).await.map_err(Into::into)
     }
@@ -168,12 +122,14 @@ impl Server {
     ///
     /// # Panics
     /// Panics if the current timestamp is before the UNIX epoch.
+    #[instrument(target = COMPONENT, name = "server.submit_challenge", skip_all)]
     pub(crate) fn submit_challenge(
         &self,
         challenge: &str,
         nonce: u64,
         account_id: AccountId,
         api_key: ApiKey,
+        request_complexity: u64,
     ) -> Result<(), MintRequestError> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -182,26 +138,35 @@ impl Server {
         let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = account_id.into();
         let mut requestor = [0u8; 32];
         requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
+
+        let challenge = hex_to_bytes::<{ Challenge::SERIALIZED_SIZE }>(&format!("0x{challenge}"))
+            .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?
+            .into();
         self.rate_limiter
-            .submit_challenge(requestor, api_key, challenge, nonce, timestamp)
+            .submit_challenge(requestor, api_key, &challenge, nonce, timestamp, request_complexity)
             .map_err(MintRequestError::PowError)
     }
-}
 
-impl FromRef<Server> for &'static Metadata {
-    fn from_ref(input: &Server) -> Self {
-        input.metadata
+    /// Computes the request complexity for a given asset amount.
+    pub(crate) fn compute_request_complexity(&self, base_units: u64) -> u64 {
+        (base_units / self.metadata.base_amount) + 1
     }
 }
 
-impl FromRef<Server> for GetTokensState {
-    fn from_ref(input: &Server) -> Self {
+impl FromRef<ApiServer> for Metadata {
+    fn from_ref(input: &ApiServer) -> Self {
+        input.metadata.clone()
+    }
+}
+
+impl FromRef<ApiServer> for GetTokensState {
+    fn from_ref(input: &ApiServer) -> Self {
         input.mint_state.clone()
     }
 }
 
-impl FromRef<Server> for PoWRateLimiter {
-    fn from_ref(input: &Server) -> Self {
+impl FromRef<ApiServer> for PoWRateLimiter {
+    fn from_ref(input: &ApiServer) -> Self {
         // Clone is cheap: only copies a 32-byte array and increments Arc reference counters.
         input.rate_limiter.clone()
     }
@@ -213,9 +178,9 @@ impl FromRef<Server> for PoWRateLimiter {
 /// Errors that can occur when parsing an account ID or address.
 #[derive(Debug, thiserror::Error)]
 pub enum AccountError {
-    #[error("account ID failed to parse")]
+    #[error("account ID failed to parse: {0}")]
     ParseId(#[source] AccountIdError),
-    #[error("account address failed to parse")]
+    #[error("account address failed to parse: {0}")]
     ParseAddress(#[source] AddressError),
     #[error("account address is not an ID based")]
     AddressNotIdBased,
