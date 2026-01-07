@@ -320,6 +320,13 @@ impl Faucet {
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
 
+        // Update the issuance tracker
+        let new_issuance = self.get_issuance().await.unwrap_or(AssetAmount::max());
+        {
+            let mut issuance = self.issuance.write();
+            *issuance = new_issuance;
+        }
+
         Self::send_responses(response_senders, note_ids, tx_id);
         Ok(())
     }
@@ -350,7 +357,8 @@ impl Faucet {
     ) -> (Vec<MintRequest>, Vec<MintResponseSender>) {
         let mut valid_requests = vec![];
         let mut response_senders = vec![];
-        let mut issuance = self.get_issuance().await.unwrap();
+        // SAFETY: creating an asset amount with the max is always valid
+        let mut issuance = self.get_issuance().await.unwrap_or(AssetAmount::max());
         for (request, response_sender) in requests {
             let requested_amount = request.asset_amount;
             let available_amount = self.available_supply(issuance).unwrap_or_default();
@@ -367,17 +375,10 @@ impl Faucet {
             valid_requests.push(request);
             response_senders.push(response_sender);
             // SAFETY: creating an asset amount with the max is always valid
-            issuance = issuance
-                .checked_add(requested_amount)
-                .unwrap_or(AssetAmount::new(AssetAmount::MAX).unwrap());
+            issuance = issuance.checked_add(requested_amount).unwrap_or(AssetAmount::max());
         }
         if self.available_supply(issuance).is_none() {
             error!("Faucet has run out of tokens");
-        }
-        let new_issuance = self.get_issuance().await.unwrap();
-        {
-            let mut issuance = self.issuance.write();
-            *issuance = new_issuance;
         }
         (valid_requests, response_senders)
     }
@@ -489,8 +490,8 @@ impl Faucet {
 
     /// Returns a reference to a tracker of the faucet's issuance. It's value is updated after each
     /// minting transaction.
-    pub fn issuance(&self) -> Arc<RwLock<AssetAmount>> {
-        self.issuance.clone()
+    pub fn issuance(&self) -> &Arc<RwLock<AssetAmount>> {
+        &self.issuance
     }
 }
 

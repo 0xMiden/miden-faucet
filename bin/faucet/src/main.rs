@@ -15,11 +15,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
 use miden_client::account::{
-    Account,
-    AccountBuilder,
-    AccountFile,
-    AccountStorageMode,
-    AccountType,
+    Account, AccountBuilder, AccountFile, AccountStorageMode, AccountType,
 };
 use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
@@ -385,7 +381,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             let metadata = Metadata {
                 id: faucet.faucet_id(),
-                issuance: faucet.issuance(),
+                issuance: faucet.issuance().clone(),
                 max_supply,
                 decimals,
                 explorer_url,
