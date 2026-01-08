@@ -1,12 +1,12 @@
-const.AUX=0
-const.EXECUTION_HINT=1
-const.EXPIRATION_DELTA=10
+const AUX=0
+const EXECUTION_HINT=1
+const EXPIRATION_DELTA=10
 
 #! Returns a boolean indicating if the notes counter `i` has reached `n`
 #!
 #! Inputs:  [i, n]
 #! Outputs: [i != n, i, n]
-proc.check_continue_neq
+proc check_continue_neq
     # [i, n]
     dup.1
     dup.1
@@ -34,7 +34,7 @@ end
 begin
     # Set the transaction expiration delta (10 blocks)
     push.EXPIRATION_DELTA
-    exec.::miden::tx::update_expiration_block_delta
+    exec.::miden::protocol::tx::update_expiration_block_delta
     # OS => []
 
     adv.push_mapval dropw
@@ -57,7 +57,7 @@ begin
         # OS => [amount_i, tag_i, 0, note_type_i, 1, RECIPIENT_i, pad(7), i, n]
         # AS => [...]
 
-        call.::miden::contracts::faucets::basic_fungible::distribute
+        call.::miden::standards::faucets::basic_fungible::distribute
         # OS => [note_idx, pad(15), i, n]
 
         dropw dropw dropw dropw
