@@ -1,8 +1,12 @@
 import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
 import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
+import { Endpoint, NoteId, RpcClient } from "@demox-labs/miden-sdk";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
 import { getConfig, getMetadata, getPowChallenge, getTokens, get_note } from "./api.js";
+
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
 
 export class MidenFaucetApp {
     constructor() {
@@ -10,6 +14,7 @@ export class MidenFaucetApp {
         this.tokenAmountOptions = [100, 500, 1000];
         this.metadataInitialized = false;
         this.apiUrl = null;
+        this.rpcClient = null;
         this.baseAmount = null;
         this.powLoadDifficulty = null;
 
@@ -28,6 +33,7 @@ export class MidenFaucetApp {
         try {
             let config = await getConfig();
             this.apiUrl = config.api_url;
+            this.rpcClient = new RpcClient(new Endpoint(config.node_url));
             this.setupEventListeners();
             this.startMetadataPolling();
         } catch (error) {
@@ -88,9 +94,14 @@ export class MidenFaucetApp {
             const nonce = await this.findValidNonce(powData.challenge, powData.target);
 
             this.ui.updateMintingTitle('MINTING TOKENS');
-            this.ui.updateProgressBar(50);
+            this.ui.updateProgressBar(33);
 
             const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
+
+            this.ui.updateMintingTitle('CONFIRMING TRANSACTION');
+            this.ui.updateProgressBar(66);
+
+            await this.pollNote(getTokensResponse.note_id);
 
             this.ui.showCompletedModal(
                 recipient,
@@ -116,7 +127,7 @@ export class MidenFaucetApp {
         // Poll every 4 seconds
         this.metadataInterval = setInterval(() => {
             this.fetchMetadata();
-        }, 4000);
+        }, 4 * SECOND);
     }
 
     async fetchMetadata() {
@@ -200,6 +211,40 @@ export class MidenFaucetApp {
             console.error('Error downloading note:', error);
             this.ui.showPrivateModalError('Failed to download note: ' + error.message);
         }
+    }
+
+    pollNote(noteId) {
+        return new Promise((resolve, reject) => {
+            const start = Date.now();
+
+            const tick = async () => {
+                // bail if we already timed out
+                if (Date.now() - start >= 5 * MINUTE) {
+                    return reject(new Error('Timeout while waiting for tx to be committed. Please try again later.'));
+                }
+
+                try {
+                    const note = await this.rpcClient.getNotesById([NoteId.fromHex(noteId)]);
+                    if (note && note.length > 0) {
+                        return resolve();
+                    }
+                } catch (err) {
+                    console.error('Error polling for note:', err);
+                    return reject('Error fetching note confirmation.');
+                }
+
+                // choose next delay: 0.5s up to 10s, then 1s up to 40s, then 5s
+                const elapsed = Date.now() - start;
+                const nextDelay =
+                    elapsed <= 10 * SECOND ? 0.5 * SECOND :
+                        elapsed <= 40 * SECOND ? 1 * SECOND :
+                            5 * SECOND;
+
+                setTimeout(() => tick(), nextDelay);
+            };
+
+            tick();
+        });
     }
 
     async findValidNonce(challenge, target) {
