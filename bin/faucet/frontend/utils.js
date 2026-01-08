@@ -37,6 +37,7 @@ export const Utils = {
     },
 
     fromHex: (hex) => {
+        hex = hex.trim().replace(/^0x/i, '');
         return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
     },
 };
