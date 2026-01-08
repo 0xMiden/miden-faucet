@@ -169,25 +169,45 @@ export class MidenFaucetApp {
         return estimatedTime;
     }
 
+    async importNoteToWallet(noteId, data) {
+        try {
+            // Prevent hanging if the user doesn't see or respond to the wallet popup
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Import timeout')), 60000);
+            });
+
+            await Promise.race([
+                this.walletAdapter.importPrivateNote(data),
+                timeoutPromise
+            ]);
+            return true;
+        } catch (error) {
+            console.error("Failed to import private note to wallet:", error);
+            return false;
+        }
+    }
+
     async downloadNote(noteId, recipient) {
         try {
             const data = await get_note(this.apiUrl, noteId);
 
-            // Decode base64
-            const binaryString = atob(data.data_base64);
-            const byteArray = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                byteArray[i] = binaryString.charCodeAt(i);
+            await this.connectWallet();
+            // if the recipient's wallet is connected, import note directly
+            let noteImported = false;
+            if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
+                this.ui.setPrivateMintedSubtitle('Please check your <strong>Miden Wallet</strong> to accept the import...');
+                noteImported = await this.importNoteToWallet(noteId, data);
+                if (noteImported) {
+                    this.ui.setPrivateMintedSubtitle('Go to your <strong>Miden Wallet</strong> to claim.');
+                    this.ui.showCloseButton();
+                }
             }
 
-            await this.connectWallet();
-            if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
-                await this.walletAdapter.importPrivateNote(byteArray);
-                this.ui.showNoteImportedMessage();
-            } else {
-                const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+            if (!noteImported) {
+                this.ui.setPrivateMintedSubtitle('Follow the instructions to claim.');
+                this.ui.showDownloadedNoteHints();
+                const blob = new Blob([data], { type: 'application/octet-stream' });
                 Utils.downloadBlob(blob, 'note.mno');
-                this.ui.showNoteDownloadedMessage();
             }
         } catch (error) {
             console.error('Error downloading note:', error);

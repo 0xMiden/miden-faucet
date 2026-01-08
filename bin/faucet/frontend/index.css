@@ -332,6 +332,11 @@ body {
     font-style: italic;
 }
 
+.minting-subtitle strong {
+    color: #ff5500;
+    font-weight: 600;
+}
+
 .minting-separator {
     border-bottom: 0.5px solid rgba(0, 0, 0, 0.5);
     height: 1px;

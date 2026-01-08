@@ -64,5 +64,14 @@ export async function get_note(backendUrl, noteId) {
         const message = await response.text();
         throw new ApiError(message, response.status);
     }
-    return response.json();
+    const json = await response.json();
+
+    // Decode base64
+    const binaryString = atob(json.data_base64);
+    const byteArray = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        byteArray[i] = binaryString.charCodeAt(i);
+    }
+
+    return byteArray;
 }

@@ -63,6 +63,11 @@ export class UIController {
         modal.classList.add('active');
     }
 
+    setPrivateMintedSubtitle(subtitle) {
+        const privateMintedSubtitle = document.getElementById('private-minted-subtitle');
+        privateMintedSubtitle.innerHTML = subtitle;
+    }
+
     hideMintingModal() {
         const mintingModal = document.getElementById('minting-modal');
         mintingModal.classList.remove('active');
@@ -202,7 +207,6 @@ export class UIController {
         document.getElementById('download-button-text').textContent = 'Download Note';
         downloadButton.onclick = async () => {
             this.hideErrors();
-            this.showDownloadedNoteHints();
             downloadButton.classList.add('pressed');
             document.getElementById('download-button-text').textContent = 'Download Again';
             this.showCloseButton(() => {
