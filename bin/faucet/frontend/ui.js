@@ -63,11 +63,6 @@ export class UIController {
         modal.classList.add('active');
     }
 
-    setMintingTitle(title) {
-        const mintingTitle = document.getElementById('minting-title');
-        mintingTitle.textContent = title;
-    }
-
     setPrivateMintedSubtitle(subtitle) {
         const privateMintedSubtitle = document.getElementById('private-minted-subtitle');
         privateMintedSubtitle.innerHTML = subtitle;
@@ -78,12 +73,11 @@ export class UIController {
         mintingModal.classList.remove('active');
     }
 
-    showCompletedPrivateModal(recipient, amountAsTokens, noteId, txId, onDownloadNote) {
+    showCompletedPrivateModal(recipient, amountAsTokens, txId) {
         document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-private-recipient-address').textContent = recipient;
         const completedPrivateModal = document.getElementById('completed-private-modal');
         completedPrivateModal.classList.add('active');
-        this.setupDownloadButton(noteId, onDownloadNote);
         const privateExplorerButton = document.getElementById('private-explorer-button');
         this.setupExplorerButton(privateExplorerButton, txId);
         this.showPrivateSuccessTick();
@@ -214,7 +208,7 @@ export class UIController {
         };
     }
 
-    setupDownloadButton(noteId, onDownloadNote) {
+    setupDownloadButton(onDownloadNote) {
         const bigDownloadButton = document.getElementById('private-download-button');
         bigDownloadButton.onclick = async () => {
             this.hideErrors();
@@ -222,14 +216,14 @@ export class UIController {
             this.showCloseButton();
             this.showWarningText();
 
-            await onDownloadNote(noteId);
+            await onDownloadNote();
         };
 
         const instructionsDownloadButton = document.getElementById('instructions-download-button');
         instructionsDownloadButton.onclick = async () => {
             this.hideErrors();
             instructionsDownloadButton.classList.add('pressed');
-            await onDownloadNote(noteId);
+            await onDownloadNote();
         };
     }
 
@@ -255,7 +249,8 @@ export class UIController {
         this.showPrivateSuccessTick();
     }
 
-    showDownload() {
+    showDownload(onDownloadNote) {
+        this.setupDownloadButton(onDownloadNote);
         this.showNextSteps();
         this.setNextStepsTitle('Next Steps');
         const bigDownloadButton = document.getElementById('private-download-button');

@@ -27,7 +27,6 @@ use miden_client::transaction::{
 use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
-use rand::rngs::StdRng;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
 use tracing::{Instrument, error, info, info_span, instrument, warn};
@@ -73,7 +72,7 @@ impl FaucetId {
 /// Stores the current faucet state and handles minting requests.
 pub struct Faucet {
     id: FaucetId,
-    client: Client<FilesystemKeyStore<StdRng>>,
+    client: Client<FilesystemKeyStore>,
     state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<RwLock<AssetAmount>>,
@@ -105,8 +104,8 @@ impl Faucet {
         secret_key: &AuthSecretKey,
         deploy: bool,
     ) -> anyhow::Result<()> {
-        let keystore = FilesystemKeyStore::<StdRng>::new(KEYSTORE_PATH.into())
-            .context("failed to create keystore")?;
+        let keystore =
+            FilesystemKeyStore::new(KEYSTORE_PATH.into()).context("failed to create keystore")?;
         keystore.add_key(secret_key)?;
 
         let sqlite_store = Arc::new(SqliteStore::new(config.store_path.clone()).await?);
@@ -175,9 +174,9 @@ impl Faucet {
         });
 
         let record = client.get_account(account_id).await?.context("no account found")?;
-        let account = record.account();
+        let account = Account::try_from(record)?;
 
-        let faucet = BasicFungibleFaucet::try_from(account)?;
+        let faucet = BasicFungibleFaucet::try_from(account.clone())?;
         let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
@@ -210,7 +209,7 @@ impl Faucet {
     #[instrument(target = COMPONENT, name = "faucet.sync_state", skip_all, err)]
     async fn sync_state(
         account_id: AccountId,
-        client: &mut Client<FilesystemKeyStore<StdRng>>,
+        client: &mut Client<FilesystemKeyStore>,
         state_sync: &StateSync,
     ) -> anyhow::Result<SyncSummary> {
         // Get current state of the client
@@ -459,13 +458,11 @@ impl Faucet {
 
     /// Returns the faucet account.
     pub async fn faucet_account(&self) -> Result<Account, ClientError> {
-        Ok(self
-            .client
+        self.client
             .get_account(self.id.account_id)
             .await?
             .ok_or(ClientError::AccountDataNotFound(self.id.account_id))?
-            .account()
-            .clone())
+            .try_into()
     }
 
     /// Returns the id of the faucet account.
@@ -607,8 +604,7 @@ mod tests {
 
             // Run the faucet on this thread's runtime
             rt.block_on(async {
-                let keystore =
-                    FilesystemKeyStore::<StdRng>::new(PathBuf::from("keystore")).unwrap();
+                let keystore = FilesystemKeyStore::new(PathBuf::from("keystore")).unwrap();
                 keystore.add_key(&key).unwrap();
 
                 let mut client = MockClient::new(
@@ -639,7 +635,7 @@ mod tests {
                     max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
                     script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
                 };
-                faucet.run(rx_mint_requests, batch_size).await.unwrap();
+                Box::pin(faucet.run(rx_mint_requests, batch_size)).await.unwrap();
             });
         });
     }

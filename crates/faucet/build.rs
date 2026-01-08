@@ -3,7 +3,7 @@ use std::fs::{self};
 use std::io::{self};
 use std::path::{Path, PathBuf};
 
-use miden_client::transaction::{TransactionKernel, TransactionScript};
+use miden_client::assembly::CodeBuilder;
 use miden_client::utils::Serializable;
 
 const ASSETS_DIR: &str = "assets";
@@ -33,25 +33,19 @@ fn main() {
 /// The source files are expected to contain executable programs.
 fn compile_transaction_scripts(source_dir: &Path, target_dir: &Path) {
     fs::create_dir_all(target_dir).expect("should create target directory");
-    let assembler = TransactionKernel::assembler();
 
     let masm_files = get_masm_files(source_dir).expect("should find MASM files");
     for masm_file_path in masm_files {
-        // read the MASM file, parse it, and serialize the parsed AST to bytes
-        let code = assembler
-            .clone()
-            .assemble_program(masm_file_path.clone())
+        let script = CodeBuilder::new()
+            .compile_tx_script(masm_file_path.clone())
             .expect("program should assemble correctly");
-        let script = TransactionScript::new(code);
-
-        let bytes = script.to_bytes();
 
         let masm_file_name = masm_file_path.file_name().expect("file name should exist");
         let mut txs_file_path = target_dir.join(masm_file_name);
 
         // write the binary TXS to the output dir
         txs_file_path.set_extension("txs");
-        fs::write(txs_file_path, bytes).expect("should write .txs file");
+        fs::write(txs_file_path, script.to_bytes()).expect("should write .txs file");
     }
 }
 

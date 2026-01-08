@@ -64,7 +64,6 @@ export async function get_note(backendUrl, noteId) {
         const message = await response.text();
         throw new ApiError(message, response.status);
     }
-
     const json = await response.json();
 
     // Decode base64

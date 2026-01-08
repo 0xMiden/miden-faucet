@@ -88,13 +88,7 @@ export class MidenFaucetApp {
             const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
 
             if (isPrivateNote) {
-                this.ui.showCompletedPrivateModal(
-                    recipient,
-                    amountAsTokens,
-                    getTokensResponse.note_id,
-                    getTokensResponse.tx_id,
-                    (noteId) => this.downloadNote(noteId),
-                );
+                this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.tx_id);
                 this.ui.setPrivateMintedSubtitle('Importing note to your wallet...');
 
                 await this.connectWallet();
@@ -121,7 +115,7 @@ export class MidenFaucetApp {
                     } else {
                         // if note transport failed, show the download button
                         this.ui.setPrivateMintedSubtitle('Follow the instructions to claim.');
-                        this.ui.showDownload();
+                        this.ui.showDownload(() => this.downloadNote(getTokensResponse.note_id));
                     }
                 }
             } else {
