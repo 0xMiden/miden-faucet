@@ -205,49 +205,35 @@ export class MidenFaucetApp {
 
     pollNote(noteId) {
         return new Promise((resolve, reject) => {
-            // Poll every 500ms for the first 10 seconds, then every 1s for the next 30 seconds, then every 5s.
-            let currentInterval = 0.5 * SECOND;
-            let pollInterval = 0.5 * SECOND;
-            let elapsedTime = 0;
-            // Timeout after 5 minutes
-            const timeout = 5 * MINUTE;
-            let timeoutId;
+            const start = Date.now();
 
-            const poll = async () => {
+            const tick = async () => {
+                // bail if we already timed out
+                if (Date.now() - start >= 5 * MINUTE) {
+                    return reject(new Error('Timeout while waiting for tx to be committed. Please try again later.'));
+                }
+
                 try {
                     const note = await this.rpcClient.getNotesById([NoteId.fromHex(noteId)]);
                     if (note && note.length > 0) {
-                        clearInterval(pollInterval);
-                        clearTimeout(timeoutId);
-                        resolve();
-                        return;
+                        return resolve();
                     }
-
-                    elapsedTime += currentInterval;
-
-                    if (elapsedTime <= 10 * SECOND) {
-                        currentInterval = 0.5 * SECOND;
-                    } else if (elapsedTime <= 40 * SECOND) {
-                        currentInterval = 1 * SECOND;
-                    } else {
-                        currentInterval = 5 * SECOND;
-                    }
-
-                    // Update the interval
-                    clearInterval(pollInterval);
-                    pollInterval = setInterval(poll, currentInterval);
-                } catch (error) {
-                    console.error('Error polling for note:', error);
-                    clearInterval(pollInterval);
-                    clearTimeout(timeoutId);
-                    reject('Error fetching note confirmation.');
+                } catch (err) {
+                    console.error('Error polling for note:', err);
+                    return reject('Error fetching note confirmation.');
                 }
+
+                // choose next delay: 0.5s up to 10s, then 1s up to 40s, then 5s
+                const elapsed = Date.now() - start;
+                const nextDelay =
+                    elapsed <= 10 * SECOND ? 0.5 * SECOND :
+                        elapsed <= 40 * SECOND ? 1 * SECOND :
+                            5 * SECOND;
+
+                setTimeout(() => tick(), nextDelay);
             };
-            pollInterval = setInterval(poll, currentInterval);
-            timeoutId = setTimeout(() => {
-                clearInterval(pollInterval);
-                reject(new Error('Timeout while waiting for tx to be committed. Please try again later.'));
-            }, timeout);
+
+            tick();
         });
     }
 
