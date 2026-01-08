@@ -637,6 +637,7 @@ mod tests {
         // Wait for the website to be fully loaded
         client
             .wait()
+            .at_most(Duration::from_secs(10))
             .for_element(fantoccini::Locator::Css("#token-amount option"))
             .await
             .unwrap();
