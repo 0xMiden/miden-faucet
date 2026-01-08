@@ -250,7 +250,7 @@ export class MidenFaucetApp {
     async findValidNonce(challenge, target) {
         let nonce = 0;
         let targetNum = BigInt(target);
-        const challengeBytes = Uint8Array.fromHex(challenge);
+        const challengeBytes = Utils.fromHex(challenge);
 
         while (true) {
             nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
