@@ -44,7 +44,7 @@ tokio                 = { features = ["fs"], workspace = true }
 tokio-stream          = { features = ["net"], workspace = true }
 tonic                 = { features = ["tls-native-roots"], workspace = true }
 tower                 = { workspace = true }
-tower-http            = { features = ["cors", "set-header", "trace"], workspace = true }
+tower-http            = { features = ["compression-gzip", "cors", "set-header", "trace"], workspace = true }
 tracing               = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber    = { workspace = true }

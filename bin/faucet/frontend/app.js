@@ -1,8 +1,12 @@
 import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
 import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
+import { Endpoint, NoteId, RpcClient } from "@demox-labs/miden-sdk";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
 import { getConfig, getMetadata, getPowChallenge, getTokens, get_note } from "./api.js";
+
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
 
 export class MidenFaucetApp {
     constructor() {
@@ -10,6 +14,7 @@ export class MidenFaucetApp {
         this.tokenAmountOptions = [100, 500, 1000];
         this.metadataInitialized = false;
         this.apiUrl = null;
+        this.rpcClient = null;
         this.baseAmount = null;
         this.powLoadDifficulty = null;
 
@@ -29,6 +34,7 @@ export class MidenFaucetApp {
         try {
             let config = await getConfig();
             this.apiUrl = config.api_url;
+            this.rpcClient = new RpcClient(new Endpoint(config.node_url));
             this.setupEventListeners();
             this.startMetadataPolling();
         } catch (error) {
@@ -89,6 +95,8 @@ export class MidenFaucetApp {
 
             const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
 
+            await this.pollNote(getTokensResponse.note_id);
+
             this.ui.hideMintingModal();
             if (isPrivateNote) {
                 this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.note_id, getTokensResponse.tx_id, (noteId) => this.downloadNote(noteId, recipient));
@@ -117,26 +125,22 @@ export class MidenFaucetApp {
             } catch (error) {
                 console.error('Error fetching metadata:', error);
             }
-        }, 4000);
+        }, 4 * SECOND);
     }
 
     async fetchMetadata() {
-        try {
-            const data = await getMetadata(this.apiUrl);
+        const data = await getMetadata(this.apiUrl);
 
-            this.ui.setIssuanceAndSupply(data.issuance, data.max_supply, data.decimals);
-            this.powLoadDifficulty = data.pow_load_difficulty;
-            this.baseAmount = data.base_amount;
+        this.ui.setIssuanceAndSupply(data.issuance, data.max_supply, data.decimals);
+        this.powLoadDifficulty = data.pow_load_difficulty;
+        this.baseAmount = data.base_amount;
 
-            if (!this.metadataInitialized) {
-                this.metadataInitialized = true;
-                this.ui.setFaucetId(data.id);
-                this.ui.setExplorerUrl(data.explorer_url);
-                this.ui.setTokenOptions(this.tokenAmountOptions, data.decimals);
-                this.updateTokenHint(this.tokenAmountOptions[0]);
-            }
-        } catch (error) {
-            console.error('Error fetching metadata:', error);
+        if (!this.metadataInitialized) {
+            this.metadataInitialized = true;
+            this.ui.setFaucetId(data.id);
+            this.ui.setExplorerUrl(data.explorer_url);
+            this.ui.setTokenOptions(this.tokenAmountOptions, data.decimals);
+            this.updateTokenHint(this.tokenAmountOptions[0]);
         }
     }
 
@@ -215,10 +219,44 @@ export class MidenFaucetApp {
         }
     }
 
+    pollNote(noteId) {
+        return new Promise((resolve, reject) => {
+            const start = Date.now();
+
+            const tick = async () => {
+                // bail if we already timed out
+                if (Date.now() - start >= 5 * MINUTE) {
+                    return reject(new Error('Timeout while waiting for tx to be committed. Please try again later.'));
+                }
+
+                try {
+                    const note = await this.rpcClient.getNotesById([NoteId.fromHex(noteId)]);
+                    if (note && note.length > 0) {
+                        return resolve();
+                    }
+                } catch (err) {
+                    console.error('Error polling for note:', err);
+                    this.ui.showConnectionError('Connection failed', 'Could not fetch note confirmation. Retrying...');
+                }
+
+                // choose next delay: 0.5s up to 10s, then 1s up to 40s, then 5s
+                const elapsed = Date.now() - start;
+                const nextDelay =
+                    elapsed <= 10 * SECOND ? 0.5 * SECOND :
+                        elapsed <= 40 * SECOND ? 1 * SECOND :
+                            5 * SECOND;
+
+                setTimeout(() => tick(), nextDelay);
+            };
+
+            tick();
+        });
+    }
+
     async findValidNonce(challenge, target) {
         let nonce = 0;
         let targetNum = BigInt(target);
-        const challengeBytes = Uint8Array.fromHex(challenge);
+        const challengeBytes = Utils.fromHex(challenge);
 
         while (true) {
             nonce = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);

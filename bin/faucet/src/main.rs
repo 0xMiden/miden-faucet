@@ -504,7 +504,7 @@ mod tests {
     use std::env::temp_dir;
     use std::process::Stdio;
     use std::str::FromStr;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use clap::Parser;
     use fantoccini::ClientBuilder;
@@ -512,7 +512,6 @@ mod tests {
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
-    use tokio::time::sleep;
     use url::Url;
     use uuid::Uuid;
 
@@ -635,6 +634,14 @@ mod tests {
         let address = Address::new(account_id);
         let address_bech32 = address.encode(network_id);
 
+        // Wait for the website to be fully loaded
+        client
+            .wait()
+            .at_most(Duration::from_secs(10))
+            .for_element(fantoccini::Locator::Css("#token-amount option"))
+            .await
+            .unwrap();
+
         // Fill in the account address
         client
             .find(fantoccini::Locator::Css("#recipient-address"))
@@ -724,7 +731,6 @@ mod tests {
         .expect("failed to create faucet account");
 
         let api_bind_port = 8000;
-        let api_url = format!("http://localhost:{api_bind_port}");
         let frontend_url = "http://localhost:8080";
 
         // Use std::thread to launch faucet - avoids Send requirements
@@ -762,21 +768,6 @@ mod tests {
                 .expect("failed to start faucet");
             });
         });
-
-        // Wait for faucet to be up
-        let api_url = Url::parse(&api_url).unwrap();
-        let addrs = api_url.socket_addrs(|| None).unwrap();
-        let start = Instant::now();
-        let timeout = Duration::from_secs(10);
-        loop {
-            match tokio::net::TcpStream::connect(&addrs[..]).await {
-                Ok(_) => break,
-                Err(_) if start.elapsed() < timeout => {
-                    sleep(Duration::from_millis(200)).await;
-                },
-                Err(e) => panic!("faucet never became reachable: {e}"),
-            }
-        }
 
         frontend_url.to_string()
     }
