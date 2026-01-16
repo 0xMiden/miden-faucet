@@ -8,12 +8,16 @@ For comprehensive guides, API reference, and examples, see the [Miden Faucet Doc
 
 ## Running the faucet
 
-1. Install the faucet:
+The faucet comes with two CLI tools:
+- **miden-faucet**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
+
+1. Install both faucet binaries:
 ```bash
 make install-faucet
 ```
 
-2. Initialize the faucet. This will generate a new account with the specified token configuration and save the account data to a local SQLite store:
+2. Initialize the faucet server. This will generate a new account with the specified token configuration and save the account data to a local SQLite store:
 
 ```bash
 miden-faucet init \
@@ -25,6 +29,8 @@ miden-faucet init \
 > [!TIP]
 > This account will not be created on chain yet, creation on chain will happen on the first minting transaction.
 
+> You can also run the legacy alias `miden-faucet` for backwards compatibility; it runs the same `miden-faucet` binary.
+
 3. Start the faucet:
 ```bash
 miden-faucet start \
@@ -32,6 +38,13 @@ miden-faucet start \
   --api-bind-url http://localhost:8000 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
+```
+
+## Requesting tokens from a live faucet
+
+You can use the `miden-faucet-client` binary to request tokens from any running faucet instance, whether it's your local faucet or the remote testnet faucet:
+```bash
+miden-faucet-client mint --url <FAUCET_API_URL> --target-account <ACCOUNT_ID> --amount <BASE_UNITS>
 ```
 
 After a few seconds you may go to `http://localhost:8080` and see the faucet UI.

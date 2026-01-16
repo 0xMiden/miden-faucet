@@ -28,12 +28,26 @@ miden-faucet start \
   --frontend-url http://localhost:8080 \
   --api-bind-url http://localhost:8000 \
   --node-url https://rpc.testnet.miden.io \
+  --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
 
 ## Step 3: Request Test Tokens
 
-Once the faucet is running, you can request test tokens through either the web interface or the REST API.
+Once the faucet is running, you can request test tokens through either the web interface, the client CLI, or the REST API.
+
+### Via Client CLI
+
+Use the dedicated mint command:
+
+```bash
+miden-faucet-client mint \
+  --url http://localhost:8000 \
+  --target-account <ACCOUNT_ID_OR_ADDRESS> \
+  --amount 1000
+```
+
+Although the command is named `mint`, in technical terms it makes a request to the faucet, solves the PoW challenge and creates a public P2ID note.
 
 ### Via Web Interface (if frontend is enabled)
 
@@ -47,6 +61,7 @@ Open `http://localhost:8080` in your browser to access the web interface for gen
 ### Via API
 
 You can also programmatically interact with the REST API to mint tokens. Check out the complete working examples below. Make sure the faucet REST API is running at `http://localhost:8000` before using them.
+
 - [Rust](../examples/rust/request_tokens.rs)
 - [TypeScript](../examples/typescript/request_tokens.ts)
 
@@ -100,7 +115,7 @@ miden-faucet start \
   --api-bind-url http://localhost:8000 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
-``` 
+```
 
 ### Faucet API Only (No Frontend)
 
