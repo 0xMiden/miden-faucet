@@ -1,9 +1,9 @@
 #!/bin/bash
 #
 ###############
-# Remove miden-faucet-operator installs
+# Remove miden-faucet installs
 ##############
-sudo rm -rf /lib/systemd/system/miden-faucet-operator.service
-sudo rm -rf /etc/opt/miden-faucet-operator
-sudo deluser miden-faucet-operator
+sudo rm -rf /lib/systemd/system/miden-faucet.service
+sudo rm -rf /etc/opt/miden-faucet
+sudo deluser miden-faucet
 sudo systemctl daemon-reload

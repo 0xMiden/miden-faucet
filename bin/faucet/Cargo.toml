@@ -1,28 +1,15 @@
 [package]
 authors.workspace      = true
-description            = "Token faucet operator for Miden faucet"
+description            = "Token faucet application for Miden testnet"
 edition.workspace      = true
 homepage.workspace     = true
-keywords               = ["faucet", "miden", "operator"]
+keywords               = ["faucet", "miden", "node"]
 license.workspace      = true
-name                   = "miden-faucet-operator"
+name                   = "miden-faucet"
 readme                 = "README.md"
 repository.workspace   = true
 rust-version.workspace = true
 version.workspace      = true
-
-# Define both binary names pointing to the same source for backwards compatibility
-[[bin]]
-name = "miden-faucet-operator"
-path = "src/main.rs"
-
-[[bin]]
-name = "miden-faucet"
-path = "src/main.rs"
-# Avoid running tests twice for the same binary target; tests are exercised via `miden-faucet-operator`.
-bench   = false
-doctest = false
-test    = false
 
 [lints]
 workspace = true

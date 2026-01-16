@@ -9,7 +9,7 @@ For comprehensive guides, API reference, and examples, see the [Miden Faucet Doc
 ## Running the faucet
 
 The faucet comes with two CLI tools:
-- **miden-faucet-operator**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet**: Runs the faucet, used for initializing and starting the faucet.
 - **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
 
 1. Install both faucet binaries:
@@ -20,7 +20,7 @@ make install-faucet
 2. Initialize the faucet server. This will generate a new account with the specified token configuration and save the account data to a local SQLite store:
 
 ```bash
-miden-faucet-operator init \
+miden-faucet init \
   --token-symbol MIDEN \
   --decimals 6 \
   --max-supply 100000000000000000 \
@@ -29,11 +29,11 @@ miden-faucet-operator init \
 > [!TIP]
 > This account will not be created on chain yet, creation on chain will happen on the first minting transaction.
 
-> You can also run the legacy alias `miden-faucet` for backwards compatibility; it runs the same `miden-faucet-operator` binary.
+> You can also run the legacy alias `miden-faucet` for backwards compatibility; it runs the same `miden-faucet` binary.
 
 3. Start the faucet:
 ```bash
-miden-faucet-operator start \
+miden-faucet start \
   --frontend-url http://localhost:8080 \
   --api-bind-url http://localhost:8000 \
   --explorer-url https://testnet.midenscan.com \

@@ -2155,42 +2155,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "miden-faucet-client"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "axum",
- "clap",
- "hex",
- "miden-client",
- "miden-faucet-lib",
- "miden-pow-rate-limiter",
- "rand",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "miden-faucet-lib"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "miden-client",
- "miden-client-sqlite-store",
- "rand",
- "serde",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "miden-faucet-operator"
+name = "miden-faucet"
 version = "0.12.4"
 dependencies = [
  "anyhow",
@@ -2227,6 +2192,41 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "miden-faucet-client"
+version = "0.12.4"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "hex",
+ "miden-client",
+ "miden-faucet-lib",
+ "miden-pow-rate-limiter",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "miden-faucet-lib"
+version = "0.12.4"
+dependencies = [
+ "anyhow",
+ "miden-client",
+ "miden-client-sqlite-store",
+ "rand",
+ "serde",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
  "url",
 ]
 
