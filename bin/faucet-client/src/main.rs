@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use miden_faucet_client::mint;
 
-/// Operator CLI for interacting with a live faucet.
+/// Client CLI for interacting with a live faucet.
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
