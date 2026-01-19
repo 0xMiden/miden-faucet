@@ -1,0 +1,33 @@
+[package]
+authors.workspace      = true
+description            = "Client CLI to request tokens from a remote Miden faucet (PoW mint)"
+edition.workspace      = true
+homepage.workspace     = true
+license.workspace      = true
+name                   = "miden-faucet-client"
+readme                 = "README.md"
+repository.workspace   = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow                 = { workspace = true }
+clap                   = { features = ["derive", "env", "string"], version = "4.5" }
+hex                    = { version = "0.4" }
+miden-client           = { workspace = true }
+miden-faucet-lib       = { workspace = true }
+miden-pow-rate-limiter = { workspace = true }
+rand                   = { features = ["thread_rng"], workspace = true }
+reqwest                = { default-features = false, features = ["json", "rustls-tls"], version = "0.12" }
+serde_json             = { workspace = true }
+thiserror              = { workspace = true }
+tokio                  = { features = ["macros", "net", "rt-multi-thread", "sync", "time"], workspace = true }
+url                    = { workspace = true }
+
+[dev-dependencies]
+axum  = { features = ["tokio"], version = "0.8" }
+serde = { workspace = true }
+tokio = { features = ["macros", "net", "rt-multi-thread", "time"], workspace = true }
