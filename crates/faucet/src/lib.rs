@@ -11,18 +11,13 @@ use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
-use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
+use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, create_p2id_note};
 use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequest,
-    TransactionRequestBuilder,
-    TransactionRequestError,
-    TransactionScript,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
+    TransactionRequestBuilder, TransactionRequestError, TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -391,7 +386,7 @@ impl Faucet {
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
         let n = notes.len() as u64;
         let mut note_data = vec![Felt::new(n)];
-        for note in notes {
+        for note in &notes {
             // SAFETY: these are p2id notes with only one fungible asset
             let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
 
@@ -507,7 +502,7 @@ fn build_p2id_notes(
             request.account_id,
             vec![asset.into()],
             request.note_type.into(),
-            Felt::default(),
+            NoteAttachment::default(),
             rng,
         )
         .inspect_err(
@@ -523,7 +518,7 @@ mod tests {
     use std::env::temp_dir;
 
     use miden_client::ExecutionOptions;
-    use miden_client::account::component::AuthRpoFalcon512;
+    use miden_client::account::component::AuthFalcon512Rpo;
     use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
     use miden_client::asset::TokenSymbol;
     use miden_client::auth::AuthSecretKey;
@@ -558,19 +553,27 @@ mod tests {
             tx_mint_requests.send((mint_request, sender)).await.unwrap();
             receivers.push(receiver);
         }
+        // Drop the sender so the channel closes after all requests are sent
+        drop(tx_mint_requests);
 
         let store = Arc::new(
             SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
                 .await
                 .unwrap(),
         );
-        run_faucet(rx_mint_requests, batch_size, store.clone());
+        let faucet_handle = run_faucet(rx_mint_requests, batch_size, store.clone());
+
+        // Give the faucet thread time to initialize
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         for receiver in receivers {
             let response = receiver.await.unwrap().unwrap();
             let notes = store.get_output_notes(NoteFilter::Unique(response.note_id)).await.unwrap();
             assert_eq!(notes.len(), 1);
         }
+
+        // Wait for the faucet thread to complete
+        faucet_handle.join().expect("Faucet thread panicked");
     }
 
     // TESTING HELPERS
@@ -581,7 +584,7 @@ mod tests {
         rx_mint_requests: mpsc::Receiver<(MintRequest, MintResponseSender)>,
         batch_size: usize,
         store: Arc<dyn Store>,
-    ) {
+    ) -> std::thread::JoinHandle<()> {
         let secret = SecretKey::new();
         let symbol = TokenSymbol::new("TEST").unwrap();
         let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
@@ -589,10 +592,10 @@ mod tests {
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
-            .with_auth_component(AuthRpoFalcon512::new(secret.public_key().to_commitment().into()))
+            .with_auth_component(AuthFalcon512Rpo::new(secret.public_key().to_commitment().into()))
             .build()
             .unwrap();
-        let key = AuthSecretKey::RpoFalcon512(secret);
+        let key = AuthSecretKey::Falcon512Rpo(secret);
 
         std::thread::spawn(move || {
             // Create a new runtime for this thread
@@ -604,7 +607,9 @@ mod tests {
 
             // Run the faucet on this thread's runtime
             rt.block_on(async {
-                let keystore = FilesystemKeyStore::new(PathBuf::from("keystore")).unwrap();
+                // Use a temporary unique keystore directory for tests
+                let keystore_path = temp_dir().join(format!("keystore_{}", Uuid::new_v4()));
+                let keystore = FilesystemKeyStore::new(keystore_path).unwrap();
                 keystore.add_key(&key).unwrap();
 
                 let mut client = MockClient::new(
@@ -637,6 +642,6 @@ mod tests {
                 };
                 Box::pin(faucet.run(rx_mint_requests, batch_size)).await.unwrap();
             });
-        });
+        })
     }
 }
