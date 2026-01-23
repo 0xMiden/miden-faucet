@@ -29,7 +29,6 @@ impl api_server::Api for StubRpcApi {
         let mock_chain = MockChain::new();
         let protocol_header = mock_chain.latest_block_header();
 
-        // Convert miden_protocol::BlockHeader to miden_client::BlockHeader via serialization
         let bytes = protocol_header.to_bytes();
         let client_header = BlockHeader::read_from_bytes(&bytes)
             .map_err(|e| Status::internal(format!("Failed to deserialize block header: {e}")))?;
@@ -54,7 +53,6 @@ impl api_server::Api for StubRpcApi {
             .get_delta(Forest::empty(), mmr_peaks.forest())
             .unwrap();
 
-        // Convert miden_protocol::BlockHeader to miden_client::BlockHeader via serialization
         let bytes = protocol_header.to_bytes();
         let client_header = BlockHeader::read_from_bytes(&bytes)
             .map_err(|e| Status::internal(format!("Failed to deserialize block header: {e}")))?;

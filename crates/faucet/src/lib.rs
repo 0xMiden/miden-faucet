@@ -16,8 +16,13 @@ use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
-    TransactionRequestBuilder, TransactionRequestError, TransactionScript,
+    LocalTransactionProver,
+    TransactionId,
+    TransactionProver,
+    TransactionRequest,
+    TransactionRequestBuilder,
+    TransactionRequestError,
+    TransactionScript,
 };
 use miden_client::utils::{Deserializable, RwLock};
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -553,7 +558,7 @@ mod tests {
             tx_mint_requests.send((mint_request, sender)).await.unwrap();
             receivers.push(receiver);
         }
-        // Drop the sender so the channel closes after all requests are sent
+        // Close channel after all requests are sent
         drop(tx_mint_requests);
 
         let store = Arc::new(
@@ -572,8 +577,7 @@ mod tests {
             assert_eq!(notes.len(), 1);
         }
 
-        // Wait for the faucet thread to complete
-        faucet_handle.join().expect("Faucet thread panicked");
+        faucet_handle.join().unwrap();
     }
 
     // TESTING HELPERS
@@ -607,9 +611,7 @@ mod tests {
 
             // Run the faucet on this thread's runtime
             rt.block_on(async {
-                // Use a temporary unique keystore directory for tests
-                let keystore_path = temp_dir().join(format!("keystore_{}", Uuid::new_v4()));
-                let keystore = FilesystemKeyStore::new(keystore_path).unwrap();
+                let keystore = FilesystemKeyStore::new(PathBuf::from("keystore")).unwrap();
                 keystore.add_key(&key).unwrap();
 
                 let mut client = MockClient::new(
