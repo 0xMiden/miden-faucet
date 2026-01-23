@@ -9,6 +9,7 @@
 - Updated faucet optional deployment to use an empty transaction (#[182](https://github.com/0xMiden/miden-faucet/pull/182)).
 - Added a feature `tokio` for the `miden-pow-rate-limiter` crate ([#188](https://github.com/0xMiden/miden-faucet/pull/188).)
 - Added integration to import mint private notes directly to the wallet ([#189](https://github.com/0xMiden/miden-faucet/pull/189)).
+- Added a new `miden-faucet-client` binary with the `mint` command ([#196](https://github.com/0xMiden/miden-faucet/pull/196)).
 
 ## 0.12.4 (2025-12-04)
 
@@ -87,7 +88,7 @@
 - Redesigned the home frontend ([#20](https://github.com/0xMiden/miden-faucet/pull/20)).
 - Redesigned the tokens request flows ([#25](https://github.com/0xMiden/miden-faucet/pull/25)).
 - Added faucet supply amounts to the metadata ([#30](https://github.com/0xMiden/miden-faucet/pull/30)).
-- Added supply exceeded check ([#31](https://github.com/0xMiden/miden-faucet/pull/31)). 
+- Added supply exceeded check ([#31](https://github.com/0xMiden/miden-faucet/pull/31)).
 - Use HTTP 429 status code for rate limited error ([#51](https://github.com/0xMiden/miden-faucet/pull/51)).
 - Replace amount options validation for maximum claimable amount ([#52](https://github.com/0xMiden/miden-faucet/pull/52)).
 - Added `mdbook` documentation ([#61](https://github.com/0xMiden/miden-faucet/pull/61)).
