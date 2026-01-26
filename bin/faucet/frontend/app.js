@@ -1,6 +1,6 @@
 import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
 import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
-import { Endpoint, NoteId, RpcClient } from "@demox-labs/miden-sdk";
+import { Endpoint, NoteId, RpcClient } from "@miden-sdk/miden-sdk";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
 import { getConfig, getMetadata, getPowChallenge, getTokens, get_note } from "./api.js";
