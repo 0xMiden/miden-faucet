@@ -227,10 +227,8 @@ export class UIController {
 
     hideDownloadedNoteHints() {
         const nextSteps = document.getElementById('next-steps');
-        console.log('nextSteps', nextSteps);
         nextSteps.style.display = 'none';
         const warningText = document.getElementById('warning-text');
-        console.log('warningText', warningText);
         warningText.style.display = 'none';
     }
 

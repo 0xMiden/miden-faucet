@@ -22,6 +22,7 @@ miden-client-sqlite-store = { workspace = true }
 # External dependencies.
 anyhow    = { workspace = true }
 rand      = { features = ["thread_rng"], workspace = true }
+serde     = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { features = ["fs"], workspace = true }
 tracing   = { workspace = true }
