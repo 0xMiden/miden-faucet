@@ -21,7 +21,8 @@ export class MidenFaucetApp {
         // Check if Web Crypto API is available
         if (!window.crypto || !window.crypto.subtle) {
             console.error("Web Crypto API not available");
-            this.ui.showError('Web Crypto API not available. Please use a modern browser.');
+            this.ui.showConnectionError('Web Crypto API not available', 'Please use a modern browser');
+            return;
         }
 
         this.walletAdapter = new MidenWalletAdapter({ appName: 'Miden Faucet' });
@@ -38,7 +39,7 @@ export class MidenFaucetApp {
             this.startMetadataPolling();
         } catch (error) {
             console.error('Failed to initialize app:', error);
-            this.ui.showError('Failed to initialize application. Please refresh the page.');
+            this.handleApiError(error, 'Connection failed', 'Some data couldn\'t be loaded right now.');
         }
     }
 
@@ -65,6 +66,7 @@ export class MidenFaucetApp {
             await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
         } catch (error) {
             console.error("WalletConnectionError:", error);
+            this.ui.showConnectionError("Connection failed", "Failed to connect wallet.");
         }
     }
 
@@ -73,87 +75,72 @@ export class MidenFaucetApp {
             const { recipient, amount, amountAsTokens } = this.ui.getFormData();
 
             if (!recipient) {
-                this.ui.showError('Recipient address is required.');
+                this.ui.showInvalidRequestError('Invalid address', 'Please enter a recipient address.');
                 return;
             }
             if (!amount || amount === '0') {
-                this.ui.showError('Amount is required.');
+                this.ui.showInvalidRequestError('Invalid amount', 'Please enter a non zero amount.');
                 return;
             }
             if (!Utils.validateAddress(recipient)) {
-                this.ui.showError('Please enter a valid recipient address.');
+                this.ui.showInvalidRequestError('Invalid address', 'Please enter a valid recipient address.');
                 return;
             }
 
-            this.ui.hideMessages();
+            this.ui.hideErrors();
             this.ui.showMintingModal(recipient, amountAsTokens, isPrivateNote);
-            this.ui.updateMintingTitle('PREPARING THE REQUEST');
-            this.ui.updateProgressBar(0);
 
             const powData = await getPowChallenge(this.apiUrl, recipient, amount);
             const nonce = await this.findValidNonce(powData.challenge, powData.target);
 
-            this.ui.updateMintingTitle('MINTING TOKENS');
-            this.ui.updateProgressBar(33);
-
             const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
-
-            this.ui.updateMintingTitle('CONFIRMING TRANSACTION');
-            this.ui.updateProgressBar(66);
 
             await this.pollNote(getTokensResponse.note_id);
 
-            this.ui.showCompletedModal(
-                recipient,
-                amountAsTokens,
-                isPrivateNote,
-                getTokensResponse.tx_id,
-                getTokensResponse.note_id,
-                (noteId) => this.downloadNote(noteId, recipient),
-                () => {
-                    this.ui.hideModals();
-                    this.ui.resetForm();
-                }
-            );
+            this.ui.hideMintingModal();
+            if (isPrivateNote) {
+                this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.note_id, getTokensResponse.tx_id, (noteId) => this.downloadNote(noteId, recipient));
+            } else {
+                this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id);
+            }
         } catch (error) {
-            this.ui.showError(error);
+            this.ui.hideMintingModal();
+            this.handleApiError(error, 'Request failed', error.message);
             return;
         }
     }
 
     startMetadataPolling() {
-        this.fetchMetadata();
+        try {
+            this.fetchMetadata();
+        } catch (error) {
+            this.ui.showConnectionError('Connection failed', 'Some data couldn\'t be loaded right now.');
+            console.error('Error fetching metadata:', error);
+        }
 
         // Poll every 4 seconds
         this.metadataInterval = setInterval(() => {
-            this.fetchMetadata();
+            try {
+                this.fetchMetadata();
+            } catch (error) {
+                console.error('Error fetching metadata:', error);
+            }
         }, 4 * SECOND);
     }
 
     async fetchMetadata() {
-        try {
-            const data = await getMetadata(this.apiUrl);
+        const data = await getMetadata(this.apiUrl);
 
-            this.ui.setIssuanceAndSupply(data.issuance, data.max_supply, data.decimals);
-            this.powLoadDifficulty = data.pow_load_difficulty;
-            this.baseAmount = data.base_amount;
+        this.ui.setIssuanceAndSupply(data.issuance, data.max_supply, data.decimals);
+        this.powLoadDifficulty = data.pow_load_difficulty;
+        this.baseAmount = data.base_amount;
 
-            if (this.metadataError) {
-                this.metadataError = false;
-                this.ui.hideMessages();
-            }
-
-            if (!this.metadataInitialized) {
-                this.metadataInitialized = true;
-                this.ui.setFaucetId(data.id);
-                this.ui.setExplorerUrl(data.explorer_url);
-                this.ui.setTokenOptions(this.tokenAmountOptions, data.decimals);
-                this.updateTokenHint(this.tokenAmountOptions[0]);
-            }
-        } catch (error) {
-            this.metadataError = true;
-            this.ui.showError('Failed to connect to the faucet API server (FetchMetadata).');
-            console.error('Error fetching metadata:', error);
+        if (!this.metadataInitialized) {
+            this.metadataInitialized = true;
+            this.ui.setFaucetId(data.id);
+            this.ui.setExplorerUrl(data.explorer_url);
+            this.ui.setTokenOptions(this.tokenAmountOptions, data.decimals);
+            this.updateTokenHint(this.tokenAmountOptions[0]);
         }
     }
 
@@ -186,30 +173,49 @@ export class MidenFaucetApp {
         return estimatedTime;
     }
 
+    async importNoteToWallet(noteId, data) {
+        try {
+            // Prevent hanging if the user doesn't see or respond to the wallet popup
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Import timeout')), 60000);
+            });
+
+            await Promise.race([
+                this.walletAdapter.importPrivateNote(data),
+                timeoutPromise
+            ]);
+            return true;
+        } catch (error) {
+            console.error("Failed to import private note to wallet:", error);
+            return false;
+        }
+    }
+
     async downloadNote(noteId, recipient) {
-        this.ui.hidePrivateModalError();
         try {
             const data = await get_note(this.apiUrl, noteId);
 
-            // Decode base64
-            const binaryString = atob(data.data_base64);
-            const byteArray = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                byteArray[i] = binaryString.charCodeAt(i);
+            await this.connectWallet();
+            // if the recipient's wallet is connected, import note directly
+            let noteImported = false;
+            if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
+                this.ui.setPrivateMintedSubtitle('Please check your <strong>Miden Wallet</strong> to accept the import...');
+                noteImported = await this.importNoteToWallet(noteId, data);
+                if (noteImported) {
+                    this.ui.setPrivateMintedSubtitle('Go to your <strong>Miden Wallet</strong> to claim.');
+                    this.ui.showCloseButton();
+                }
             }
 
-            await this.connectWallet();
-            if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
-                await this.walletAdapter.importPrivateNote(byteArray);
-                this.ui.showNoteImportedMessage();
-            } else {
-                const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+            if (!noteImported) {
+                this.ui.setPrivateMintedSubtitle('Follow the instructions to claim.');
+                this.ui.showDownloadedNoteHints();
+                const blob = new Blob([data], { type: 'application/octet-stream' });
                 Utils.downloadBlob(blob, 'note.mno');
-                this.ui.showNoteDownloadedMessage();
             }
         } catch (error) {
             console.error('Error downloading note:', error);
-            this.ui.showPrivateModalError('Failed to download note: ' + error.message);
+            this.handleApiError(error, 'Download failed', error.message);
         }
     }
 
@@ -230,7 +236,7 @@ export class MidenFaucetApp {
                     }
                 } catch (err) {
                     console.error('Error polling for note:', err);
-                    return reject('Error fetching note confirmation.');
+                    this.ui.showConnectionError('Connection failed', 'Could not fetch note confirmation. Retrying...');
                 }
 
                 // choose next delay: 0.5s up to 10s, then 1s up to 40s, then 5s
@@ -289,6 +295,35 @@ export class MidenFaucetApp {
             if (nonce % 1000 === 0) {
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
+        }
+    }
+
+    handleApiError(error, defaultTitle, defaultMessage) {
+        // Check if it's an ApiError with a status code
+        if (error.statusCode) {
+            const statusCode = error.statusCode;
+            const errorMessage = error.message || defaultMessage;
+
+            switch (statusCode) {
+                case 400: // Bad Request
+                    this.ui.showInvalidRequestError('Invalid request', errorMessage);
+                    break;
+                case 429: // Too Many Requests (Rate Limited)
+                    this.ui.showWaitError('Error!', errorMessage || 'Too many requests.');
+                    break;
+                case 500: // Internal Server Error
+                    this.ui.showConnectionError('Server error', errorMessage || 'An internal server error occurred.');
+                    break;
+                case 503: // Service Unavailable
+                    this.ui.showConnectionError('Service unavailable', errorMessage || 'The faucet is currently unavailable.');
+                    break;
+                default:
+                    // For other status codes, use the default error handler
+                    this.ui.showRequestFailedError(defaultTitle, errorMessage);
+            }
+        } else {
+            // For non-API errors (e.g. network errors), use default handler
+            this.ui.showRequestFailedError(defaultTitle, defaultMessage);
         }
     }
 }

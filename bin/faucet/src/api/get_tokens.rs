@@ -127,6 +127,12 @@ impl GetTokenError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
+            Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited(
+                remaining,
+            ))) => format!("Account is rate limited for {remaining} more seconds."),
+            Self::InvalidRequest(MintRequestError::AccountError(_)) => {
+                "Please enter a valid recipient address.".to_owned()
+            },
             Self::InvalidRequest(error) => error.to_string(),
             Self::MintError(error) => error.to_string(),
             Self::FaucetOverloaded => {
