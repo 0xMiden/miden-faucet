@@ -58,10 +58,9 @@ pub enum AssetAmountError {
 
 /// Type of note to generate for a mint request.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
 pub enum NoteType {
-    Private = 2,
-    Public = 1,
+    Private,
+    Public,
 }
 
 impl From<NoteType> for miden_client::note::NoteType {

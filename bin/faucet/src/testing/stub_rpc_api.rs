@@ -1,7 +1,5 @@
 use anyhow::Context;
-use miden_client::block::BlockHeader;
 use miden_client::crypto::{Forest, MmrDelta};
-use miden_client::utils::{Deserializable, Serializable};
 use miden_node_proto::generated::rpc::api_server;
 use miden_node_proto::generated::{self as proto};
 use miden_testing::MockChain;
@@ -27,14 +25,9 @@ impl api_server::Api for StubRpcApi {
         _request: Request<proto::rpc::BlockHeaderByNumberRequest>,
     ) -> Result<Response<proto::rpc::BlockHeaderByNumberResponse>, Status> {
         let mock_chain = MockChain::new();
-        let protocol_header = mock_chain.latest_block_header();
-
-        let bytes = protocol_header.to_bytes();
-        let client_header = BlockHeader::read_from_bytes(&bytes)
-            .map_err(|e| Status::internal(format!("Failed to deserialize block header: {e}")))?;
 
         Ok(Response::new(proto::rpc::BlockHeaderByNumberResponse {
-            block_header: Some((&client_header).into()),
+            block_header: Some(mock_chain.latest_block_header().into()),
             mmr_path: None,
             chain_length: None,
         }))
@@ -45,21 +38,17 @@ impl api_server::Api for StubRpcApi {
         _request: Request<proto::rpc::SyncStateRequest>,
     ) -> Result<Response<proto::rpc::SyncStateResponse>, Status> {
         let mock_chain = MockChain::new();
-        let protocol_header = mock_chain.latest_block_header();
-        let mmr_peaks = mock_chain.blockchain().peaks_at(protocol_header.block_num()).unwrap();
+        let header = mock_chain.latest_block_header();
+        let mmr_peaks = mock_chain.blockchain().peaks_at(header.block_num()).unwrap();
         let mmr_delta: MmrDelta = mock_chain
             .blockchain()
             .as_mmr()
             .get_delta(Forest::empty(), mmr_peaks.forest())
             .unwrap();
 
-        let bytes = protocol_header.to_bytes();
-        let client_header = BlockHeader::read_from_bytes(&bytes)
-            .map_err(|e| Status::internal(format!("Failed to deserialize block header: {e}")))?;
-
         Ok(Response::new(proto::rpc::SyncStateResponse {
-            chain_tip: client_header.block_num().as_u32(),
-            block_header: Some((&client_header).into()),
+            chain_tip: header.block_num().as_u32(),
+            block_header: Some(header.into()),
             mmr_delta: Some(mmr_delta.into()),
             accounts: vec![],
             transactions: vec![],

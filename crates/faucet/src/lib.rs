@@ -318,7 +318,7 @@ impl Faucet {
 
         // Build and submit transaction
         let tx_request =
-            self.create_transaction(notes).context("faucet failed to create transaction")?;
+            self.create_transaction(&notes).context("faucet failed to create transaction")?;
         let tx_id = self
             .submit_new_transaction(tx_request)
             .await
@@ -385,13 +385,13 @@ impl Faucet {
     #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err)]
     fn create_transaction(
         &mut self,
-        notes: Vec<Note>,
+        notes: &[Note],
     ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
         let n = notes.len() as u64;
         let mut note_data = vec![Felt::new(n)];
-        for note in &notes {
+        for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
             let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
 
