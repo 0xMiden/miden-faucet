@@ -390,6 +390,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
+name = "cfg_aliases"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
+
+[[package]]
 name = "chacha20"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1366,6 +1372,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-rustls"
+version = "0.27.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3c93eb611681b207e1fe55d5a71ecf91572ec8a6705cdb6857f7d8d5242cf58"
+dependencies = [
+ "http 1.4.0",
+ "hyper",
+ "hyper-util",
+ "rustls",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-rustls",
+ "tower-service",
+ "webpki-roots",
+]
+
+[[package]]
 name = "hyper-timeout"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1911,6 +1934,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96051b46fc183dc9cd4a223960ef37b9af631b55191852a8274bfef064cda20f"
 
 [[package]]
+name = "lru-slab"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1930,6 +1959,23 @@ name = "memchr"
 version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
+
+[[package]]
+name = "miden-agglayer"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccebe2f7aa9e173913a9da60bd21e8402936c784fdf1eba8c48956667def354e"
+dependencies = [
+ "fs-err",
+ "miden-assembly",
+ "miden-core",
+ "miden-core-lib",
+ "miden-protocol",
+ "miden-standards",
+ "miden-utils-sync",
+ "regex",
+ "walkdir",
+]
 
 [[package]]
 name = "miden-air"
@@ -1985,8 +2031,9 @@ dependencies = [
 
 [[package]]
 name = "miden-block-prover"
-version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#e062f7522e118c19b54b5ae496a9bf4a70debd78"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa9c89257b227d0668105b4a6e81ea33956795c89549cc1baa3f253d753e81e5"
 dependencies = [
  "miden-protocol",
  "thiserror 2.0.17",
@@ -1995,7 +2042,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#d8dee63e64e7fc9223e7dbc51dbd4c2669e05b85"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#2cf36dde562b0490be2180ff7c732110e654f868"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2029,7 +2076,7 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=next#d8dee63e64e7fc9223e7dbc51dbd4c2669e05b85"
+source = "git+https://github.com/0xMiden/miden-client?branch=next#2cf36dde562b0490be2180ff7c732110e654f868"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2188,6 +2235,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "miden-faucet-client"
+version = "0.13.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "hex",
+ "miden-client",
+ "miden-faucet-lib",
+ "miden-pow-rate-limiter",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "miden-faucet-lib"
 version = "0.13.0"
 dependencies = [
@@ -2195,6 +2262,7 @@ dependencies = [
  "miden-client",
  "miden-client-sqlite-store",
  "rand",
+ "serde",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -2268,7 +2336,7 @@ dependencies = [
 [[package]]
 name = "miden-node-grpc-error-macro"
 version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#34b15eca26d7ab04d45394d1be06d65b3b52c626"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#4bd7cfffafb57986b944f2991190b603b78fd04e"
 dependencies = [
  "quote",
  "syn 2.0.111",
@@ -2277,7 +2345,7 @@ dependencies = [
 [[package]]
 name = "miden-node-proto"
 version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#34b15eca26d7ab04d45394d1be06d65b3b52c626"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#4bd7cfffafb57986b944f2991190b603b78fd04e"
 dependencies = [
  "anyhow",
  "fs-err",
@@ -2287,6 +2355,7 @@ dependencies = [
  "miden-node-proto-build",
  "miden-node-utils",
  "miden-protocol",
+ "miden-standards",
  "miette",
  "prost",
  "thiserror 2.0.17",
@@ -2299,7 +2368,7 @@ dependencies = [
 [[package]]
 name = "miden-node-proto-build"
 version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#77471e2232c102e9e57099da3f8557aeece55917"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#4bd7cfffafb57986b944f2991190b603b78fd04e"
 dependencies = [
  "fs-err",
  "miette",
@@ -2310,12 +2379,11 @@ dependencies = [
 [[package]]
 name = "miden-node-utils"
 version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#34b15eca26d7ab04d45394d1be06d65b3b52c626"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#4bd7cfffafb57986b944f2991190b603b78fd04e"
 dependencies = [
  "anyhow",
  "bytes",
  "figment",
- "fs-err",
  "http 1.4.0",
  "http-body-util",
  "itertools",
@@ -2339,7 +2407,7 @@ dependencies = [
 [[package]]
 name = "miden-note-transport-proto-build"
 version = "0.1.0"
-source = "git+https://github.com/0xMiden/miden-note-transport.git?branch=main#56de97362cc3428c93db19b484dafc60716b955f"
+source = "git+https://github.com/0xMiden/miden-note-transport.git?branch=main#4c94f3b48e717e6056f48beb4fb1786f20dd630e"
 dependencies = [
  "fs-err",
  "miette",
@@ -2379,8 +2447,9 @@ dependencies = [
 
 [[package]]
 name = "miden-protocol"
-version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#e062f7522e118c19b54b5ae496a9bf4a70debd78"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfed3ae85e2fabbf8a2e7416e388a40519e10cbf0cdceda222ef858c2f270b35"
 dependencies = [
  "bech32",
  "fs-err",
@@ -2409,8 +2478,9 @@ dependencies = [
 
 [[package]]
 name = "miden-protocol-macros"
-version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#e062f7522e118c19b54b5ae496a9bf4a70debd78"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f41a93dd532baa3a4c821073baad5d700aab119b3831ef7fdf004e196c10157e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2434,7 +2504,7 @@ dependencies = [
 [[package]]
 name = "miden-remote-prover-client"
 version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-node?branch=next#77471e2232c102e9e57099da3f8557aeece55917"
+source = "git+https://github.com/0xMiden/miden-node?branch=next#4bd7cfffafb57986b944f2991190b603b78fd04e"
 dependencies = [
  "fs-err",
  "getrandom 0.3.4",
@@ -2453,8 +2523,9 @@ dependencies = [
 
 [[package]]
 name = "miden-standards"
-version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#e062f7522e118c19b54b5ae496a9bf4a70debd78"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16144e41701794b45b7a361ec7d35407a90c4d1d129a43df0bc278d5f3327999"
 dependencies = [
  "fs-err",
  "miden-assembly",
@@ -2470,12 +2541,16 @@ dependencies = [
 
 [[package]]
 name = "miden-testing"
-version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#e062f7522e118c19b54b5ae496a9bf4a70debd78"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd0c6d0ceb4e6719a5afe76b9627b73e91506ebb66350d56ca9ed606127e4dc"
 dependencies = [
  "anyhow",
  "itertools",
+ "miden-agglayer",
+ "miden-assembly",
  "miden-block-prover",
+ "miden-core-lib",
  "miden-processor",
  "miden-protocol",
  "miden-standards",
@@ -2488,8 +2563,9 @@ dependencies = [
 
 [[package]]
 name = "miden-tx"
-version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#e062f7522e118c19b54b5ae496a9bf4a70debd78"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a97f26c833633cea0d95ddb38bcd8bd7e8225b4e7746c15070cb9ab7b85e248c"
 dependencies = [
  "miden-processor",
  "miden-protocol",
@@ -2501,8 +2577,9 @@ dependencies = [
 
 [[package]]
 name = "miden-tx-batch-prover"
-version = "0.13.0"
-source = "git+https://github.com/0xMiden/miden-base?branch=next#e062f7522e118c19b54b5ae496a9bf4a70debd78"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0669ce9d9c7aacd49e4923edb88fe668e370c02a754d1564b10a97501e37310f"
 dependencies = [
  "miden-protocol",
  "miden-tx",
@@ -3271,6 +3348,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "quinn"
+version = "0.11.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9e20a958963c291dc322d98411f541009df2ced7b5a4f2bd52337638cfccf20"
+dependencies = [
+ "bytes",
+ "cfg_aliases",
+ "pin-project-lite",
+ "quinn-proto",
+ "quinn-udp",
+ "rustc-hash",
+ "rustls",
+ "socket2",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "web-time",
+]
+
+[[package]]
+name = "quinn-proto"
+version = "0.11.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1906b49b0c3bc04b5fe5d86a77925ae6524a19b816ae38ce1e426255f1d8a31"
+dependencies = [
+ "bytes",
+ "getrandom 0.3.4",
+ "lru-slab",
+ "rand",
+ "ring",
+ "rustc-hash",
+ "rustls",
+ "rustls-pki-types",
+ "slab",
+ "thiserror 2.0.17",
+ "tinyvec",
+ "tracing",
+ "web-time",
+]
+
+[[package]]
+name = "quinn-udp"
+version = "0.5.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "addec6a0dcad8a8d96a771f815f0eaf55f9d1805756410b39f5fa81332574cbd"
+dependencies = [
+ "cfg_aliases",
+ "libc",
+ "once_cell",
+ "socket2",
+ "tracing",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3421,16 +3553,21 @@ dependencies = [
  "http-body",
  "http-body-util",
  "hyper",
+ "hyper-rustls",
  "hyper-util",
  "js-sys",
  "log",
  "percent-encoding",
  "pin-project-lite",
+ "quinn",
+ "rustls",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper",
  "tokio",
+ "tokio-rustls",
  "tower",
  "tower-http",
  "tower-service",
@@ -3438,6 +3575,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -3493,6 +3631,12 @@ name = "rustc-demangle"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56f7d92ca342cea22a06f2121d944b4fd82af56988c270852495420f961d4ace"
+
+[[package]]
+name = "rustc-hash"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
 
 [[package]]
 name = "rustc_version"
@@ -3571,6 +3715,7 @@ version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "708c0f9d5f54ba0272468c1d306a52c495b31fa155e91bc25371e6df7996908c"
 dependencies = [
+ "web-time",
  "zeroize",
 ]
 
@@ -4170,6 +4315,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyvec"
+version = "1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfa5fdc3bce6191a1dbc8c02d5c8bffcf557bafa17c124c5264a458f1b0613fa"
+dependencies = [
+ "tinyvec_macros",
+]
+
+[[package]]
+name = "tinyvec_macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
 name = "tokio"
 version = "1.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4468,9 +4628,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.6.7"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf146f99d442e8e68e585f5d798ccd3cad9a7835b917e09728880a862706456"
+checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
 dependencies = [
  "async-compression",
  "bitflags",
@@ -4897,6 +5057,15 @@ dependencies = [
  "thiserror 1.0.69",
  "time",
  "url",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12bed680863276c63889429bfd6cab3b99943659923822de1c8a39c49e4d722c"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]

@@ -3,12 +3,7 @@ use std::process::Command;
 use std::{env, fs};
 
 fn main() {
-    println!("cargo:rerun-if-changed=frontend/api.js");
-    println!("cargo:rerun-if-changed=frontend/app.js");
-    println!("cargo:rerun-if-changed=frontend/ui.js");
-    println!("cargo:rerun-if-changed=frontend/utils.js");
-    println!("cargo:rerun-if-changed=frontend/package.json");
-    println!("cargo:rerun-if-changed=frontend/package-lock.json");
+    println!("cargo:rerun-if-changed=frontend");
 
     let build_dir = env::var("OUT_DIR").expect("OUT_DIR should be set");
     let target_dir = Path::new(&build_dir).join("frontend");

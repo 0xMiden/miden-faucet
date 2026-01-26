@@ -38,10 +38,8 @@ impl api_server::Api for StubRpcApi {
         _request: Request<proto::rpc::SyncStateRequest>,
     ) -> Result<Response<proto::rpc::SyncStateResponse>, Status> {
         let mock_chain = MockChain::new();
-        let mmr_peaks = mock_chain
-            .blockchain()
-            .peaks_at(mock_chain.latest_block_header().block_num())
-            .unwrap();
+        let header = mock_chain.latest_block_header();
+        let mmr_peaks = mock_chain.blockchain().peaks_at(header.block_num()).unwrap();
         let mmr_delta: MmrDelta = mock_chain
             .blockchain()
             .as_mmr()
@@ -49,8 +47,8 @@ impl api_server::Api for StubRpcApi {
             .unwrap();
 
         Ok(Response::new(proto::rpc::SyncStateResponse {
-            chain_tip: 0,
-            block_header: Some(mock_chain.latest_block_header().into()),
+            chain_tip: header.block_num().as_u32(),
+            block_header: Some(header.into()),
             mmr_delta: Some(mmr_delta.into()),
             accounts: vec![],
             transactions: vec![],
@@ -86,10 +84,10 @@ impl api_server::Api for StubRpcApi {
         unimplemented!()
     }
 
-    async fn get_account_details(
+    async fn get_account(
         &self,
-        _request: Request<proto::account::AccountId>,
-    ) -> Result<Response<proto::account::AccountDetails>, Status> {
+        _request: Request<proto::rpc::AccountRequest>,
+    ) -> Result<Response<proto::rpc::AccountResponse>, Status> {
         Err(Status::not_found("account not found"))
     }
 
@@ -114,17 +112,10 @@ impl api_server::Api for StubRpcApi {
         unimplemented!()
     }
 
-    async fn sync_storage_maps(
+    async fn sync_account_storage_maps(
         &self,
-        _request: Request<proto::rpc::SyncStorageMapsRequest>,
-    ) -> Result<Response<proto::rpc::SyncStorageMapsResponse>, Status> {
-        unimplemented!()
-    }
-
-    async fn get_account_proof(
-        &self,
-        _request: Request<proto::rpc::AccountProofRequest>,
-    ) -> Result<Response<proto::rpc::AccountProofResponse>, Status> {
+        _request: Request<proto::rpc::SyncAccountStorageMapsRequest>,
+    ) -> Result<Response<proto::rpc::SyncAccountStorageMapsResponse>, Status> {
         unimplemented!()
     }
 

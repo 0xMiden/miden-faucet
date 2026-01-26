@@ -1,7 +1,16 @@
+// Custom error class to include status code
+export class ApiError extends Error {
+    constructor(message, statusCode) {
+        super(message);
+        this.name = 'ApiError';
+        this.statusCode = statusCode;
+    }
+}
+
 export async function getConfig() {
     const response = await fetch('/config.json');
     if (!response.ok) {
-        throw new Error(`Failed to fetch config.json file: ${response.statusText}`);
+        throw new ApiError(response.statusText, response.status);
     }
     return JSON.parse(await response.json());
 }
@@ -9,7 +18,7 @@ export async function getConfig() {
 export async function getMetadata(backendUrl) {
     const response = await fetch(backendUrl + '/get_metadata');
     if (!response.ok) {
-        throw new Error(`Failed to get metadata: ${response.statusText}`);
+        throw new ApiError(response.statusText, response.status);
     }
     return response.json();
 }
@@ -22,7 +31,7 @@ export async function getPowChallenge(backendUrl, recipient, amount) {
 
     if (!response.ok) {
         const message = await response.text();
-        throw new Error(`Failed to get PoW challenge: ${message}`);
+        throw new ApiError(message, response.status);
     }
 
     return response.json();
@@ -41,7 +50,7 @@ export async function getTokens(backendUrl, challenge, nonce, recipient, amount,
 
     if (!response.ok) {
         const message = await response.text();
-        throw new Error(`Failed to receive tokens: ${message}`);
+        throw new ApiError(message, response.status);
     }
 
     return response.json();
@@ -53,7 +62,16 @@ export async function get_note(backendUrl, noteId) {
     }));
     if (!response.ok) {
         const message = await response.text();
-        throw new Error(`Failed to get note: ${message}`);
+        throw new ApiError(message, response.status);
     }
-    return response.json();
+    const json = await response.json();
+
+    // Decode base64
+    const binaryString = atob(json.data_base64);
+    const byteArray = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        byteArray[i] = binaryString.charCodeAt(i);
+    }
+
+    return byteArray;
 }
