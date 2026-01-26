@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
+use miden_client::account::component::{AuthFalcon512Rpo, BasicFungibleFaucet};
 use miden_client::account::{
     Account,
     AccountBuilder,
@@ -483,7 +483,7 @@ fn create_faucet_account(
     let max_supply = Felt::try_from(max_supply)
         .map_err(anyhow::Error::msg)
         .context("max supply value is greater than or equal to the field modulus")?;
-    let auth_component = AuthRpoFalcon512::new(secret.public_key().to_commitment().into());
+    let auth_component = AuthFalcon512Rpo::new(secret.public_key().to_commitment().into());
 
     let account = AccountBuilder::new(rng.random())
         .account_type(AccountType::FungibleFaucet)
@@ -493,7 +493,7 @@ fn create_faucet_account(
         .build()
         .context("failed to create basic fungible faucet account")?;
 
-    Ok((account, AuthSecretKey::RpoFalcon512(secret)))
+    Ok((account, AuthSecretKey::Falcon512Rpo(secret)))
 }
 
 // TESTS
