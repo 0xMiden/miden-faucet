@@ -185,8 +185,8 @@ export class MidenFaucetApp {
                 timeoutPromise
             ]);
             return true;
-        } catch {
-            // Ignore errors if the wallet integration fails
+        } catch (error) {
+            console.log("Failed to connect with the wallet:", error);
             return false;
         }
     }
