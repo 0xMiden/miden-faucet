@@ -186,7 +186,7 @@ export class MidenFaucetApp {
             ]);
             return true;
         } catch (error) {
-            console.log("Failed to connect with the wallet:", error);
+            console.log("Wallet integration not available:", error);
             return false;
         }
     }
