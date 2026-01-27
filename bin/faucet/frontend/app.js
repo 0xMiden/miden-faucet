@@ -185,8 +185,8 @@ export class MidenFaucetApp {
                 timeoutPromise
             ]);
             return true;
-        } catch (error) {
-            console.error("Failed to import private note to wallet:", error);
+        } catch {
+            // Ignore errors if the wallet integration fails
             return false;
         }
     }
