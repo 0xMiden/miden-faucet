@@ -38,8 +38,8 @@ miden-faucet init \
 
 ```bash
 miden-faucet start \
-  --api-bind-url <URL> \
-  --frontend-url <URL> \
+  --api-bind-port <PORT> \
+  --frontend-bind-port <PORT> \
   --node-url <URL> \
   --network <NETWORK>
 ```
@@ -69,9 +69,10 @@ miden-faucet start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--api-bind-url` | URL to serve the faucet API | - | Yes |
-| `--api-public-url` | Public URL to access the faucet API. If not set, the bind url will be used. | - | No |
-| `--frontend-url` | URL to serve the Frontend API | - | No |
+| `--api-bind-port` | Port to bind the API server | 8000 | No |
+| `--api-public-url` | Public URL to access the faucet API | http://localhost:8000 | No |
+| `--frontend-bind-port` | Port to bind the frontend server | 8080 | No |
+| `--no-frontend` | Optionally disable the frontend server | false | No |
 | `--node-url` | Miden node RPC endpoint. If not set, it will be derived from the network | - | No |
 | `--network` | Network configuration | `localhost` | No |
 | `--timeout` | RPC request timeout | `5s` | No |
@@ -112,8 +113,9 @@ export MIDEN_FAUCET_DECIMALS=
 export MIDEN_FAUCET_MAX_SUPPLY=
 
 # Faucet Service Configuration
-export MIDEN_FAUCET_FRONTEND_URL=http://localhost:8080
-export MIDEN_FAUCET_API_BIND_URL=http://localhost:8000
+export MIDEN_FAUCET_API_BIND_PORT=8000
+export MIDEN_FAUCET_FRONTEND_BIND_PORT=8080
+export MIDEN_FAUCET_NO_FRONTEND=false
 export MIDEN_FAUCET_API_PUBLIC_URL=http://localhost:8000
 export MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT=1000000000
 export MIDEN_FAUCET_ENABLE_OTEL=true
@@ -222,13 +224,13 @@ miden-faucet init \
   --node-url http://localhost:57291
 
 miden-faucet start \
-  --frontend-url http://localhost:8080 \
-  --api-bind-url http://localhost:8000 \
+  --frontend-bind-port 8080 \
+  --api-bind-port 8000 \
   --node-url http://localhost:57291 \
   --network localhost
 ```
 
-For detailed options, run `miden-faucet [COMMAND] --help`. The legacy alias `miden-faucet` is still available for backwards compatibility.
+For detailed options, run `miden-faucet [COMMAND] --help`.
 
 ## Requesting tokens from a live faucet
 

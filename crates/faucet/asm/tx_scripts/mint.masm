@@ -1,12 +1,10 @@
-const.AUX=0
-const.EXECUTION_HINT=1
-const.EXPIRATION_DELTA=10
+const EXPIRATION_DELTA=10
 
 #! Returns a boolean indicating if the notes counter `i` has reached `n`
 #!
 #! Inputs:  [i, n]
 #! Outputs: [i != n, i, n]
-proc.check_continue_neq
+proc check_continue_neq
     # [i, n]
     dup.1
     dup.1
@@ -34,7 +32,7 @@ end
 begin
     # Set the transaction expiration delta (10 blocks)
     push.EXPIRATION_DELTA
-    exec.::miden::tx::update_expiration_block_delta
+    exec.::miden::protocol::tx::update_expiration_block_delta
     # OS => []
 
     adv.push_mapval dropw
@@ -53,11 +51,12 @@ begin
         # AS => [RECIPIENT_i, note_type_i, tag_i, amount_i, ...]
 
         # set the params for the distribute call by getting values from the advice stack
-        push.0.0.0.0.0.0.0 adv_push.4 push.EXECUTION_HINT adv_push.1 push.AUX adv_push.2
-        # OS => [amount_i, tag_i, 0, note_type_i, 1, RECIPIENT_i, pad(7), i, n]
+        # We need stack: [amount, tag, note_type, RECIPIENT(4), pad(9), i, n]
+        push.0.0.0.0.0.0.0.0.0 adv_push.4 adv_push.3
+        # OS => [amount_i, tag_i, note_type_i, RECIPIENT_i(4), pad(9), i, n]
         # AS => [...]
 
-        call.::miden::contracts::faucets::basic_fungible::distribute
+        call.::miden::standards::faucets::basic_fungible::distribute
         # OS => [note_idx, pad(15), i, n]
 
         dropw dropw dropw dropw

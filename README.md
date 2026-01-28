@@ -29,13 +29,9 @@ miden-faucet init \
 > [!TIP]
 > This account will not be created on chain yet, creation on chain will happen on the first minting transaction.
 
-> You can also run the legacy alias `miden-faucet` for backwards compatibility; it runs the same `miden-faucet` binary.
-
 3. Start the faucet:
 ```bash
 miden-faucet start \
-  --frontend-url http://localhost:8080 \
-  --api-bind-url http://localhost:8000 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```

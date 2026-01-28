@@ -25,10 +25,21 @@ export const Utils = {
     },
 
     baseUnitsToTokens: (baseUnits, decimals) => {
-        return (baseUnits / 10 ** decimals).toLocaleString();
+        return (baseUnits / 10 ** decimals).toLocaleString(undefined, {
+            maximumFractionDigits: 0,
+        });
     },
 
     tokensToBaseUnits: (tokens, decimals) => {
         return tokens * (10 ** decimals);
+    },
+
+    idFromBech32: (address) => {
+        return address.split('_')[0];
+    },
+
+    fromHex: (hex) => {
+        hex = hex.trim().replace(/^0x/i, '');
+        return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
     },
 };

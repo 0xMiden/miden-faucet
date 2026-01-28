@@ -5,11 +5,11 @@
 }
 
 body {
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     background-color: #ffffff;
-    color: rgba(0, 0, 0, 0.4);
+    background-image: radial-gradient(circle, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+    background-size: 8px 8px;
     font-weight: 500;
-    letter-spacing: -0.04em;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -20,21 +20,20 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 55px 20px 0;
+    padding: 45px 20px 0;
 }
 
 .header {
-    margin-bottom: 55px;
+    margin-bottom: 30px;
 }
 
 .header-text {
     position: relative;
-    color: rgb(255, 255, 255);
+    color: black;
     top: -22px;
     translate: 10px 0;
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     font-size: 13px;
-    letter-spacing: 0;
 }
 
 .logo-icon {
@@ -56,7 +55,7 @@ body {
 
 .main-content {
     width: 100%;
-    max-width: 400px;
+    max-width: 550px;
 }
 
 .form-title {
@@ -72,17 +71,18 @@ body {
 
 .form-label {
     display: block;
-    font-size: 14px;
+    font-size: 15px;
+    font-weight: 400;
     margin-bottom: 8px;
+    color: rgba(0, 0, 0, 1);
 }
 
 .form-input {
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     font-weight: 500;
-    letter-spacing: -0.02em;
     font-size: 13px;
     width: 100%;
-    height: 48px;
+    height: 50px;
     padding: 0 16px;
     border: 0.5px solid #e0e0e0;
     background-color: white;
@@ -96,12 +96,11 @@ body {
 }
 
 .form-select {
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     font-weight: 500;
-    letter-spacing: -0.02em;
     font-size: 13px;
     width: 100%;
-    height: 48px;
+    height: 50px;
     padding: 0 16px;
     border: 0.5px solid #e0e0e0;
     background-color: white;
@@ -121,11 +120,12 @@ body {
 }
 
 .token-amount-hint {
-    font-size: 11px;
+    font-family: "SF Pro Display", sans-serif;
+    font-size: 13px;
     font-style: italic;
     font-weight: 400;
     margin-top: 8px;
-    color: rgba(0, 0, 0, 0.4);
+    color: rgba(0, 0, 0, 0.3);
 }
 
 .button-group {
@@ -136,14 +136,13 @@ body {
 }
 
 .button {
-    font-family: "DM Mono", monospace;
+    font-family: "Geist", monospace;
     font-weight: 500;
-    letter-spacing: -0.02em;
-    font-size: 16px;
+    font-size: 15px;
     width: 100%;
-    height: 48px;
+    height: 50px;
     border: 1px solid #e0e0e0;
-    background-color: rgba(0, 0, 0, 0.02);
+    background-color: rgba(249, 249, 249, 1);
     color: #ff5500;
     cursor: pointer;
     display: flex;
@@ -166,51 +165,60 @@ body {
 }
 
 .note {
+    font-family: "SF Pro Display", sans-serif;
     text-align: center;
-    font-size: 12px;
-    font-weight: 400;
-    letter-spacing: -0.04em;
+    font-size: 13px;
+    font-weight: 500;
     font-style: italic;
-    color: rgba(0, 0, 0, 0.26);
+    color: rgba(0, 0, 0, 0.3);
 }
 
 .modal-overlay {
-    font-family: "DM Mono", monospace;
-    letter-spacing: -0.02em;
-    color: rgba(0, 0, 0, 0.4);
+    font-family: "Geist", monospace;
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    backdrop-filter: blur(50px);
+    backdrop-filter: brightness(0.96) blur(50px);
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     z-index: 2;
     visibility: hidden;
+    overflow: scroll;
 }
 
 .modal-overlay.active {
     visibility: visible;
 }
 
-.modal-content {
-    background: white;
-    border: 0.5px solid rgba(0, 0, 0, 0.1);
-    max-width: 600px;
+.modal-placeholder {
+    max-width: 550px;
     width: 90%;
     max-height: 90vh;
     text-align: center;
     transform: scale(0.9);
     position: absolute;
-    top: 50%;
+    top: 40%;
     translate: 0 -121px;
     opacity: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-.modal-overlay.active .modal-content {
+.modal-content {
+    background: white;
+    border: 0.5px solid #e0e0e0;
+    margin-bottom: 15px;
+    border-radius: 7px;
+    overflow: scroll;
+    width: 100%;
+}
+
+.modal-overlay.active .modal-placeholder {
     transition: transform 0.3s ease;
     transform: scale(1);
     opacity: 1;
@@ -221,11 +229,11 @@ body {
 }
 
 .modal-title {
-    font-size: 24px;
+    font-size: 21px;
     font-weight: 500;
     color: rgba(0, 0, 0, 1);
-    padding-bottom: 10px;
-    padding-top: 10px;
+    padding-bottom: 14px;
+    padding-top: 14px;
 }
 
 .modal-title .highlight {
@@ -234,12 +242,13 @@ body {
 
 #private-close-button {
     position: absolute;
-    top: 0px;
+    top: -34px;
     right: 0px;
     width: 26px;
     height: 26px;
     background: #ff5500;
     border: none;
+    border-radius: 5px;
     cursor: pointer;
     color: white;
     display: flex;
@@ -251,7 +260,7 @@ body {
 }
 
 #private-close-button:hover {
-    background-color: #f0f0f0;
+    background-color: #c0c0c0;
     color: #333;
 }
 
@@ -261,15 +270,13 @@ body {
 }
 
 .token-info {
-    font-size: 14px;
+    font-family: "SF Pro Display", sans-serif;
+    color: #000000;
+    font-size: 13px;
     font-weight: 400;
-    letter-spacing: 0;
-    margin-bottom: 15px;
     background-color: rgba(0, 0, 0, 0.02);
-    padding-top: 1px;
-    padding-bottom: 1px;
+    padding: 13px;
     border-top: 0.5px solid #e0e0e0;
-    border-bottom: 0.5px solid #e0e0e0;
 }
 
 .loading-section {
@@ -278,13 +285,16 @@ body {
     justify-content: center;
     position: relative;
     height: 60px;
+    margin-top: 15px;
 }
 
 .loader {
     width: 60px;
     height: 60px;
-    border: 3px solid #ff5500;
-    border-bottom-color: transparent;
+    border: 4px solid #ff5500;
+    border-bottom-color: rgb(255, 85, 0, 0.36);
+    border-right-color: rgb(255, 85, 0, 0.36);
+    border-top-color: rgb(255, 85, 0, 0.36);
     border-radius: 50%;
     display: inline-block;
     box-sizing: border-box;
@@ -298,92 +308,81 @@ body {
 }
 
 .minting-text {
-    margin-top: 25px;
+    margin-top: 15px;
     margin-bottom: 15px;
 }
 
 .minting-title {
-    font-size: 14px;
-    font-style: italic;
+    font-family: "SF Pro Display", sans-serif;
+    font-size: 15px;
     font-weight: 500;
-    letter-spacing: 0;
     color: rgba(0, 0, 0, 1);
-    margin-bottom: 8px;
+}
+
+.minting-hint {
+    font-family: "SF Pro Display", sans-serif;
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.5);
 }
 
 .minting-subtitle {
-    font-size: 11px;
-    color: #999;
-    letter-spacing: 0;
+    font-family: "SF Pro Display", sans-serif;
+    font-size: 12px;
+    color: #000000;
     font-style: italic;
 }
 
-.progress-bar-modal {
-    position: fixed;
-    top: 49%;
-    left: 50%;
-    transform: translate(-50%, 105px) scale(0.9);
-    z-index: 3;
-    width: 85%;
-    max-width: 550px;
-    height: 10px;
-    background-color: #e0e0e0;
-    overflow: hidden;
-    opacity: 0;
-    transition: transform 0.3s ease;
+.minting-subtitle strong {
+    color: #ff5500;
+    font-weight: 600;
 }
 
-.progress-bar-modal.active {
-    transform: translate(-50%, 109px) scale(1);
-    opacity: 1;
-}
-
-.progress-bar-placeholder {
-    height: 10px;
-    margin-bottom: 10px;
-}
-
-.progress-fill-modal {
-    height: 100%;
-    background-color: #FE5400;
-    width: 0%;
-    transition: width 0.2s ease;
+.minting-separator {
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.5);
+    height: 1px;
+    margin: 6px 47%;
 }
 
 .footer {
     margin-top: auto;
-    width: 100%;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-wrap: nowrap;
+    padding: 0px 65px;
 }
 
 .footer-metadata {
     color: rgba(0, 0, 0, 0.4);
-    padding: 20px 65px;
+    padding: 20px 0px;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 13px;
+    font-weight: 400;
+    width: 100%;
 }
 
 .footer-content {
     height: 54px;
-    border-top: 0.5px solid #e0e0e0;
     color: rgba(0, 0, 0, 1);
-    width: 100%;
-    padding: 0px 65px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 15px;
-    font-family: "DM Mono", monospace;
-    font-weight: 500;
+    font-size: 12px;
+    font-family: "SF Pro Display", sans-serif;
+    font-weight: 400;
+    width: 100vw;
+    padding: 0 65px;
+    background-color: rgba(249, 249, 249, 0.99);
 }
 
 .footer-content-section {
     display: flex;
     flex-direction: row;
     gap: 4px;
+    color: rgba(124, 124, 124, 1)
 }
 
 .footer-section {
@@ -393,10 +392,11 @@ body {
 
 .footer-label {
     margin-bottom: 4px;
+    color: #ff5500;
 }
 
 .footer-value {
-    color: rgba(0, 0, 0, 0.4);
+    color: rgba(0, 0, 0, 1);
     font-weight: 400;
     font-size: 12px;
 }
@@ -406,6 +406,11 @@ body {
 }
 
 .progress-bar {
+    height: 7px;
+    background-color: #ff5500;
+}
+
+.issuance-bar {
     width: 240px;
     height: 4px;
     background-color: #e0e0e0;
@@ -414,7 +419,7 @@ body {
     overflow: hidden;
 }
 
-.progress-fill {
+.issuance-fill {
     height: 100%;
     background-color: #ff5500;
     width: 0%;
@@ -422,53 +427,34 @@ body {
 }
 
 .error-message {
-    background-color: #f8d7da;
-    max-width: 400px;
-    color: #721c24;
+    position: relative;
+    margin-top: -15px;
+    background-color: #FFE8E9;
+    border: 0.5px solid #e0e0e0;
+    color: black;
     padding: 12px 16px;
     border-radius: 6px;
-    margin-top: 16px;
-    display: none;
+    z-index: 10;
     font-size: 14px;
     white-space: pre-wrap;
-    z-index: 2;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
 }
 
-@media (max-width: 768px) {
-    .container {
-        padding: 40px 16px 0;
-    }
-
-    .footer-metadata {
-        flex-direction: column;
-        gap: 26px;
-        text-align: center;
-        align-items: center;
-    }
-
-    .tokens-section {
-        text-align: center;
-    }
-
-    .progress-bar {
-        margin: 4px auto 0;
-    }
+.error-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 1);
 }
 
-@media (max-width: 516px) {
-    .progress-bar-modal {
-        top: 51%;
-    }
-
-    .warning-text {
-        top: 36vh;
-    }
-}
-
-@media (max-width: 314px) {
-    .progress-bar-modal {
-        top: 55%;
-    }
+.error-description {
+    font-size: 12px;
+    font-weight: 400;
+    background-color: white;
+    border-radius: 5px;
+    padding: 5px 15px;
 }
 
 .success-tick-css {
@@ -494,27 +480,33 @@ body {
 }
 
 .explorer-button {
-    font-family: "DM Mono", monospace;
-    letter-spacing: -0.02em;
-    font-weight: 400;
+    font-family: "Geist", monospace;
+    font-weight: 500;
+    background-color: rgba(249, 249, 249, 1);
     border: 0.5px solid #e0e0e0;
-    background-color: white;
-    font-size: 12px;
+    font-size: 13px;
+    width: 320px;
+    color: black;
     cursor: pointer;
-    padding: 14px;
-    top: 23vh;
-    position: relative;
+    padding: 12px;
+    border-radius: 7px;
+    max-width: 100%;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.explorer-button.public {
+    background-color: #ff5500;
+    color: white;
+    border: none;
 }
 
 .continue-text {
-    font-family: "DM Mono", monospace;
-    letter-spacing: -0.02em;
-    position: relative;
-    top: 30vh;
-    font-size: 12px;
+    font-family: "Geist", monospace;
+    font-size: 13px;
     font-weight: 400;
-    margin-top: 20px;
     color: rgba(0, 0, 0, 1);
+    margin-top: 85px;
 }
 
 #private-continue-text {
@@ -527,22 +519,38 @@ body {
     position: absolute;
     translate: 480px 0;
     width: 235px;
-    letter-spacing: 0;
 }
 
 .warning-text {
-    position: relative;
-    top: 35vh;
-    font-size: 13px;
+    display: none;
+    width: 100vw;
+    font-family: "SF Pro Display", sans-serif;
+    font-size: 14px;
     font-weight: 400;
     color: rgba(0, 0, 0, 1);
+    margin-top: 20px;
 }
 
 .download-button {
-    font-family: "DM Mono", monospace;
-    font-size: 16px;
+    font-family: "Geist", monospace;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: text-bottom;
+    gap: 2px;
+    background-color: rgba(0, 0, 0, 0);
+    color: #ff5500;
+    border: none;
+    cursor: pointer;
+}
+
+.download-button.pressed {
+    color: #c58af9;
+}
+
+.big-download-button {
+    font-family: "Geist", monospace;
+    font-size: 14px;
     font-weight: 500;
-    letter-spacing: -0.04em;
     display: flex;
     padding: 10px;
     padding-left: 15px;
@@ -554,30 +562,35 @@ body {
     border: none;
     border-radius: 3.85px;
     cursor: pointer;
+    width: 190px;
 }
 
-.download-button:disabled {
-    background-color: #cccccc;
-    cursor: wait;
-    opacity: 0.7;
+.download-button.pressed {
+    background-color: rgba(255, 85, 0, 0.77);
 }
 
 .next-steps {
-    font-size: 10px;
-    letter-spacing: 0.0em;
+    display: none;
+    margin-top: 15px;
+    font-size: 13px;
     color: #000000;
     font-weight: 400;
-    width: 60px;
     text-align: left;
-    border-top: 0.5px solid rgba(0, 0, 0, 0.1);
-    padding: 14px;
-    max-width: 600px;
+    border: 0.5px solid #e0e0e0;
+    padding: 25px;
+    padding-top: 15px;
+    padding-bottom: 15px;
+    max-width: 550px;
     width: 100%;
     max-height: 242px;
+    background-color: white;
+    border-radius: 7px;
 }
 
 .next-steps .highlight {
-    color: #ff5500;
+    font-size: 14px;
+    font-weight: 700;
+    background-color: rgba(0, 0, 0, 0.02);
 }
 
 .next-steps .step {
@@ -586,16 +599,11 @@ body {
 }
 
 .next-steps .step strong {
-    font-weight: 500;
+    font-weight: 700;
 }
 
 .next-steps .step:last-child {
     margin-bottom: 0;
-}
-
-.modal-error {
-    position: absolute;
-    top: 26vh;
 }
 
 .input-with-icon {
@@ -637,4 +645,43 @@ body {
     width: 20px;
     height: 20px;
     color: #888;
+}
+
+.header-image {
+    width: 100%;
+    max-width: 550px;
+    color: #888;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 16px 16px 0;
+    }
+
+    .header {
+        margin-bottom: 10px;
+    }
+
+    .footer {
+        padding: 0px 16px;
+    }
+
+    .footer-metadata {
+        flex-direction: column;
+        gap: 26px;
+        text-align: center;
+        align-items: center;
+    }
+
+    .tokens-section {
+        text-align: center;
+    }
+
+    .progress-bar {
+        margin: 4px auto 0;
+    }
+
+    .modal-placeholder {
+        top: 25%;
+    }
 }
