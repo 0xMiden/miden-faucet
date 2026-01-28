@@ -24,6 +24,7 @@ miden-pow-rate-limiter = { path = "crates/pow", version = "0.13" }
 
 # Miden dependencies.
 miden-client              = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
+miden-client-cli          = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
 miden-client-sqlite-store = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
 
 # External dependencies

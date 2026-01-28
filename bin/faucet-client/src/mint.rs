@@ -6,8 +6,10 @@ use clap::Parser;
 use miden_client::Word;
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
-use miden_client::note::NoteId;
-use miden_client::transaction::TransactionId;
+use miden_client::note::{NoteId, get_input_note_with_id_prefix};
+use miden_client::store::NoteRecordError;
+use miden_client::transaction::{TransactionId, TransactionRequestBuilder};
+use miden_client_cli::{CliClient, DebugMode};
 use miden_faucet_lib::requests::{
     GetPowResponse,
     GetTokensQueryParams,
@@ -25,6 +27,8 @@ use tokio::task;
 
 const DEFAULT_FAUCET_URL: &str = "https://faucet-api.testnet.miden.io";
 const REQUEST_TIMEOUT_MS: u64 = 30_000;
+const MAX_SYNC_RETRIES: u32 = 3;
+const SYNC_RETRY_DELAY_SECS: u64 = 5;
 
 // CLI
 // ================================================================================================
@@ -48,6 +52,10 @@ pub struct MintCmd {
     /// Optional faucet API key.
     #[arg(long = "api-key", value_name = "STRING")]
     api_key: Option<String>,
+
+    /// Skip auto-consumption of the minted note.
+    #[arg(long = "no-consume", default_value_t = false)]
+    no_consume: bool,
 }
 
 impl MintCmd {
@@ -79,6 +87,77 @@ impl MintCmd {
 
         println!("Mint request accepted. Transaction: {}", mint_response.tx_id.to_hex());
         println!("Public P2ID note commitment: {}", mint_response.note_id.to_hex());
+
+        if self.no_consume {
+            return Ok(());
+        }
+
+        self.consume_note(account_id, mint_response.note_id).await
+    }
+
+    /// Consumes the minted note instantiating a new client instance with the global user
+    /// configuration.
+    async fn consume_note(
+        &self,
+        account_id: AccountId,
+        note_id: NoteId,
+    ) -> Result<(), MintClientError> {
+        println!("Initializing client...");
+        let mut client = CliClient::from_system_user_config(DebugMode::Disabled)
+            .await
+            .map_err(|e| MintClientError::ClientConfig(e.to_string()))?;
+
+        let note_id_hex = note_id.to_hex();
+        let mut note_record = None;
+
+        for attempt in 0..MAX_SYNC_RETRIES {
+            println!("Syncing client state...");
+            client
+                .sync_state()
+                .await
+                .map_err(|e| MintClientError::SyncFailed(e.to_string()))?;
+
+            match get_input_note_with_id_prefix(&client, &note_id_hex).await {
+                Ok(record) => {
+                    note_record = Some(record);
+                    break;
+                },
+                Err(_) if attempt < MAX_SYNC_RETRIES - 1 => {
+                    println!(
+                        "Note not found, retrying in {} seconds... ({}/{})",
+                        SYNC_RETRY_DELAY_SECS,
+                        attempt + 1,
+                        MAX_SYNC_RETRIES
+                    );
+                    tokio::time::sleep(Duration::from_secs(SYNC_RETRY_DELAY_SECS)).await;
+                },
+                Err(_) => {},
+            }
+        }
+
+        let note_record = note_record.ok_or_else(|| {
+            MintClientError::NoteNotFound(format!(
+                "Note {note_id_hex} not found after {MAX_SYNC_RETRIES} sync attempts. \
+                 You can manually consume it later using: miden-client consume-notes {note_id_hex}"
+            ))
+        })?;
+
+        println!("Consuming note...");
+        let input_note = note_record
+            .try_into()
+            .map_err(|e: NoteRecordError| MintClientError::ConsumeTransaction(e.to_string()))?;
+
+        let tx_request = TransactionRequestBuilder::new()
+            .input_notes(vec![(input_note, None)])
+            .build()
+            .map_err(|e| MintClientError::ConsumeTransaction(e.to_string()))?;
+
+        client
+            .submit_new_transaction(account_id, tx_request)
+            .await
+            .map_err(|e| MintClientError::ConsumeTransaction(e.to_string()))?;
+
+        println!("Note {note_id_hex} successfully consumed.");
 
         Ok(())
     }
@@ -247,6 +326,14 @@ pub enum MintClientError {
     InvalidNoteId(String, String),
     #[error("invalid transaction id `{0}`: {1}")]
     InvalidTransactionId(String, String),
+    #[error("failed to initialize client: {0}")]
+    ClientConfig(String),
+    #[error("failed to sync client state: {0}")]
+    SyncFailed(String),
+    #[error("note not found: {0}")]
+    NoteNotFound(String),
+    #[error("failed to consume note: {0}")]
+    ConsumeTransaction(String),
 }
 
 // HELPERS

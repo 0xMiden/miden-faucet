@@ -87,6 +87,7 @@ async fn mint_command_requests_public_note() {
         &expected_amount.to_string(),
         "--api-key",
         "test-key",
+        "--no-consume",
     ]);
 
     cli.execute().await.unwrap();
