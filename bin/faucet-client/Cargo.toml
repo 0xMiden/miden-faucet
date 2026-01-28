@@ -22,7 +22,7 @@ miden-client-cli       = { workspace = true }
 miden-faucet-lib       = { workspace = true }
 miden-pow-rate-limiter = { workspace = true }
 rand                   = { features = ["thread_rng"], workspace = true }
-reqwest                = { default-features = false, features = ["json", "rustls-tls"], version = "0.12" }
+reqwest                = { features = ["json", "query", "rustls"], workspace = true }
 serde_json             = { workspace = true }
 thiserror              = { workspace = true }
 tokio                  = { features = ["macros", "net", "rt-multi-thread", "sync", "time"], workspace = true }

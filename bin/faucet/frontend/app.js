@@ -1,6 +1,6 @@
 import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
 import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
-import { Endpoint, NoteId, RpcClient } from "@demox-labs/miden-sdk";
+import { Endpoint, NoteId, RpcClient } from "@miden-sdk/miden-sdk";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
 import { getConfig, getMetadata, getPowChallenge, getTokens, get_note } from "./api.js";
@@ -186,7 +186,7 @@ export class MidenFaucetApp {
             ]);
             return true;
         } catch (error) {
-            console.error("Failed to import private note to wallet:", error);
+            console.log("Wallet integration not available:", error);
             return false;
         }
     }
