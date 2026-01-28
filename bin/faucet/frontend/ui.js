@@ -230,6 +230,9 @@ export class UIController {
     showPrivateSuccessTick() {
         const checkmark = document.getElementById('private-success-tick');
         checkmark.style.display = 'flex';
+
+        const bigDownloadButton = document.getElementById('private-download-button');
+        bigDownloadButton.style.display = 'none';
     }
 
     hidePrivateSuccessTick() {
@@ -240,8 +243,6 @@ export class UIController {
     showOptionalDownload() {
         this.showNextSteps();
         this.setNextStepsTitle('If you don\'t see the note in your wallet, you can import it manually:');
-        const bigDownloadButton = document.getElementById('private-download-button');
-        bigDownloadButton.style.display = 'none';
 
         document.getElementById('save-note-step').style.display = 'none';
         document.getElementById('download-note-step').style.display = 'block';

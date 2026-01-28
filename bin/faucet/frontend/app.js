@@ -224,7 +224,7 @@ export class MidenFaucetApp {
             await send_note(this.apiUrl, noteId);
             return true;
         } catch (error) {
-            console.error("Failed to send note through note transport layer", error);
+            console.log("Note transport layer not available:", error);
             return false;
         }
     }
