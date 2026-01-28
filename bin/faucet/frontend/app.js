@@ -214,7 +214,7 @@ export class MidenFaucetApp {
             ]);
             return true;
         } catch (error) {
-            console.error("Failed to import private note to wallet:", error);
+            console.log("Wallet integration not available:", error);
             return false;
         }
     }
