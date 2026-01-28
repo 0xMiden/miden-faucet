@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.13.0 (TBD)
+## 0.13.0 (2026-01-28)
 
 - Added web-client to wait for note commitment on the node ([#174](https://github.com/0xMiden/miden-faucet/pull/174)).
 - [BREAKING] Replaced the `api-bind-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
