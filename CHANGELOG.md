@@ -10,7 +10,7 @@
 - Updated faucet optional deployment to use an empty transaction (#[182](https://github.com/0xMiden/miden-faucet/pull/182)).
 - Added a feature `tokio` for the `miden-pow-rate-limiter` crate ([#188](https://github.com/0xMiden/miden-faucet/pull/188).)
 - Added integration to import mint private notes directly to the wallet ([#189](https://github.com/0xMiden/miden-faucet/pull/189)).
-- Added a new `miden-faucet-client` binary with the `mint` command ([#196](https://github.com/0xMiden/miden-faucet/pull/196)).
+- Added a new `miden-faucet-client` binary with the `mint` command ([#196](https://github.com/0xMiden/miden-faucet/pull/196), [#215](https://github.com/0xMiden/miden-faucet/pull/215)). 
 
 ## 0.12.4 (2025-12-04)
 
