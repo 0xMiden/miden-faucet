@@ -533,6 +533,22 @@ body {
 
 .download-button {
     font-family: "Geist", monospace;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: text-bottom;
+    gap: 2px;
+    background-color: rgba(0, 0, 0, 0);
+    color: #ff5500;
+    border: none;
+    cursor: pointer;
+}
+
+.download-button.pressed {
+    color: #c58af9;
+}
+
+.big-download-button {
+    font-family: "Geist", monospace;
     font-size: 14px;
     font-weight: 500;
     display: flex;

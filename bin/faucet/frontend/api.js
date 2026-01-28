@@ -75,3 +75,15 @@ export async function get_note(backendUrl, noteId) {
 
     return byteArray;
 }
+
+export async function send_note(backendUrl, noteId) {
+    const response = await fetch(backendUrl + '/send_note?' + new URLSearchParams({
+        note_id: noteId
+    }), {
+        method: 'POST'
+    });
+    if (!response.ok) {
+        const message = await response.text();
+        throw new ApiError(message, response.status);
+    }
+}

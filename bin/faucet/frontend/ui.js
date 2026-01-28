@@ -73,14 +73,14 @@ export class UIController {
         mintingModal.classList.remove('active');
     }
 
-    showCompletedPrivateModal(recipient, amountAsTokens, noteId, txId, onDownloadNote) {
+    showCompletedPrivateModal(recipient, amountAsTokens, txId) {
         document.getElementById('completed-private-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-private-recipient-address').textContent = recipient;
         const completedPrivateModal = document.getElementById('completed-private-modal');
         completedPrivateModal.classList.add('active');
-        this.setupDownloadButton(noteId, onDownloadNote);
         const privateExplorerButton = document.getElementById('private-explorer-button');
         this.setupExplorerButton(privateExplorerButton, txId);
+        this.showPrivateSuccessTick();
     }
 
     setupExplorerButton(explorerButton, txId) {
@@ -165,7 +165,7 @@ export class UIController {
 
     showError(title, description) {
         this.hideIcons();
-        this.hideDownloadedNoteHints();
+        this.hideNextSteps();
 
         const errorTitle = document.getElementById('home-error-message-title');
         errorTitle.textContent = title;
@@ -190,7 +190,7 @@ export class UIController {
         this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
     }
 
-    showCloseButton(onClose) {
+    showCloseButton() {
         const closeButton = document.getElementById('private-close-button');
         closeButton.style.display = 'block';
         closeButton.onclick = () => {
@@ -198,34 +198,90 @@ export class UIController {
             this.hideErrors();
             this.hideModals();
             this.resetForm();
-            onClose();
+            const bigDownloadButton = document.getElementById('private-download-button');
+            bigDownloadButton.classList.remove('pressed')
+
+            const instructionsDownloadButton = document.getElementById('instructions-download-button');
+            instructionsDownloadButton.classList.remove('pressed')
+
+            this.hideNextSteps();
         };
     }
 
-    setupDownloadButton(noteId, onDownloadNote) {
-        const downloadButton = document.getElementById('download-button');
-        document.getElementById('download-button-text').textContent = 'Download Note';
-        downloadButton.onclick = async () => {
+    setupDownloadButton(onDownloadNote) {
+        const bigDownloadButton = document.getElementById('private-download-button');
+        bigDownloadButton.onclick = async () => {
             this.hideErrors();
-            downloadButton.classList.add('pressed');
-            document.getElementById('download-button-text').textContent = 'Download Again';
-            this.showCloseButton(() => {
-                downloadButton.classList.remove('pressed')
-                this.hideDownloadedNoteHints();
-            });
+            bigDownloadButton.classList.add('pressed');
+            this.showCloseButton();
+            this.showWarningText();
 
-            await onDownloadNote(noteId);
+            await onDownloadNote();
+        };
+
+        const instructionsDownloadButton = document.getElementById('instructions-download-button');
+        instructionsDownloadButton.onclick = async () => {
+            this.hideErrors();
+            instructionsDownloadButton.classList.add('pressed');
+            await onDownloadNote();
         };
     }
 
-    showDownloadedNoteHints() {
+    showPrivateSuccessTick() {
+        const checkmark = document.getElementById('private-success-tick');
+        checkmark.style.display = 'flex';
+
+        const bigDownloadButton = document.getElementById('private-download-button');
+        bigDownloadButton.style.display = 'none';
+    }
+
+    hidePrivateSuccessTick() {
+        const checkmark = document.getElementById('private-success-tick');
+        checkmark.style.display = 'none';
+    }
+
+    showOptionalDownload() {
+        this.showNextSteps();
+        this.setNextStepsTitle('If you don\'t see the note in your wallet, you can import it manually:');
+
+        document.getElementById('save-note-step').style.display = 'none';
+        document.getElementById('download-note-step').style.display = 'block';
+
+        this.showPrivateSuccessTick();
+    }
+
+    showDownload(onDownloadNote) {
+        this.setupDownloadButton(onDownloadNote);
+        this.showNextSteps();
+        this.setNextStepsTitle('Next Steps');
+        const bigDownloadButton = document.getElementById('private-download-button');
+        bigDownloadButton.style.display = 'flex';
+
+        document.getElementById('save-note-step').style.display = 'block';
+        document.getElementById('download-note-step').style.display = 'none';
+
+        this.hidePrivateSuccessTick();
+    }
+
+    showNextSteps() {
         const nextSteps = document.getElementById('next-steps');
         nextSteps.style.display = 'block';
+
+        const nextStepsList = document.getElementById('next-steps-list');
+        nextStepsList.display = 'block';
+    }
+
+    setNextStepsTitle(title) {
+        const nextStepsTitle = document.getElementById('next-steps-title');
+        nextStepsTitle.textContent = title;
+    }
+
+    showWarningText() {
         const warningText = document.getElementById('warning-text');
         warningText.style.display = 'block';
     }
 
-    hideDownloadedNoteHints() {
+    hideNextSteps() {
         const nextSteps = document.getElementById('next-steps');
         nextSteps.style.display = 'none';
         const warningText = document.getElementById('warning-text');
