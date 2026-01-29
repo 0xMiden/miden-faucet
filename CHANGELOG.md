@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.13.1 (2026-01-29)
+
+ - Added `public-node-url` CLI param to configure a separate node URL for browser access ([#219](https://github.com/0xMiden/miden-faucet/pull/219)).
+
 ## 0.13.0 (2026-01-28)
 
 - Added web-client to wait for note commitment on the node ([#174](https://github.com/0xMiden/miden-faucet/pull/174)).

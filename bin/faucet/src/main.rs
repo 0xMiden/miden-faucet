@@ -76,6 +76,7 @@ const ENV_TOKEN_SYMBOL: &str = "MIDEN_FAUCET_TOKEN_SYMBOL";
 const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
 const ENV_MAX_SUPPLY: &str = "MIDEN_FAUCET_MAX_SUPPLY";
 const ENV_NOTE_TRANSPORT_URL: &str = "MIDEN_FAUCET_NOTE_TRANSPORT_URL";
+const ENV_PUBLIC_NODE_URL: &str = "MIDEN_FAUCET_PUBLIC_NODE_URL";
 
 // COMMANDS
 // ================================================================================================
@@ -100,7 +101,7 @@ pub enum Command {
             short,
             long,
             value_name = "STRING",
-            required_unless_present = "import_account_path", 
+            required_unless_present = "import_account_path",
             env = ENV_TOKEN_SYMBOL
         )]
         token_symbol: Option<String>,
@@ -216,6 +217,11 @@ pub enum Command {
         /// Note transport endpoint. If not set, no note transport will be used.
         #[arg(long = "note-transport-url", value_name = "URL", env = ENV_NOTE_TRANSPORT_URL)]
         note_transport_url: Option<Url>,
+
+        /// Public node RPC endpoint accessible from browsers. Used by the frontend to poll for
+        /// note confirmation. If not set, falls back to `--node-url`.
+        #[arg(long = "public-node-url", value_name = "URL", env = ENV_PUBLIC_NODE_URL)]
+        public_node_url: Option<Url>,
     },
 }
 
@@ -356,6 +362,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             explorer_url,
             batch_size,
             note_transport_url,
+            public_node_url,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
             let config = FaucetConfig {
@@ -440,8 +447,12 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             if !no_frontend {
                 let frontend_url = Url::parse(&format!("http://0.0.0.0:{frontend_bind_port}"))?;
+                // Use public_node_url for the frontend if provided, otherwise fall back to
+                // node_endpoint.
+                let frontend_node_url = public_node_url
+                    .map_or_else(|| node_endpoint.to_string(), |url| url.to_string());
                 let frontend_id = tasks
-                    .spawn(serve_frontend(frontend_url, api_public_url, node_endpoint.to_string()))
+                    .spawn(serve_frontend(frontend_url, api_public_url, frontend_node_url))
                     .id();
                 tasks_ids.insert(frontend_id, "frontend");
             }
@@ -783,6 +794,7 @@ mod tests {
                         explorer_url: None,
                         batch_size: 8,
                         note_transport_url: None,
+                        public_node_url: None,
                     },
                 }))
                 .await
