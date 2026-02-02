@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{Account, AccountId, Address, NetworkId};
+use miden_client::account::{Account, AccountId, AccountStorage, Address, NetworkId};
 use miden_client::asset::FungibleAsset;
 use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
@@ -183,8 +183,13 @@ impl Faucet {
         };
         let id = FaucetId::new(account.id(), config.network_id.clone());
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
-        let issuance =
-            Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
+        let faucet_sysdata = client
+            .new_storage_reader(account.id())
+            .get_item(AccountStorage::faucet_sysdata_slot().clone())
+            .await
+            .context("failed to get faucet sysdata slot")?;
+        let issuance_felt = faucet_sysdata[Account::ISSUANCE_ELEMENT_INDEX];
+        let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance_felt.as_int())?));
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
@@ -484,13 +489,15 @@ impl Faucet {
 
     /// Get the current issuance of the faucet by querying the client's store.
     pub async fn get_issuance(&self) -> anyhow::Result<AssetAmount> {
-        let issuance = self
-            .faucet_account()
-            .await?
-            .get_token_issuance()
-            .context("faucet account is not a valid fungible faucet account")?;
+        let faucet_sysdata = self
+            .client
+            .new_storage_reader(self.id.account_id)
+            .get_item(AccountStorage::faucet_sysdata_slot().clone())
+            .await
+            .context("failed to get faucet sysdata slot")?;
+        let issuance_felt = faucet_sysdata[Account::ISSUANCE_ELEMENT_INDEX];
 
-        Ok(AssetAmount::new(issuance.as_int())?)
+        Ok(AssetAmount::new(issuance_felt.as_int())?)
     }
 
     /// Returns a reference to a tracker of the faucet's issuance. It's value is updated after each
