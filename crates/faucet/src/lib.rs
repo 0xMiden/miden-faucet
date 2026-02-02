@@ -11,7 +11,7 @@ use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
-use miden_client::note::{Note, NoteError, NoteId, create_p2id_note};
+use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, create_p2id_note};
 use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
@@ -318,7 +318,7 @@ impl Faucet {
 
         // Build and submit transaction
         let tx_request =
-            self.create_transaction(notes).context("faucet failed to create transaction")?;
+            self.create_transaction(&notes).context("faucet failed to create transaction")?;
         let tx_id = self
             .submit_new_transaction(tx_request)
             .await
@@ -392,7 +392,7 @@ impl Faucet {
     #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err)]
     fn create_transaction(
         &mut self,
-        notes: Vec<Note>,
+        notes: &[Note],
     ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
         let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
@@ -526,7 +526,7 @@ fn build_p2id_notes(
             request.account_id,
             vec![asset.into()],
             request.note_type.into(),
-            Felt::default(),
+            NoteAttachment::default(),
             rng,
         )
         .inspect_err(
@@ -542,7 +542,7 @@ mod tests {
     use std::env::temp_dir;
 
     use miden_client::ExecutionOptions;
-    use miden_client::account::component::AuthRpoFalcon512;
+    use miden_client::account::component::AuthFalcon512Rpo;
     use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
     use miden_client::asset::TokenSymbol;
     use miden_client::auth::AuthSecretKey;
@@ -577,19 +577,26 @@ mod tests {
             tx_mint_requests.send((mint_request, sender)).await.unwrap();
             receivers.push(receiver);
         }
+        // Close channel after all requests are sent
+        drop(tx_mint_requests);
 
         let store = Arc::new(
             SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
                 .await
                 .unwrap(),
         );
-        run_faucet(rx_mint_requests, batch_size, store.clone());
+        let faucet_handle = run_faucet(rx_mint_requests, batch_size, store.clone());
+
+        // Give the faucet thread time to initialize
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         for receiver in receivers {
             let response = receiver.await.unwrap().unwrap();
             let notes = store.get_output_notes(NoteFilter::Unique(response.note_id)).await.unwrap();
             assert_eq!(notes.len(), 1);
         }
+
+        faucet_handle.join().unwrap();
     }
 
     // TESTING HELPERS
@@ -600,7 +607,7 @@ mod tests {
         rx_mint_requests: mpsc::Receiver<(MintRequest, MintResponseSender)>,
         batch_size: usize,
         store: Arc<dyn Store>,
-    ) {
+    ) -> std::thread::JoinHandle<()> {
         let secret = SecretKey::new();
         let symbol = TokenSymbol::new("TEST").unwrap();
         let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
@@ -608,10 +615,10 @@ mod tests {
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
-            .with_auth_component(AuthRpoFalcon512::new(secret.public_key().to_commitment().into()))
+            .with_auth_component(AuthFalcon512Rpo::new(secret.public_key().to_commitment().into()))
             .build()
             .unwrap();
-        let key = AuthSecretKey::RpoFalcon512(secret);
+        let key = AuthSecretKey::Falcon512Rpo(secret);
 
         std::thread::spawn(move || {
             // Create a new runtime for this thread
@@ -656,6 +663,6 @@ mod tests {
                 };
                 Box::pin(faucet.run(rx_mint_requests, batch_size)).await.unwrap();
             });
-        });
+        })
     }
 }

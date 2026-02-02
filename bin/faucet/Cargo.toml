@@ -26,7 +26,7 @@ miden-client-sqlite-store = { workspace = true }
 anyhow                = { workspace = true }
 async-trait           = { version = "0.1" }
 axum                  = { features = ["tokio"], version = "0.8" }
-axum-extra            = { version = "0.10" }
+axum-extra            = { version = "0.12" }
 base64                = { version = "0.22" }
 clap                  = { features = ["derive", "env", "string"], version = "4.5" }
 http                  = { workspace = true }
@@ -44,7 +44,7 @@ tokio                 = { features = ["fs"], workspace = true }
 tokio-stream          = { features = ["net"], workspace = true }
 tonic                 = { features = ["tls-native-roots"], workspace = true }
 tower                 = { workspace = true }
-tower-http            = { features = ["cors", "set-header", "trace"], workspace = true }
+tower-http            = { features = ["compression-gzip", "cors", "set-header", "trace"], workspace = true }
 tracing               = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber    = { workspace = true }
@@ -52,9 +52,9 @@ url                   = { workspace = true }
 
 [dev-dependencies]
 fantoccini       = { version = "0.22" }
-miden-node-proto = { branch = "next", git = "https://github.com/0xMiden/miden-node" }
-miden-testing    = { branch = "next", git = "https://github.com/0xMiden/miden-base" }
-reqwest          = { default-features = false, features = ["json"], version = "0.12" }
+miden-node-proto = { version = "0.13" }
+miden-testing    = { version = "0.13" }
+reqwest          = { features = ["json"], workspace = true }
 serde_json       = { workspace = true }
 tokio            = { features = ["macros", "process"], workspace = true }
 tonic-web        = { version = "0.14" }

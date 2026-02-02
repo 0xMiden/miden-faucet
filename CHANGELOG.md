@@ -1,13 +1,17 @@
 # Changelog
 
-## 0.13.0 (TBD)
+## 0.13.0 (2026-01-28)
 
+- Added web-client to wait for note commitment on the node ([#174](https://github.com/0xMiden/miden-faucet/pull/174)).
 - [BREAKING] Replaced the `api-bind-url` param for `api-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
 - [BREAKING] Replaced the `frontend-url` param for `frontend-bind-port` ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
 - [BREAKING] Added `no-frontend` param to optionally disable the frontend server ([#156](https://github.com/0xMiden/miden-faucet/pull/156)).
+- Redesigned the frontend ([#201](https://github.com/0xMiden/miden-faucet/pull/201)).
+- [BREAKING] Added `note-transport-url` CLI param to set the note transport layer ([#191](https://github.com/0xMiden/miden-faucet/pull/191)).
 - Updated faucet optional deployment to use an empty transaction (#[182](https://github.com/0xMiden/miden-faucet/pull/182)).
 - Added a feature `tokio` for the `miden-pow-rate-limiter` crate ([#188](https://github.com/0xMiden/miden-faucet/pull/188).)
 - Added integration to import mint private notes directly to the wallet ([#189](https://github.com/0xMiden/miden-faucet/pull/189)).
+- Added a new `miden-faucet-client` binary with the `mint` command ([#196](https://github.com/0xMiden/miden-faucet/pull/196), [#215](https://github.com/0xMiden/miden-faucet/pull/215)). 
 
 ## 0.12.4 (2025-12-04)
 
@@ -86,7 +90,7 @@
 - Redesigned the home frontend ([#20](https://github.com/0xMiden/miden-faucet/pull/20)).
 - Redesigned the tokens request flows ([#25](https://github.com/0xMiden/miden-faucet/pull/25)).
 - Added faucet supply amounts to the metadata ([#30](https://github.com/0xMiden/miden-faucet/pull/30)).
-- Added supply exceeded check ([#31](https://github.com/0xMiden/miden-faucet/pull/31)). 
+- Added supply exceeded check ([#31](https://github.com/0xMiden/miden-faucet/pull/31)).
 - Use HTTP 429 status code for rate limited error ([#51](https://github.com/0xMiden/miden-faucet/pull/51)).
 - Replace amount options validation for maximum claimable amount ([#52](https://github.com/0xMiden/miden-faucet/pull/52)).
 - Added `mdbook` documentation ([#61](https://github.com/0xMiden/miden-faucet/pull/61)).

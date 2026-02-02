@@ -2,6 +2,11 @@
 
 This guide shows the available commands and their configuration options to run with the Miden Faucet CLI.
 
+The faucet comes with two CLI tools:
+
+- **miden-faucet**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
+
 ## Available Commands
 
 | Command | Description |
@@ -225,4 +230,18 @@ miden-faucet start \
   --network localhost
 ```
 
-For detailed options, run `miden-faucet [COMMAND] --help`. 
+For detailed options, run `miden-faucet [COMMAND] --help`.
+
+## Requesting tokens from a live faucet
+
+You can use the `miden-faucet-client` binary to request tokens from any running faucet instance, whether it's your local faucet or the remote testnet faucet:
+```bash
+miden-faucet-client mint --url <FAUCET_API_URL> --target-account <ACCOUNT_ID> --amount <BASE_UNITS>
+```
+
+Although the command is named `mint`, in technical terms it makes a request to the faucet to request a public P2ID note.
+
+To see available options:
+```bash
+miden-faucet-client mint --help
+```

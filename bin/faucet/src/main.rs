@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::component::{AuthRpoFalcon512, BasicFungibleFaucet};
+use miden_client::account::component::{AuthFalcon512Rpo, BasicFungibleFaucet};
 use miden_client::account::{
     Account,
     AccountBuilder,
@@ -25,6 +25,7 @@ use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
 use miden_client::crypto::RpoRandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
+use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::rpc::Endpoint;
 use miden_client::{Felt, Word};
 use miden_client_sqlite_store::SqliteStore;
@@ -74,6 +75,7 @@ const ENV_DEPLOY: &str = "MIDEN_FAUCET_DEPLOY";
 const ENV_TOKEN_SYMBOL: &str = "MIDEN_FAUCET_TOKEN_SYMBOL";
 const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
 const ENV_MAX_SUPPLY: &str = "MIDEN_FAUCET_MAX_SUPPLY";
+const ENV_NOTE_TRANSPORT_URL: &str = "MIDEN_FAUCET_NOTE_TRANSPORT_URL";
 
 // COMMANDS
 // ================================================================================================
@@ -210,6 +212,10 @@ pub enum Command {
         /// single transaction.
         #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
         batch_size: usize,
+
+        /// Note transport endpoint. If not set, no note transport will be used.
+        #[arg(long = "note-transport-url", value_name = "URL", env = ENV_NOTE_TRANSPORT_URL)]
+        note_transport_url: Option<Url>,
     },
 }
 
@@ -349,6 +355,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             open_telemetry: _,
             explorer_url,
             batch_size,
+            note_transport_url,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
             let config = FaucetConfig {
@@ -392,6 +399,18 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 base_amount,
             };
 
+            let note_transport_client = if let Some(note_transport_url) = note_transport_url {
+                Some(Arc::new(
+                    GrpcNoteTransportClient::connect(
+                        note_transport_url.to_string(),
+                        timeout.as_millis().try_into().unwrap(),
+                    )
+                    .await?,
+                ))
+            } else {
+                None
+            };
+
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.
             let tx_mint_requests_clone = tx_mint_requests.clone();
@@ -403,6 +422,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 rate_limiter_config,
                 &api_keys,
                 store,
+                note_transport_client,
             );
 
             // Use select to concurrently:
@@ -483,7 +503,7 @@ fn create_faucet_account(
     let max_supply = Felt::try_from(max_supply)
         .map_err(anyhow::Error::msg)
         .context("max supply value is greater than or equal to the field modulus")?;
-    let auth_component = AuthRpoFalcon512::new(secret.public_key().to_commitment().into());
+    let auth_component = AuthFalcon512Rpo::new(secret.public_key().to_commitment().into());
 
     let account = AccountBuilder::new(rng.random())
         .account_type(AccountType::FungibleFaucet)
@@ -493,7 +513,7 @@ fn create_faucet_account(
         .build()
         .context("failed to create basic fungible faucet account")?;
 
-    Ok((account, AuthSecretKey::RpoFalcon512(secret)))
+    Ok((account, AuthSecretKey::Falcon512Rpo(secret)))
 }
 
 // TESTS
@@ -504,7 +524,7 @@ mod tests {
     use std::env::temp_dir;
     use std::process::Stdio;
     use std::str::FromStr;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use clap::Parser;
     use fantoccini::ClientBuilder;
@@ -512,7 +532,6 @@ mod tests {
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
-    use tokio::time::sleep;
     use url::Url;
     use uuid::Uuid;
 
@@ -635,6 +654,14 @@ mod tests {
         let address = Address::new(account_id);
         let address_bech32 = address.encode(network_id);
 
+        // Wait for the website to be fully loaded
+        client
+            .wait()
+            .at_most(Duration::from_secs(10))
+            .for_element(fantoccini::Locator::Css("#token-amount option"))
+            .await
+            .unwrap();
+
         // Fill in the account address
         client
             .find(fantoccini::Locator::Css("#recipient-address"))
@@ -724,7 +751,6 @@ mod tests {
         .expect("failed to create faucet account");
 
         let api_bind_port = 8000;
-        let api_url = format!("http://localhost:{api_bind_port}");
         let frontend_url = "http://localhost:8080";
 
         // Use std::thread to launch faucet - avoids Send requirements
@@ -756,27 +782,13 @@ mod tests {
                         open_telemetry: false,
                         explorer_url: None,
                         batch_size: 8,
+                        note_transport_url: None,
                     },
                 }))
                 .await
                 .expect("failed to start faucet");
             });
         });
-
-        // Wait for faucet to be up
-        let api_url = Url::parse(&api_url).unwrap();
-        let addrs = api_url.socket_addrs(|| None).unwrap();
-        let start = Instant::now();
-        let timeout = Duration::from_secs(10);
-        loop {
-            match tokio::net::TcpStream::connect(&addrs[..]).await {
-                Ok(_) => break,
-                Err(_) if start.elapsed() < timeout => {
-                    sleep(Duration::from_millis(200)).await;
-                },
-                Err(e) => panic!("faucet never became reachable: {e}"),
-            }
-        }
 
         frontend_url.to_string()
     }
