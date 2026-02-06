@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.0 (TBD)
+
+- OpenTelemetry traces are now flushed before program termination on panic ([#222](https://github.com/0xMiden/miden-faucet/pull/222)).
+
 ## 0.13.0 (2026-01-28)
 
 - Added web-client to wait for note commitment on the node ([#174](https://github.com/0xMiden/miden-faucet/pull/174)).
