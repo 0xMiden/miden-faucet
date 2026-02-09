@@ -183,13 +183,8 @@ impl Faucet {
         };
         let id = FaucetId::new(account.id(), config.network_id.clone());
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
-        let faucet_sysdata = client
-            .new_storage_reader(account.id())
-            .get_item(AccountStorage::faucet_sysdata_slot().clone())
-            .await
-            .context("failed to get faucet sysdata slot")?;
-        let issuance_felt = faucet_sysdata[Account::ISSUANCE_ELEMENT_INDEX];
-        let issuance = Arc::new(RwLock::new(AssetAmount::new(issuance_felt.as_int())?));
+        let issuance =
+            Arc::new(RwLock::new(Self::read_issuance_from_store(&client, account.id()).await?));
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
@@ -305,7 +300,7 @@ impl Faucet {
 
         let span = tracing::Span::current();
 
-        let (valid_requests, response_senders) = self.filter_requests_by_supply(requests).await;
+        let (valid_requests, response_senders) = self.filter_requests_by_supply(requests);
         span.record("num_requests", valid_requests.len());
 
         if valid_requests.is_empty() {
@@ -330,12 +325,8 @@ impl Faucet {
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
 
-        // Update the issuance tracker
-        let new_issuance = self.get_issuance().await.unwrap_or(AssetAmount::max());
-        {
-            let mut issuance = self.issuance.write();
-            *issuance = new_issuance;
-        }
+        // Refresh the issuance cache from the store after submitting the transaction
+        self.refresh_issuance().await;
 
         Self::send_responses(response_senders, note_ids, tx_id);
         Ok(())
@@ -361,14 +352,13 @@ impl Faucet {
     ///
     /// Returns a tuple of valid requests and response senders.
     #[instrument(target = COMPONENT, name = "faucet.mint.filter_requests_by_supply", skip_all)]
-    async fn filter_requests_by_supply(
+    fn filter_requests_by_supply(
         &self,
         requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
     ) -> (Vec<MintRequest>, Vec<MintResponseSender>) {
         let mut valid_requests = vec![];
         let mut response_senders = vec![];
-        // SAFETY: creating an asset amount with the max is always valid
-        let mut issuance = self.get_issuance().await.unwrap_or(AssetAmount::max());
+        let mut issuance = *self.issuance.read();
         for (request, response_sender) in requests {
             let requested_amount = request.asset_amount;
             let available_amount = self.available_supply(issuance).unwrap_or_default();
@@ -487,23 +477,33 @@ impl Faucet {
         self.max_supply.checked_sub(issuance)
     }
 
-    /// Get the current issuance of the faucet by querying the client's store.
-    pub async fn get_issuance(&self) -> anyhow::Result<AssetAmount> {
-        let faucet_sysdata = self
-            .client
-            .new_storage_reader(self.id.account_id)
+    /// Returns a reference to the shared issuance tracker. Its value is updated after each
+    /// minting transaction.
+    pub fn issuance(&self) -> &Arc<RwLock<AssetAmount>> {
+        &self.issuance
+    }
+
+    /// Reads the current issuance from the client's store and updates the in-memory cache.
+    async fn refresh_issuance(&self) {
+        let new_issuance = Self::read_issuance_from_store(&self.client, self.id.account_id)
+            .await
+            .unwrap_or(AssetAmount::max());
+        *self.issuance.write() = new_issuance;
+    }
+
+    /// Reads the current issuance from the client's store.
+    async fn read_issuance_from_store(
+        client: &Client<FilesystemKeyStore>,
+        account_id: AccountId,
+    ) -> anyhow::Result<AssetAmount> {
+        let faucet_sysdata = client
+            .new_storage_reader(account_id)
             .get_item(AccountStorage::faucet_sysdata_slot().clone())
             .await
             .context("failed to get faucet sysdata slot")?;
         let issuance_felt = faucet_sysdata[Account::ISSUANCE_ELEMENT_INDEX];
 
         Ok(AssetAmount::new(issuance_felt.as_int())?)
-    }
-
-    /// Returns a reference to a tracker of the faucet's issuance. It's value is updated after each
-    /// minting transaction.
-    pub fn issuance(&self) -> &Arc<RwLock<AssetAmount>> {
-        &self.issuance
     }
 }
 
