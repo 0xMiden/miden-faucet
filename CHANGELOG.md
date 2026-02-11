@@ -2,7 +2,7 @@
 
 ## 0.14.0 (TBD)
 
-- Replaced polling with Server-Sent Events (SSE) for real-time issuance counter updates ([#224](https://github.com/0xMiden/miden-faucet/pull/224)).
+- Replaced metadata polling with Server-Sent Events (SSE) for issuance updates ([#224](https://github.com/0xMiden/miden-faucet/pull/224)).
 
 ## 0.13.0 (2026-01-28)
 
