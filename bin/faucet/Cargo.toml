@@ -41,7 +41,7 @@ serde_json            = { workspace = true }
 sha2                  = { workspace = true }
 thiserror             = { workspace = true }
 tokio                 = { features = ["fs"], workspace = true }
-tokio-stream          = { features = ["net"], workspace = true }
+tokio-stream          = { features = ["net", "sync"], workspace = true }
 tonic                 = { features = ["tls-native-roots"], workspace = true }
 tower                 = { workspace = true }
 tower-http            = { features = ["compression-gzip", "cors", "set-header", "trace"], workspace = true }
