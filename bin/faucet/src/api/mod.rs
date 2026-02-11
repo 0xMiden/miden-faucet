@@ -16,6 +16,7 @@ use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
 use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
+use tokio::sync::watch;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -23,6 +24,7 @@ use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
+use crate::api::events::issuance_stream;
 use crate::api::get_metadata::get_metadata;
 use crate::api::get_note::get_note;
 use crate::api::get_pow::get_pow;
@@ -30,6 +32,7 @@ use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::api::send_note::send_note;
 use crate::api_key::ApiKey;
 
+mod events;
 mod get_metadata;
 mod get_note;
 mod get_pow;
@@ -46,6 +49,7 @@ pub use get_metadata::Metadata;
 pub struct ApiServer {
     mint_state: GetTokensState,
     metadata: Metadata,
+    issuance_receiver: watch::Receiver<AssetAmount>,
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
     store: Arc<dyn Store>,
@@ -63,6 +67,7 @@ impl ApiServer {
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
         note_transport_client: Option<Arc<GrpcNoteTransportClient>>,
+        issuance_receiver: watch::Receiver<AssetAmount>,
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
 
@@ -76,6 +81,7 @@ impl ApiServer {
         ApiServer {
             mint_state,
             metadata,
+            issuance_receiver,
             rate_limiter,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
             store,
@@ -87,6 +93,7 @@ impl ApiServer {
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
             .route("/get_metadata", get(get_metadata))
+            .route("/issuance", get(issuance_stream))
             .route("/pow", get(get_pow))
             .route("/get_tokens", get(get_tokens))
             .route("/get_note", get(get_note))
