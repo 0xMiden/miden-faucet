@@ -1,10 +1,10 @@
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
-use miden_client::note::{Note, NoteDetails};
-use miden_client::note_transport::NoteTransportError;
+use miden_client::ClientError;
+use miden_client::account::{AccountId, Address};
+use miden_client::note::Note;
 use miden_client::store::NoteFilter;
-use miden_client::utils::Serializable;
 use tracing::{Instrument, info_span, instrument};
 
 use crate::COMPONENT;
@@ -24,28 +24,29 @@ pub async fn send_note(
     State(server): State<ApiServer>,
     Query(request): Query<RawNoteRequest>,
 ) -> Result<(), SendNoteError> {
-    let note_transport_client = server
-        .note_transport_client
-        .ok_or(SendNoteError::NoteTransportError(NoteTransportError::Disabled))?;
-
     let request = request.validate().map_err(|_| SendNoteError::InvalidNoteId)?;
-    let note_record = server
-        .store
-        .get_output_notes(NoteFilter::Unique(request.note_id))
-        .instrument(info_span!(target: COMPONENT, "store.get_output_notes"))
-        .await
-        .map_err(|e| {
-            tracing::error!(?e, "failed to read note from store");
-            SendNoteError::NoteNotFound
-        })?
-        .pop()
-        .ok_or(SendNoteError::NoteNotFound)?;
 
-    let note = Note::try_from(note_record).unwrap();
-    let header = note.header().clone();
-    let details: NoteDetails = note.into();
+    let note = {
+        let client = server.client.read().await;
+        let note_record = client
+            .get_output_notes(NoteFilter::Unique(request.note_id))
+            .instrument(info_span!(target: COMPONENT, "client.get_output_notes"))
+            .await
+            .map_err(|e| {
+                tracing::error!(?e, "failed to read note from store");
+                SendNoteError::NoteNotFound
+            })?
+            .pop()
+            .ok_or(SendNoteError::NoteNotFound)?;
+        Note::try_from(note_record).expect("note record should be valid")
+    };
 
-    note_transport_client.send_note(header, details.to_bytes()).await?;
+    // Write lock to send via note transport.
+    // TODO: use actual recipient address when e2ee is implemented.
+    let address = Address::new(AccountId::try_from(0).expect("valid account id"));
+    let mut client = server.client.write().await;
+    client.send_private_note(note, &address).await?;
+
     Ok(())
 }
 
@@ -54,8 +55,8 @@ pub async fn send_note(
 
 #[derive(Debug, thiserror::Error)]
 pub enum SendNoteError {
-    #[error("note transport layer error: {0}")]
-    NoteTransportError(#[from] NoteTransportError),
+    #[error("client error: {0}")]
+    ClientError(#[from] ClientError),
     #[error("invalid note ID")]
     InvalidNoteId,
     #[error("note not found")]
@@ -66,9 +67,7 @@ impl SendNoteError {
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
-            Self::NoteTransportError(_) => {
-                "Failed to send note through note transport layer".to_owned()
-            },
+            Self::ClientError(_) => "Failed to send note through note transport layer".to_owned(),
             Self::InvalidNoteId => "Invalid Note ID".to_owned(),
             Self::NoteNotFound => "Note not found".to_owned(),
         }

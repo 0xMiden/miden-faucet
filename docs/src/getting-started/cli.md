@@ -99,6 +99,7 @@ miden-faucet start \
 | `--api-keys` | Comma-separated API keys | - | No |
 | `--enable-otel` | Enable OpenTelemetry | `false` | No |
 | `--batch-size` | Maximum number of P2ID notes to create per transaction | `32` | No |
+| `--note-transport-url` | Note transport service endpoint. Enables the `/send_note` API endpoint for distributing private notes | - | No |
 
 ## Environment Variables
 
@@ -132,6 +133,7 @@ export MIDEN_FAUCET_ACCOUNT_PATH=./faucet.mac
 export MIDEN_FAUCET_STORE=faucet_client_store.sqlite3
 export MIDEN_FAUCET_REMOTE_TX_PROVER_URL=https://tx-prover.devnet.miden.io
 export MIDEN_FAUCET_BATCH_SIZE=32
+export MIDEN_FAUCET_NOTE_TRANSPORT_URL=https://transport.miden.io
 
 # Rate Limiting Configuration
 export MIDEN_FAUCET_POW_SECRET=your-secret-here

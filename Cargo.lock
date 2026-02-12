@@ -2411,7 +2411,6 @@ dependencies = [
  "http 1.4.0",
  "humantime",
  "miden-client",
- "miden-client-sqlite-store",
  "miden-faucet-lib",
  "miden-node-proto",
  "miden-pow-rate-limiter",

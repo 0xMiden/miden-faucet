@@ -12,6 +12,7 @@ use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
 use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, create_p2id_note};
+use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
@@ -31,6 +32,10 @@ use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
 use tracing::{Instrument, error, info, info_span, instrument, warn};
 use url::Url;
+
+/// A shared, thread-safe miden client that can be used concurrently by the faucet minter and the
+/// API server.
+pub type SharedClient = Arc<tokio::sync::RwLock<Client<FilesystemKeyStore>>>;
 
 mod note_screener;
 pub mod requests;
@@ -72,7 +77,7 @@ impl FaucetId {
 /// Stores the current faucet state and handles minting requests.
 pub struct Faucet {
     id: FaucetId,
-    client: Client<FilesystemKeyStore>,
+    client: SharedClient,
     state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<RwLock<AssetAmount>>,
@@ -93,6 +98,8 @@ pub struct FaucetConfig {
     /// The remote prover url to use for proving transactions. If set to none, a local transaction
     /// prover is used.
     pub remote_tx_prover_url: Option<Url>,
+    /// The URL of the note transport service. If set to none, no note transport will be used.
+    pub note_transport_url: Option<Url>,
 }
 
 impl Faucet {
@@ -139,10 +146,17 @@ impl Faucet {
         client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
 
         if deploy {
-            let mut faucet = Self::load(config).await?;
+            let faucet = Self::load(config).await?;
+            let mut client = faucet.client.write().await;
 
             let empty_tx_request = TransactionRequestBuilder::new().build()?;
-            faucet.submit_new_transaction(empty_tx_request).await?;
+            Self::submit_new_transaction(
+                &mut client,
+                faucet.id.account_id,
+                faucet.tx_prover.clone(),
+                empty_tx_request,
+            )
+            .await?;
         }
 
         Ok(())
@@ -154,13 +168,24 @@ impl Faucet {
     #[instrument(target = COMPONENT, name = "faucet.load", fields(account_id), skip_all, err)]
     pub async fn load(config: &FaucetConfig) -> anyhow::Result<Self> {
         let span = tracing::Span::current();
-        let mut client = ClientBuilder::new()
+
+        let store = Arc::new(SqliteStore::new(config.store_path.clone()).await?);
+        let mut builder = ClientBuilder::new()
             .grpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .filesystem_keystore(KEYSTORE_PATH)?
-            .store(Arc::new(SqliteStore::new(config.store_path.clone()).await?))
-            .build()
+            .store(store.clone());
+
+        if let Some(ref note_transport_url) = config.note_transport_url {
+            let transport = GrpcNoteTransportClient::connect(
+                note_transport_url.to_string(),
+                config.timeout.as_millis() as u64,
+            )
             .await
-            .context("failed to build client")?;
+            .context("failed to connect to note transport")?;
+            builder = builder.note_transport(Arc::new(transport));
+        }
+
+        let mut client = builder.build().await.context("failed to build client")?;
 
         let account_id: AccountId = client
             .get_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned())
@@ -187,15 +212,14 @@ impl Faucet {
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
-        let note_screener =
-            NoteScreener::new(Arc::new(SqliteStore::new(config.store_path.clone()).await?));
+        let note_screener = NoteScreener::new(store);
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component = StateSync::new(grpc_client, Arc::new(note_screener), None);
 
         Ok(Self {
             id,
-            client,
+            client: Arc::new(tokio::sync::RwLock::new(client)),
             state_sync_component,
             tx_prover,
             issuance,
@@ -262,7 +286,7 @@ impl Faucet {
     /// Once the available supply is exceeded, any requests that exceed the supply will return an
     /// error. The request stream is closed and the minter shuts down.
     pub async fn run(
-        mut self,
+        self,
         mut requests: Receiver<(MintRequest, MintResponseSender)>,
         batch_size: usize,
     ) -> anyhow::Result<()> {
@@ -291,13 +315,15 @@ impl Faucet {
     /// `Faucet::run`.
     #[instrument(parent = None, target = COMPONENT, name = "faucet.mint", skip_all, fields(num_requests, tx_id), err)]
     async fn mint(
-        &mut self,
+        &self,
         requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
     ) -> anyhow::Result<()> {
+        let mut client = self.client.write().await;
+
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        Self::sync_state(self.id.account_id, &mut self.client, &self.state_sync_component).await?;
+        Self::sync_state(self.id.account_id, &mut client, &self.state_sync_component).await?;
 
         let span = tracing::Span::current();
 
@@ -320,10 +346,14 @@ impl Faucet {
         // Build and submit transaction
         let tx_request =
             self.create_transaction(&notes).context("faucet failed to create transaction")?;
-        let tx_id = self
-            .submit_new_transaction(tx_request)
-            .await
-            .context("faucet failed to submit transaction")?;
+        let tx_id = Self::submit_new_transaction(
+            &mut client,
+            self.id.account_id,
+            self.tx_prover.clone(),
+            tx_request,
+        )
+        .await
+        .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
 
         Self::send_responses(response_senders, note_ids, tx_id);
@@ -385,7 +415,7 @@ impl Faucet {
     /// Creates a transaction that generates the given p2id notes.
     #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err)]
     fn create_transaction(
-        &mut self,
+        &self,
         notes: &[Note],
     ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
@@ -417,28 +447,28 @@ impl Faucet {
     /// the created notes.
     #[instrument(target = COMPONENT, name = "faucet.mint.submit_new_transaction", skip_all, err)]
     async fn submit_new_transaction(
-        &mut self,
+        client: &mut Client<FilesystemKeyStore>,
+        account_id: AccountId,
+        tx_prover: Arc<dyn TransactionProver>,
         tx_request: TransactionRequest,
     ) -> Result<TransactionId, ClientError> {
         // Execute the transaction
-        let tx_result = self
-            .client
-            .execute_transaction(self.id.account_id, tx_request)
+        let tx_result = client
+            .execute_transaction(account_id, tx_request)
             .instrument(info_span!(target: COMPONENT, "faucet.mint.execute"))
             .await?;
         let tx_id = tx_result.executed_transaction().id();
 
         let proven_transaction = {
-            let remote_proven_transaction = self
-                .client
-                .prove_transaction_with(&tx_result, self.tx_prover.clone())
+            let remote_proven_transaction = client
+                .prove_transaction_with(&tx_result, tx_prover)
                 .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_remote"))
                 .await;
             match remote_proven_transaction {
                 Ok(proven_transaction) => proven_transaction,
                 Err(error) => {
                     error!(?error, "Failed to prove transaction with remote prover");
-                    self.client
+                    client
                         .prove_transaction(&tx_result)
                         .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_local"))
                         .await?
@@ -446,20 +476,20 @@ impl Faucet {
             }
         };
 
-        let submission_height = self
-            .client
+        let submission_height = client
             .submit_proven_transaction(proven_transaction, &tx_result)
             .instrument(info_span!(target: COMPONENT, "faucet.mint.submit_transaction"))
             .await?;
 
-        self.client.apply_transaction(&tx_result, submission_height).await?;
+        client.apply_transaction(&tx_result, submission_height).await?;
 
         Ok(tx_id)
     }
 
     /// Returns the faucet account.
     pub async fn faucet_account(&self) -> Result<Account, ClientError> {
-        self.client
+        let client = self.client.read().await;
+        client
             .get_account(self.id.account_id)
             .await?
             .ok_or(ClientError::AccountDataNotFound(self.id.account_id))
@@ -468,6 +498,12 @@ impl Faucet {
     /// Returns the id of the faucet account.
     pub fn faucet_id(&self) -> FaucetId {
         self.id.clone()
+    }
+
+    /// Returns a shared reference to the client that can be shared with other components (e.g. the
+    /// API server).
+    pub fn shared_client(&self) -> SharedClient {
+        self.client.clone()
     }
 
     /// Returns the available supply of the faucet.
@@ -609,7 +645,7 @@ mod tests {
 
         Faucet {
             id: FaucetId::new(account.id(), NetworkId::Testnet),
-            client,
+            client: Arc::new(tokio::sync::RwLock::new(client)),
             state_sync_component: StateSync::new(
                 mock_rpc,
                 Arc::new(NoteScreener::new(store.clone())),

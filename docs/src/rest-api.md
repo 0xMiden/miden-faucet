@@ -81,6 +81,20 @@ For detailed information about the token request flow, see the [Architecture](./
   - `note_id` (string): The ID of the requested note
   - `data_base64` (string): The note data encoded in base64 format. This data should be decoded and saved as a file with `.mno` extension and `application/octet-stream` media type
 
+### Send Note
+
+**Endpoint**: `POST /send_note`
+
+- **Purpose**: Send a private note through the note transport layer. This endpoint is only available when the faucet is started with the `--note-transport-url` option.
+
+- **Query Parameters**:
+  - `note_id` (string, required): The ID of the note to send
+
+- **Response**: Empty response on success
+
+- **Errors**:
+  - `400 Bad Request`: Invalid note ID, note not found, or note transport not configured
+
 ## Rate Limiting
 
 When a challenge is submitted for an account, that same account cannot submit a new challenge while the previous one is still valid. This effectively rate limits accounts minting requests. Though, the same account can use API keys to submit multiple challenges simultaneously:

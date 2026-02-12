@@ -8,7 +8,6 @@ mod testing;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -25,10 +24,8 @@ use miden_client::asset::TokenSymbol;
 use miden_client::auth::AuthSecretKey;
 use miden_client::crypto::RpoRandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
-use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::rpc::Endpoint;
 use miden_client::{Felt, Word};
-use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
 use miden_faucet_lib::{Faucet, FaucetConfig};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
@@ -212,10 +209,6 @@ pub enum Command {
         /// single transaction.
         #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
         batch_size: usize,
-
-        /// Note transport endpoint. If not set, no note transport will be used.
-        #[arg(long = "note-transport-url", value_name = "URL", env = ENV_NOTE_TRANSPORT_URL)]
-        note_transport_url: Option<Url>,
     },
 }
 
@@ -243,6 +236,10 @@ pub struct ClientConfig {
     /// from the specified network.
     #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
     node_url: Option<Url>,
+
+    /// Note transport endpoint. If not set, no note transport will be used.
+    #[arg(long = "note-transport-url", value_name = "URL", env = ENV_NOTE_TRANSPORT_URL)]
+    note_transport_url: Option<Url>,
 }
 
 impl Command {
@@ -284,6 +281,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     remote_tx_prover_url,
                     network,
                     store_path,
+                    note_transport_url,
                 },
             token_symbol,
             decimals,
@@ -317,6 +315,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 network_id: network.to_network_id()?,
                 timeout,
                 remote_tx_prover_url,
+                note_transport_url,
             };
             Box::pin(Faucet::init(&faucet_config, account, &secret, deploy))
                 .await
@@ -339,6 +338,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     remote_tx_prover_url,
                     network,
                     store_path,
+                    note_transport_url,
                 },
             api_bind_port,
             api_public_url,
@@ -355,20 +355,18 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             open_telemetry: _,
             explorer_url,
             batch_size,
-            note_transport_url,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
             let config = FaucetConfig {
-                store_path: store_path.clone(),
+                store_path,
                 node_endpoint: node_endpoint.clone(),
                 network_id: network.to_network_id()?,
                 timeout,
                 remote_tx_prover_url,
+                note_transport_url,
             };
             let faucet = Faucet::load(&config).await.context("failed to load faucet")?;
-
-            let store =
-                Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
+            let shared_client = faucet.shared_client();
 
             // Maximum of 1000 requests in-queue at once. Overflow is rejected for faster feedback.
             let (tx_mint_requests, rx_mint_requests) = mpsc::channel(REQUESTS_QUEUE_SIZE);
@@ -399,18 +397,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 base_amount,
             };
 
-            let note_transport_client = if let Some(note_transport_url) = note_transport_url {
-                Some(Arc::new(
-                    GrpcNoteTransportClient::connect(
-                        note_transport_url.to_string(),
-                        timeout.as_millis().try_into().unwrap(),
-                    )
-                    .await?,
-                ))
-            } else {
-                None
-            };
-
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.
             let tx_mint_requests_clone = tx_mint_requests.clone();
@@ -421,8 +407,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 pow_secret.as_str(),
                 rate_limiter_config,
                 &api_keys,
-                store,
-                note_transport_client,
+                shared_client,
             );
 
             // Use select to concurrently:
@@ -735,6 +720,7 @@ mod tests {
             network: FaucetNetwork::Localhost,
             store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
             remote_tx_prover_url: None,
+            note_transport_url: None,
         };
 
         Box::pin(run_faucet_command(Cli {
@@ -782,7 +768,6 @@ mod tests {
                         open_telemetry: false,
                         explorer_url: None,
                         batch_size: 8,
-                        note_transport_url: None,
                     },
                 }))
                 .await
