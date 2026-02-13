@@ -156,7 +156,7 @@ impl Faucet {
         let span = tracing::Span::current();
         let mut client = ClientBuilder::new()
             .grpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
-            .filesystem_keystore(KEYSTORE_PATH)
+            .filesystem_keystore(KEYSTORE_PATH)?
             .store(Arc::new(SqliteStore::new(config.store_path.clone()).await?))
             .build()
             .await
@@ -173,8 +173,7 @@ impl Faucet {
             info!("Received faucet account state from the node");
         });
 
-        let record = client.get_account(account_id).await?.context("no account found")?;
-        let account = Account::try_from(record)?;
+        let account = client.get_account(account_id).await?.context("no account found")?;
 
         let faucet = BasicFungibleFaucet::try_from(account.clone())?;
         let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
@@ -214,8 +213,10 @@ impl Faucet {
     ) -> anyhow::Result<SyncSummary> {
         // Get current state of the client
         let accounts = client
-            .get_account_header_by_id(account_id)
-            .await?
+            .account_reader(account_id)
+            .header()
+            .await
+            .ok()
             .map(|(header, _)| vec![header])
             .unwrap_or_default();
         let note_tags = BTreeSet::new();
@@ -225,12 +226,12 @@ impl Faucet {
             client.get_transactions(TransactionFilter::Uncommitted).await?;
 
         // Build current partial MMR
-        let current_partial_mmr = client.get_current_partial_mmr().await?;
+        let mut current_partial_mmr = client.get_current_partial_mmr().await?;
 
         // Get the sync update from the network
         let state_sync_update = state_sync
             .sync_state(
-                current_partial_mmr,
+                &mut current_partial_mmr,
                 accounts,
                 note_tags,
                 input_notes,
@@ -461,8 +462,7 @@ impl Faucet {
         self.client
             .get_account(self.id.account_id)
             .await?
-            .ok_or(ClientError::AccountDataNotFound(self.id.account_id))?
-            .try_into()
+            .ok_or(ClientError::AccountDataNotFound(self.id.account_id))
     }
 
     /// Returns the id of the faucet account.
@@ -522,7 +522,6 @@ fn build_p2id_notes(
 mod tests {
     use std::env::temp_dir;
 
-    use miden_client::ExecutionOptions;
     use miden_client::account::component::AuthFalcon512Rpo;
     use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
     use miden_client::asset::TokenSymbol;
@@ -530,8 +529,7 @@ mod tests {
     use miden_client::crypto::rpo_falcon512::SecretKey;
     use miden_client::store::{NoteFilter, Store};
     use miden_client::testing::MockChain;
-    use miden_client::testing::mock::{MockClient, MockRpcApi};
-    use miden_client_sqlite_store::SqliteStore;
+    use miden_client::testing::mock::MockRpcApi;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
@@ -566,29 +564,21 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        let faucet_handle = run_faucet(rx_mint_requests, batch_size, store.clone());
-
-        // Give the faucet thread time to initialize
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        let faucet = build_faucet(store.clone()).await;
+        Box::pin(faucet.run(rx_mint_requests, batch_size)).await.unwrap();
 
         for receiver in receivers {
             let response = receiver.await.unwrap().unwrap();
             let notes = store.get_output_notes(NoteFilter::Unique(response.note_id)).await.unwrap();
             assert_eq!(notes.len(), 1);
         }
-
-        faucet_handle.join().unwrap();
     }
 
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
 
-    /// Runs a faucet on a separate thread using a mock client.
-    fn run_faucet(
-        rx_mint_requests: mpsc::Receiver<(MintRequest, MintResponseSender)>,
-        batch_size: usize,
-        store: Arc<dyn Store>,
-    ) -> std::thread::JoinHandle<()> {
+    /// Builds a faucet using a mock client.
+    async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
         let secret = SecretKey::new();
         let symbol = TokenSymbol::new("TEST").unwrap();
         let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
@@ -601,49 +591,34 @@ mod tests {
             .unwrap();
         let key = AuthSecretKey::Falcon512Rpo(secret);
 
-        std::thread::spawn(move || {
-            // Create a new runtime for this thread
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .enable_io()
-                .build()
-                .expect("Failed to build runtime");
+        let keystore_path = temp_dir().join(format!("keystore-{}", Uuid::new_v4()));
+        let keystore = FilesystemKeyStore::new(keystore_path.clone()).unwrap();
+        keystore.add_key(&key).unwrap();
 
-            // Run the faucet on this thread's runtime
-            rt.block_on(async {
-                let keystore = FilesystemKeyStore::new(PathBuf::from("keystore")).unwrap();
-                keystore.add_key(&key).unwrap();
+        let mock_rpc = Arc::new(MockRpcApi::new(MockChain::new()));
+        let mut client = ClientBuilder::new()
+            .rpc(mock_rpc.clone())
+            .store(store.clone())
+            .filesystem_keystore(keystore_path.to_str().unwrap())
+            .expect("keystore should be created")
+            .build()
+            .await
+            .unwrap();
+        client.ensure_genesis_in_place().await.unwrap();
+        client.add_account(&account, false).await.unwrap();
 
-                let mut client = MockClient::new(
-                    Arc::new(MockRpcApi::new(MockChain::new())),
-                    Box::new(RpoRandomCoin::new(Word::empty())),
-                    store.clone(),
-                    Some(Arc::new(keystore)),
-                    ExecutionOptions::new(None, 4096, false, false).unwrap(),
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-                .await
-                .unwrap();
-                client.ensure_genesis_in_place().await.unwrap();
-                client.add_account(&account, false).await.unwrap();
-                let faucet = Faucet {
-                    id: FaucetId::new(account.id(), NetworkId::Testnet),
-                    client,
-                    state_sync_component: StateSync::new(
-                        Arc::new(MockRpcApi::new(MockChain::new())),
-                        Arc::new(NoteScreener::new(store.clone())),
-                        None,
-                    ),
-                    tx_prover: Arc::new(LocalTransactionProver::default()),
-                    issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
-                    max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
-                    script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
-                };
-                Box::pin(faucet.run(rx_mint_requests, batch_size)).await.unwrap();
-            });
-        })
+        Faucet {
+            id: FaucetId::new(account.id(), NetworkId::Testnet),
+            client,
+            state_sync_component: StateSync::new(
+                mock_rpc,
+                Arc::new(NoteScreener::new(store.clone())),
+                None,
+            ),
+            tx_prover: Arc::new(LocalTransactionProver::default()),
+            issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
+            max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
+            script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
+        }
     }
 }

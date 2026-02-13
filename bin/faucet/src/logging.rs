@@ -94,10 +94,10 @@ pub fn setup_tracing(otel: OpenTelemetry) -> Result<Option<OtelGuard>> {
 
         // Flush traces before the program terminates.
         // This ensures the panic trace is exported even though the OtelGuard won't be dropped.
-        if let Some(provider) = TRACER_PROVIDER.get() {
-            if let Err(err) = provider.force_flush() {
-                eprintln!("Failed to flush traces on panic: {err:?}");
-            }
+        if let Some(provider) = TRACER_PROVIDER.get()
+            && let Err(err) = provider.force_flush()
+        {
+            eprintln!("Failed to flush traces on panic: {err:?}");
         }
 
         // Call the default hook to print the backtrace.
