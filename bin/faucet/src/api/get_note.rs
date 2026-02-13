@@ -27,19 +27,17 @@ pub async fn get_note(
     Query(request): Query<RawNoteRequest>,
 ) -> Result<impl IntoResponse, NoteRequestError> {
     let request = request.validate()?;
-    let note = {
-        let client = server.client.read().await;
-        client
-            .get_output_notes(NoteFilter::Unique(request.note_id))
-            .instrument(info_span!(target: COMPONENT, "client.get_output_notes"))
-            .await
-            .map_err(|e| {
-                tracing::error!(?e, "failed to read note from store");
-                NoteRequestError::NoteNotFound
-            })?
-            .pop()
-            .ok_or(NoteRequestError::NoteNotFound)?
-    };
+    let note = server
+        .store
+        .get_output_notes(NoteFilter::Unique(request.note_id))
+        .instrument(info_span!(target: COMPONENT, "store.get_output_notes"))
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "failed to read note from store");
+            NoteRequestError::NoteNotFound
+        })?
+        .pop()
+        .ok_or(NoteRequestError::NoteNotFound)?;
     let note_file = note
         .clone()
         .into_note_file(&NoteExportType::NoteWithProof)

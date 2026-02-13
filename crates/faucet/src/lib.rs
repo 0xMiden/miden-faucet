@@ -14,7 +14,7 @@ use miden_client::keystore::FilesystemKeyStore;
 use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, create_p2id_note};
 use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::rpc::{Endpoint, GrpcClient};
-use miden_client::store::{NoteFilter, TransactionFilter};
+use miden_client::store::{NoteFilter, Store, TransactionFilter};
 use miden_client::sync::{StateSync, SyncSummary};
 use miden_client::transaction::{
     LocalTransactionProver,
@@ -78,6 +78,7 @@ impl FaucetId {
 pub struct Faucet {
     id: FaucetId,
     client: SharedClient,
+    store: Arc<dyn Store>,
     state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: Arc<RwLock<AssetAmount>>,
@@ -212,7 +213,7 @@ impl Faucet {
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
-        let note_screener = NoteScreener::new(store);
+        let note_screener = NoteScreener::new(store.clone());
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component = StateSync::new(grpc_client, Arc::new(note_screener), None);
@@ -220,6 +221,7 @@ impl Faucet {
         Ok(Self {
             id,
             client: Arc::new(tokio::sync::RwLock::new(client)),
+            store,
             state_sync_component,
             tx_prover,
             issuance,
@@ -506,6 +508,14 @@ impl Faucet {
         self.client.clone()
     }
 
+    /// Returns a shared reference to the store.
+    ///
+    /// Since all `Store` trait methods take `&self`, the store can be used directly for read-only
+    /// operations without acquiring the client lock.
+    pub fn store(&self) -> Arc<dyn Store> {
+        self.store.clone()
+    }
+
     /// Returns the available supply of the faucet.
     pub fn available_supply(&self) -> Option<AssetAmount> {
         self.max_supply.checked_sub(*self.issuance.read())
@@ -646,6 +656,7 @@ mod tests {
         Faucet {
             id: FaucetId::new(account.id(), NetworkId::Testnet),
             client: Arc::new(tokio::sync::RwLock::new(client)),
+            store: store.clone(),
             state_sync_component: StateSync::new(
                 mock_rpc,
                 Arc::new(NoteScreener::new(store.clone())),

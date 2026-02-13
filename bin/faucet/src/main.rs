@@ -367,6 +367,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             };
             let faucet = Faucet::load(&config).await.context("failed to load faucet")?;
             let shared_client = faucet.shared_client();
+            let store = faucet.store();
 
             // Maximum of 1000 requests in-queue at once. Overflow is rejected for faster feedback.
             let (tx_mint_requests, rx_mint_requests) = mpsc::channel(REQUESTS_QUEUE_SIZE);
@@ -408,6 +409,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 rate_limiter_config,
                 &api_keys,
                 shared_client,
+                store,
             );
 
             // Use select to concurrently:

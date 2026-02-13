@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
@@ -7,6 +8,7 @@ use axum::extract::FromRef;
 use axum::routing::{get, post};
 use http::HeaderValue;
 use miden_client::account::{AccountId, AccountIdError, AddressError};
+use miden_client::store::Store;
 use miden_client::utils::hex_to_bytes;
 use miden_faucet_lib::SharedClient;
 use miden_faucet_lib::requests::MintRequestSender;
@@ -47,9 +49,11 @@ pub struct ApiServer {
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
     client: SharedClient,
+    store: Arc<dyn Store>,
 }
 
 impl ApiServer {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         metadata: Metadata,
         max_claimable_amount: AssetAmount,
@@ -58,6 +62,7 @@ impl ApiServer {
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
         client: SharedClient,
+        store: Arc<dyn Store>,
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
 
@@ -74,6 +79,7 @@ impl ApiServer {
             rate_limiter,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
             client,
+            store,
         }
     }
 

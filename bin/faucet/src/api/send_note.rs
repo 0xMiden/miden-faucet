@@ -26,20 +26,18 @@ pub async fn send_note(
 ) -> Result<(), SendNoteError> {
     let request = request.validate().map_err(|_| SendNoteError::InvalidNoteId)?;
 
-    let note = {
-        let client = server.client.read().await;
-        let note_record = client
-            .get_output_notes(NoteFilter::Unique(request.note_id))
-            .instrument(info_span!(target: COMPONENT, "client.get_output_notes"))
-            .await
-            .map_err(|e| {
-                tracing::error!(?e, "failed to read note from store");
-                SendNoteError::NoteNotFound
-            })?
-            .pop()
-            .ok_or(SendNoteError::NoteNotFound)?;
-        Note::try_from(note_record).expect("note record should be valid")
-    };
+    let note_record = server
+        .store
+        .get_output_notes(NoteFilter::Unique(request.note_id))
+        .instrument(info_span!(target: COMPONENT, "store.get_output_notes"))
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "failed to read note from store");
+            SendNoteError::NoteNotFound
+        })?
+        .pop()
+        .ok_or(SendNoteError::NoteNotFound)?;
+    let note = Note::try_from(note_record).expect("note record should be valid");
 
     // Write lock to send via note transport.
     // TODO: use actual recipient address when e2ee is implemented.
