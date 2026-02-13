@@ -27,7 +27,6 @@ use miden_client::crypto::RpoRandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::rpc::Endpoint;
-use miden_client::store::Store;
 use miden_client::{Felt, Word};
 use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
@@ -368,7 +367,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             };
             let faucet = Faucet::load(&config).await.context("failed to load faucet")?;
 
-            let store: Arc<dyn Store> =
+            let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
 
             // Maximum of 1000 requests in-queue at once. Overflow is rejected for faster feedback.
