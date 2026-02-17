@@ -30,12 +30,30 @@ export class UIController {
         };
     }
 
-    setRecipientAddress(address) {
+    setWalletConnected(address) {
         this.recipientInput.value = address;
+        this.recipientInput.disabled = true;
+        this.walletConnectButton.textContent = 'Disconnect';
+        this.walletConnectButton.classList.add('connected');
+    }
+
+    setWalletDisconnected() {
+        this.recipientInput.value = '';
+        this.recipientInput.disabled = false;
+        this.walletConnectButton.textContent = 'Connect Wallet';
+        this.walletConnectButton.classList.remove('connected');
+    }
+
+    setWalletButtonEnabled(enabled) {
+        this.walletConnectButton.disabled = !enabled;
     }
 
     resetForm() {
-        this.recipientInput.value = '';
+        // If wallet is connected, keep the address and wallet button state intact
+        if (!this.walletConnectButton.classList.contains('connected')) {
+            this.recipientInput.value = '';
+            this.recipientInput.disabled = false;
+        }
     }
 
     hideModals() {
