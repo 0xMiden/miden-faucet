@@ -33,15 +33,7 @@ export class UIController {
     setWalletConnected(address) {
         this.recipientInput.value = address;
         this.recipientInput.disabled = true;
-        this.walletConnectButton.textContent = 'Disconnect';
-        this.walletConnectButton.classList.add('connected');
-    }
-
-    setWalletDisconnected() {
-        this.recipientInput.value = '';
-        this.recipientInput.disabled = false;
-        this.walletConnectButton.textContent = 'Connect Wallet';
-        this.walletConnectButton.classList.remove('connected');
+        this.walletConnectButton.disabled = true;
     }
 
     setWalletButtonEnabled(enabled) {
@@ -49,10 +41,9 @@ export class UIController {
     }
 
     resetForm() {
-        // If wallet is connected, keep the address and wallet button state intact
-        if (!this.walletConnectButton.classList.contains('connected')) {
+        // If wallet is connected, keep the address intact
+        if (!this.recipientInput.disabled) {
             this.recipientInput.value = '';
-            this.recipientInput.disabled = false;
         }
     }
 

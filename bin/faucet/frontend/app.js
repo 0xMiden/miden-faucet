@@ -52,8 +52,9 @@ export class MidenFaucetApp {
 
         // Listen for future readyState changes
         this.walletAdapter.on('readyStateChange', (readyState) => {
-            const shouldEnable = readyState === WalletReadyState.Installed || this.walletAdapter.connected;
-            this.ui.setWalletButtonEnabled(shouldEnable);
+            if (!this.walletAdapter.connected) {
+                this.ui.setWalletButtonEnabled(readyState === WalletReadyState.Installed);
+            }
         });
     }
 
@@ -77,24 +78,14 @@ export class MidenFaucetApp {
     async handleWalletButtonClick() {
         this.ui.setWalletButtonEnabled(false);
         try {
-            if (this.walletAdapter.connected) {
-                // Disconnect
-                try {
-                    await this.walletAdapter.disconnect();
-                } catch (error) {
-                    console.error("WalletDisconnectError:", error);
-                }
-                this.ui.setWalletDisconnected();
+            const connected = await this.connectWallet();
+            if (connected && this.walletAdapter.address) {
+                this.ui.setWalletConnected(this.walletAdapter.address);
             } else {
-                // Connect
-                const connected = await this.connectWallet();
-                if (connected && this.walletAdapter.address) {
-                    this.ui.setWalletConnected(this.walletAdapter.address);
-                } else {
-                    this.ui.showConnectionError("Connection failed", "Failed to connect wallet.");
-                }
+                this.ui.showConnectionError("Connection failed", "Failed to connect wallet.");
+                this.ui.setWalletButtonEnabled(true);
             }
-        } finally {
+        } catch (error) {
             this.ui.setWalletButtonEnabled(true);
         }
     }
