@@ -53,8 +53,10 @@ export class MidenFaucetApp {
     async connectWallet() {
         try {
             await this.walletAdapter.connect(PrivateDataPermission.UponRequest, WalletAdapterNetwork.Testnet);
+            return true;
         } catch (error) {
             console.error("WalletConnectionError:", error);
+            return false;
         }
     }
 
@@ -99,11 +101,11 @@ export class MidenFaucetApp {
                 this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.tx_id);
                 this.ui.setPrivateMintedSubtitle('Importing note to your wallet...');
 
-                await this.connectWallet();
+                const walletConnected = await this.connectWallet();
 
                 // if the recipient's wallet is connected, import note directly
                 let noteImported = false;
-                if (this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
+                if (walletConnected && this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
                     this.ui.setPrivateMintedSubtitle('Please check your <strong>Miden Wallet</strong> to accept the import...');
                     noteImported = await this.importNoteToWallet(getTokensResponse.note_id);
                     if (noteImported) {
@@ -118,7 +120,7 @@ export class MidenFaucetApp {
                     const noteSent = await this.sendNoteToClient(getTokensResponse.note_id);
                     if (noteSent) {
                         this.ui.setPrivateMintedSubtitle('Go to your <strong>Miden Wallet</strong> to claim.');
-                        this.ui.showOptionalDownload();
+                        this.ui.showOptionalDownload(() => this.downloadNote(getTokensResponse.note_id));
                         this.ui.showCloseButton();
                     } else {
                         // if note transport failed, show the download button
