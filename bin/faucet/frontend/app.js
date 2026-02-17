@@ -1,5 +1,5 @@
 import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
-import { PrivateDataPermission, WalletAdapterNetwork } from "@demox-labs/miden-wallet-adapter-base";
+import { PrivateDataPermission, WalletAdapterNetwork, WalletReadyState } from "@demox-labs/miden-wallet-adapter-base";
 import { Endpoint, NoteId, RpcClient } from "@miden-sdk/miden-sdk";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
@@ -36,6 +36,7 @@ export class MidenFaucetApp {
             this.apiUrl = config.api_url;
             this.rpcClient = new RpcClient(new Endpoint(config.node_url));
             this.setupEventListeners();
+            this.setupWalletDetection();
             this.startMetadataPolling();
         } catch (error) {
             console.error('Failed to initialize app:', error);
@@ -43,9 +44,22 @@ export class MidenFaucetApp {
         }
     }
 
+    setupWalletDetection() {
+        // Enable button if wallet extension is already installed
+        if (this.walletAdapter.readyState === WalletReadyState.Installed) {
+            this.ui.setWalletButtonEnabled(true);
+        }
+
+        // Listen for future readyState changes
+        this.walletAdapter.on('readyStateChange', (readyState) => {
+            const shouldEnable = readyState === WalletReadyState.Installed || this.walletAdapter.connected;
+            this.ui.setWalletButtonEnabled(shouldEnable);
+        });
+    }
+
     setupEventListeners() {
         const onSendTokens = (isPrivateNote) => this.handleSendTokens(isPrivateNote);
-        const onWalletConnect = () => this.setRecipientFromWallet();
+        const onWalletConnect = () => this.handleWalletButtonClick();
         const onTokenSelect = (requestedAmount) => this.updateTokenHint(requestedAmount);
         this.ui.setupEventListeners(onSendTokens, onWalletConnect, onTokenSelect);
     }
@@ -60,13 +74,28 @@ export class MidenFaucetApp {
         }
     }
 
-    async setRecipientFromWallet() {
-        await this.connectWallet();
-
-        if (this.walletAdapter.address) {
-            this.ui.setRecipientAddress(this.walletAdapter.address);
-        } else {
-            this.ui.showConnectionError("Connection failed", "Failed to connect wallet.");
+    async handleWalletButtonClick() {
+        this.ui.setWalletButtonEnabled(false);
+        try {
+            if (this.walletAdapter.connected) {
+                // Disconnect
+                try {
+                    await this.walletAdapter.disconnect();
+                } catch (error) {
+                    console.error("WalletDisconnectError:", error);
+                }
+                this.ui.setWalletDisconnected();
+            } else {
+                // Connect
+                const connected = await this.connectWallet();
+                if (connected && this.walletAdapter.address) {
+                    this.ui.setWalletConnected(this.walletAdapter.address);
+                } else {
+                    this.ui.showConnectionError("Connection failed", "Failed to connect wallet.");
+                }
+            }
+        } finally {
+            this.ui.setWalletButtonEnabled(true);
         }
     }
 
@@ -99,13 +128,10 @@ export class MidenFaucetApp {
 
             if (isPrivateNote) {
                 this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.tx_id);
-                this.ui.setPrivateMintedSubtitle('Importing note to your wallet...');
 
-                const walletConnected = await this.connectWallet();
-
-                // if the recipient's wallet is connected, import note directly
+                // If wallet is connected and address matches, try direct import
                 let noteImported = false;
-                if (walletConnected && this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
+                if (this.walletAdapter.connected && this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
                     this.ui.setPrivateMintedSubtitle('Please check your <strong>Miden Wallet</strong> to accept the import...');
                     noteImported = await this.importNoteToWallet(getTokensResponse.note_id);
                     if (noteImported) {
@@ -115,7 +141,7 @@ export class MidenFaucetApp {
                 }
 
                 if (!noteImported) {
-                    // if the note did not get imported to the wallet, send it through the note transport layer
+                    // Send through the note transport layer
                     this.ui.setPrivateMintedSubtitle('Sending note to your wallet...');
                     const noteSent = await this.sendNoteToClient(getTokensResponse.note_id);
                     if (noteSent) {
