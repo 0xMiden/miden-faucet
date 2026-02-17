@@ -211,10 +211,10 @@ body {
 
 .modal-content {
     background: white;
-    border: 0.5px solid #e0e0e0;
+    border: 1px solid #e0e0e0;
     margin-bottom: 15px;
     border-radius: 7px;
-    overflow: scroll;
+    overflow: hidden;
     width: 100%;
 }
 
@@ -606,45 +606,45 @@ body {
     margin-bottom: 0;
 }
 
-.input-with-icon {
-    position: relative;
+.recipient-row {
     display: flex;
+    gap: 8px;
     align-items: center;
 }
 
-.input-with-icon .wallet-icon-button {
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease;
+.recipient-row .form-input {
+    flex: 3;
 }
 
-.input-with-icon:focus-within .wallet-icon-button {
-    opacity: 1;
-    visibility: visible;
-}
-
-.form-input {
-    padding-right: 40px;
-}
-
-.wallet-icon-button {
-    position: absolute;
-    right: 1px;
-    top: 1px;
-    bottom: 1px;
-    border: none;
-    background: transparent;
-    padding: 0 10px;
+.wallet-button {
+    flex: 1;
+    font-family: "Geist", monospace;
+    font-weight: 500;
+    font-size: 13px;
+    height: 50px;
+    border: 1px solid #e0e0e0;
+    background-color: rgba(249, 249, 249, 1);
+    color: #ff5500;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    border-radius: 5px;
+    transition: all 0.2s;
+    white-space: nowrap;
 }
 
-.wallet-icon {
-    width: 20px;
-    height: 20px;
-    color: #888;
+.wallet-button:hover:not(:disabled) {
+    background-color: #eeeeee;
+    border-color: #d0d0d0;
+}
+
+.wallet-button:disabled {
+    color: #aaaaaa;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.wallet-button.connected {
+    color: #000000;
+    background-color: #f0f0f0;
 }
 
 .header-image {
@@ -679,6 +679,17 @@ body {
 
     .progress-bar {
         margin: 4px auto 0;
+    }
+
+    .recipient-row {
+        flex-direction: column;
+    }
+
+    .recipient-row .form-input,
+    .recipient-row .wallet-button {
+        flex: none;
+        width: 100%;
+        height: 50px;
     }
 
     .modal-placeholder {
