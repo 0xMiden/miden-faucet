@@ -2,7 +2,7 @@
 
 ## 0.14.0 (TBD)
 
-- Removed `--api-key` param from the `start` command, API keys are now persisted in the store and automatically loaded on startup.  ([#225](https://github.com/0xMiden/miden-faucet/pull/225)).
+- [BREAKING] Removed `--api-key` param from the `start` command, API keys are now persisted in the store and automatically loaded on startup.  ([#225](https://github.com/0xMiden/miden-faucet/pull/225)).
 - Added `remove-api-key` and `list-api-keys` CLI commands ([#225](https://github.com/0xMiden/miden-faucet/pull/225)).
 - OpenTelemetry traces are now flushed before program termination on panic ([#222](https://github.com/0xMiden/miden-faucet/pull/222)).
 

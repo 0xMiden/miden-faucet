@@ -186,7 +186,7 @@ API keys are persisted in the faucet's SQLite store and automatically loaded whe
 ### Create an API Key
 
 ```bash
-miden-faucet create-api-key --store ./faucet_client_store.sqlite3
+miden-faucet create-api-key
 ```
 
 Generates a new API key, persists it to the store, and prints it to stdout.
@@ -198,7 +198,7 @@ Generates a new API key, persists it to the store, and prints it to stdout.
 ### List API Keys
 
 ```bash
-miden-faucet list-api-keys --store ./faucet_client_store.sqlite3
+miden-faucet list-api-keys
 ```
 
 Lists all persisted API keys in the store.
@@ -210,7 +210,7 @@ Lists all persisted API keys in the store.
 ### Remove an API Key
 
 ```bash
-miden-faucet remove-api-key --store ./faucet_client_store.sqlite3 <KEY>
+miden-faucet remove-api-key <KEY>
 ```
 
 Removes a persisted API key from the store.

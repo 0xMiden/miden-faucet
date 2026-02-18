@@ -50,6 +50,7 @@ use crate::network::FaucetNetwork;
 
 pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
+const DEFAULT_STORE_PATH: &str = "faucet_client_store.sqlite3";
 
 const ENV_API_BIND_PORT: &str = "MIDEN_FAUCET_API_BIND_PORT";
 const ENV_API_PUBLIC_URL: &str = "MIDEN_FAUCET_API_PUBLIC_URL";
@@ -128,14 +129,14 @@ pub enum Command {
     /// so that it is automatically loaded when the faucet starts.
     CreateApiKey {
         /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
+        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
         store_path: PathBuf,
     },
 
     /// Remove an API key from the store.
     RemoveApiKey {
         /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
+        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
         store_path: PathBuf,
 
         /// The API key to remove (encoded string).
@@ -145,7 +146,7 @@ pub enum Command {
     /// List all API keys in the store.
     ListApiKeys {
         /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
+        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
         store_path: PathBuf,
     },
 
@@ -240,7 +241,7 @@ pub enum Command {
 #[derive(Parser, Debug, Clone)]
 pub struct ClientConfig {
     /// Path to the `SQLite` store.
-    #[arg(long = "store", value_name = "FILE", default_value = "faucet_client_store.sqlite3", env = ENV_STORE)]
+    #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
     store_path: PathBuf,
 
     /// Timeout for attempting to connect to the node.
@@ -367,8 +368,12 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         Command::ListApiKeys { store_path } => {
             let store = SqliteStore::new(store_path).await.context("failed to open store")?;
             let keys = load_api_keys_from_store(&store).await?;
-            for key in keys {
-                println!("{}", key.encode());
+            if keys.is_empty() {
+                println!("No API keys found.");
+            } else {
+                for key in keys {
+                    println!("{}", key.encode());
+                }
             }
         },
 
