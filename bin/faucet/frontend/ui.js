@@ -30,12 +30,21 @@ export class UIController {
         };
     }
 
-    setRecipientAddress(address) {
+    setWalletConnected(address) {
         this.recipientInput.value = address;
+        this.recipientInput.disabled = true;
+        this.walletConnectButton.disabled = true;
+    }
+
+    setWalletButtonEnabled(enabled) {
+        this.walletConnectButton.disabled = !enabled;
     }
 
     resetForm() {
-        this.recipientInput.value = '';
+        // If wallet is connected, keep the address intact
+        if (!this.recipientInput.disabled) {
+            this.recipientInput.value = '';
+        }
     }
 
     hideModals() {
@@ -240,7 +249,8 @@ export class UIController {
         checkmark.style.display = 'none';
     }
 
-    showOptionalDownload() {
+    showOptionalDownload(onDownloadNote) {
+        this.setupDownloadButton(onDownloadNote);
         this.showNextSteps();
         this.setNextStepsTitle('If you don\'t see the note in your wallet, you can import it manually:');
 
@@ -268,7 +278,7 @@ export class UIController {
         nextSteps.style.display = 'block';
 
         const nextStepsList = document.getElementById('next-steps-list');
-        nextStepsList.display = 'block';
+        nextStepsList.style.display = 'block';
     }
 
     setNextStepsTitle(title) {

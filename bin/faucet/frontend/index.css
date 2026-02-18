@@ -211,10 +211,10 @@ body {
 
 .modal-content {
     background: white;
-    border: 0.5px solid #e0e0e0;
+    border: 1px solid #e0e0e0;
     margin-bottom: 15px;
     border-radius: 7px;
-    overflow: scroll;
+    overflow: hidden;
     width: 100%;
 }
 
@@ -606,45 +606,45 @@ body {
     margin-bottom: 0;
 }
 
-.input-with-icon {
-    position: relative;
+.recipient-row {
     display: flex;
+    gap: 8px;
     align-items: center;
 }
 
-.input-with-icon .wallet-icon-button {
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease;
+.recipient-row .form-input {
+    flex: 1;
 }
 
-.input-with-icon:focus-within .wallet-icon-button {
-    opacity: 1;
-    visibility: visible;
-}
-
-.form-input {
-    padding-right: 40px;
-}
-
-.wallet-icon-button {
-    position: absolute;
-    right: 1px;
-    top: 1px;
-    bottom: 1px;
-    border: none;
-    background: transparent;
-    padding: 0 10px;
+.wallet-button {
+    flex: none;
+    width: 50px;
+    height: 50px;
+    border: 1px solid #e0e0e0;
+    background-color: rgba(249, 249, 249, 1);
     cursor: pointer;
+    border-radius: 5px;
+    transition: all 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
+}
+
+.wallet-button:hover:not(:disabled) {
+    background-color: #eeeeee;
+    border-color: #d0d0d0;
+}
+
+.wallet-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
 }
 
 .wallet-icon {
-    width: 20px;
-    height: 20px;
-    color: #888;
+    width: 22px;
+    height: 22px;
+    filter: brightness(0) saturate(100%) invert(41%) sepia(96%) saturate(1637%) hue-rotate(360deg) brightness(99%) contrast(109%);
 }
 
 .header-image {
@@ -679,6 +679,10 @@ body {
 
     .progress-bar {
         margin: 4px auto 0;
+    }
+
+    .recipient-row .form-input {
+        flex: 1;
     }
 
     .modal-placeholder {
