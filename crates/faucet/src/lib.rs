@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{Account, AccountId, Address, NetworkId};
+use miden_client::account::{Account, AccountId, AccountStorage, Address, NetworkId};
 use miden_client::asset::FungibleAsset;
 use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
@@ -184,7 +184,7 @@ impl Faucet {
         let id = FaucetId::new(account.id(), config.network_id.clone());
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
         let issuance =
-            Arc::new(RwLock::new(AssetAmount::new(account.get_token_issuance()?.as_int())?));
+            Arc::new(RwLock::new(Self::read_issuance_from_store(&client, account.id()).await?));
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
@@ -325,6 +325,9 @@ impl Faucet {
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
 
+        // Refresh the issuance cache from the store after submitting the transaction
+        self.refresh_issuance().await;
+
         Self::send_responses(response_senders, note_ids, tx_id);
         Ok(())
     }
@@ -355,9 +358,10 @@ impl Faucet {
     ) -> (Vec<MintRequest>, Vec<MintResponseSender>) {
         let mut valid_requests = vec![];
         let mut response_senders = vec![];
+        let mut issuance = *self.issuance.read();
         for (request, response_sender) in requests {
-            let available_amount = self.available_supply().unwrap_or_default();
             let requested_amount = request.asset_amount;
+            let available_amount = self.available_supply(issuance).unwrap_or_default();
             if available_amount < requested_amount {
                 error!(
                     requested_amount = requested_amount.base_units(),
@@ -370,12 +374,10 @@ impl Faucet {
             }
             valid_requests.push(request);
             response_senders.push(response_sender);
-            let mut issuance = self.issuance.write();
-            *issuance = issuance
-                .checked_add(requested_amount)
-                .expect("issuance should never be an invalid amount");
+            // SAFETY: creating an asset amount with the max is always valid
+            issuance = issuance.checked_add(requested_amount).unwrap_or(AssetAmount::max());
         }
-        if self.available_supply().is_none() {
+        if self.available_supply(issuance).is_none() {
             error!("Faucet has run out of tokens");
         }
         (valid_requests, response_senders)
@@ -471,13 +473,37 @@ impl Faucet {
     }
 
     /// Returns the available supply of the faucet.
-    pub fn available_supply(&self) -> Option<AssetAmount> {
-        self.max_supply.checked_sub(*self.issuance.read())
+    pub fn available_supply(&self, issuance: AssetAmount) -> Option<AssetAmount> {
+        self.max_supply.checked_sub(issuance)
     }
 
-    /// Returns the amount of tokens issued by the faucet.
-    pub fn issuance(&self) -> Arc<RwLock<AssetAmount>> {
-        self.issuance.clone()
+    /// Returns a reference to the shared issuance tracker. Its value is updated after each
+    /// minting transaction.
+    pub fn issuance(&self) -> &Arc<RwLock<AssetAmount>> {
+        &self.issuance
+    }
+
+    /// Reads the current issuance from the client's store and updates the in-memory cache.
+    async fn refresh_issuance(&self) {
+        let new_issuance = Self::read_issuance_from_store(&self.client, self.id.account_id)
+            .await
+            .unwrap_or(AssetAmount::max());
+        *self.issuance.write() = new_issuance;
+    }
+
+    /// Reads the current issuance from the client's store.
+    async fn read_issuance_from_store(
+        client: &Client<FilesystemKeyStore>,
+        account_id: AccountId,
+    ) -> anyhow::Result<AssetAmount> {
+        let faucet_sysdata = client
+            .new_storage_reader(account_id)
+            .get_item(AccountStorage::faucet_sysdata_slot().clone())
+            .await
+            .context("failed to get faucet sysdata slot")?;
+        let issuance_felt = faucet_sysdata[Account::ISSUANCE_ELEMENT_INDEX];
+
+        Ok(AssetAmount::new(issuance_felt.as_int())?)
     }
 }
 

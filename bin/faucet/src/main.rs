@@ -392,7 +392,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             let metadata = Metadata {
                 id: faucet.faucet_id(),
-                issuance: faucet.issuance(),
+                issuance: faucet.issuance().clone(),
                 max_supply,
                 decimals,
                 explorer_url,
