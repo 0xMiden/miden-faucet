@@ -4,6 +4,12 @@
 
 - OpenTelemetry traces are now flushed before program termination on panic ([#222](https://github.com/0xMiden/miden-faucet/pull/222)).
 
+## 0.13.1 (2026-02-18)
+
+- Replaced hidden wallet icon with explicit "Connect Wallet" / "Disconnect" button next to recipient address input ([#228](https://github.com/0xMiden/miden-faucet/pull/228)).
+- Removed automatic wallet connection popup during private note minting ([#228](https://github.com/0xMiden/miden-faucet/pull/228)).
+- Fixed modal content border rendering inconsistency caused by subpixel border ([#228](https://github.com/0xMiden/miden-faucet/pull/228)).
+
 ## 0.13.0 (2026-01-28)
 
 - Added web-client to wait for note commitment on the node ([#174](https://github.com/0xMiden/miden-faucet/pull/174)).
