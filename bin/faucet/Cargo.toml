@@ -52,7 +52,7 @@ url                   = { workspace = true }
 
 [dev-dependencies]
 fantoccini       = { version = "0.22" }
-miden-node-proto = { version = "0.14.0-alpha" }
+miden-node-proto = { version = "0.14.0-alpha.4" }
 miden-testing    = { version = "0.14.0-alpha.1" }
 reqwest          = { features = ["json"], workspace = true }
 serde_json       = { workspace = true }
