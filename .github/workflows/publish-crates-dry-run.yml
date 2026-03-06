@@ -5,7 +5,7 @@ permissions:
 
 on:
   push:
-    branches: [main]
+    branches: [main, next]
 
 jobs:
   cargo-publish-dry-run:
