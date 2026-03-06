@@ -16,7 +16,7 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc::NullifierList>,
     ) -> Result<Response<proto::rpc::CheckNullifiersResponse>, Status> {
-        Ok(Response::new(proto::rpc::CheckNullifiersResponse { proofs: vec![] }))
+        unimplemented!()
     }
 
     async fn get_block_header_by_number(
@@ -49,7 +49,7 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::note::NoteIdList>,
     ) -> Result<Response<proto::note::CommittedNoteList>, Status> {
-        Ok(Response::new(proto::note::CommittedNoteList { notes: vec![] }))
+        unimplemented!()
     }
 
     async fn submit_proven_transaction(
@@ -63,7 +63,7 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::transaction::ProvenTransactionBatch>,
     ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
-        Ok(Response::new(proto::blockchain::BlockNumber { block_num: 0 }))
+        unimplemented!()
     }
 
     async fn get_account(
@@ -77,46 +77,35 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::blockchain::BlockNumber>,
     ) -> Result<Response<proto::blockchain::MaybeBlock>, Status> {
-        Ok(Response::new(proto::blockchain::MaybeBlock { block: None }))
+        unimplemented!()
     }
 
     async fn status(
         &self,
         _request: Request<()>,
     ) -> Result<Response<proto::rpc::RpcStatus>, Status> {
-        Ok(Response::new(proto::rpc::RpcStatus {
-            version: String::new(),
-            genesis_commitment: None,
-            store: None,
-            block_producer: None,
-        }))
+        unimplemented!()
     }
 
     async fn sync_account_vault(
         &self,
         _request: Request<proto::rpc::SyncAccountVaultRequest>,
     ) -> Result<Response<proto::rpc::SyncAccountVaultResponse>, Status> {
-        Ok(Response::new(proto::rpc::SyncAccountVaultResponse {
-            pagination_info: Some(proto::rpc::PaginationInfo { chain_tip: 0, block_num: 0 }),
-            updates: vec![],
-        }))
+        unimplemented!()
     }
 
     async fn sync_account_storage_maps(
         &self,
         _request: Request<proto::rpc::SyncAccountStorageMapsRequest>,
     ) -> Result<Response<proto::rpc::SyncAccountStorageMapsResponse>, Status> {
-        Ok(Response::new(proto::rpc::SyncAccountStorageMapsResponse {
-            pagination_info: Some(proto::rpc::PaginationInfo { chain_tip: 0, block_num: 0 }),
-            updates: vec![],
-        }))
+        unimplemented!()
     }
 
     async fn get_note_script_by_root(
         &self,
         _request: Request<proto::note::NoteScriptRoot>,
     ) -> Result<Response<proto::rpc::MaybeNoteScript>, Status> {
-        Ok(Response::new(proto::rpc::MaybeNoteScript { script: None }))
+        unimplemented!()
     }
 
     async fn sync_nullifiers(
@@ -133,10 +122,7 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc::SyncTransactionsRequest>,
     ) -> Result<Response<proto::rpc::SyncTransactionsResponse>, Status> {
-        Ok(Response::new(proto::rpc::SyncTransactionsResponse {
-            pagination_info: Some(proto::rpc::PaginationInfo { chain_tip: 0, block_num: 0 }),
-            transactions: vec![],
-        }))
+        unimplemented!()
     }
 
     async fn get_limits(
