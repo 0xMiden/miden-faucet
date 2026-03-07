@@ -103,7 +103,7 @@ impl MintCmd {
         note_id: NoteId,
     ) -> Result<(), MintClientError> {
         println!("Initializing client...");
-        let mut client = CliClient::from_system_user_config(DebugMode::Disabled)
+        let mut client = CliClient::new(DebugMode::Disabled)
             .await
             .map_err(|e| MintClientError::ClientConfig(e.to_string()))?;
 

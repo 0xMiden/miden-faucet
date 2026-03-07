@@ -11,21 +11,21 @@ homepage     = "https://miden.xyz"
 license      = "MIT"
 readme       = "README.md"
 repository   = "https://github.com/0xMiden/miden-faucet"
-rust-version = "1.90"
-version      = "0.13.1"
+rust-version = "1.91"
+version      = "0.13.0"
 
 # Optimize the cryptography for faster tests involving account creation.
 [profile.test.package.miden-crypto]
 opt-level = 2
 
 [workspace.dependencies]
-miden-faucet-lib       = { path = "crates/faucet", version = "0.13" }
-miden-pow-rate-limiter = { path = "crates/pow", version = "0.13" }
+miden-faucet-lib       = { path = "crates/faucet", version = "0.13.0" }
+miden-pow-rate-limiter = { path = "crates/pow", version = "0.13.0" }
 
 # Miden dependencies.
-miden-client              = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
-miden-client-cli          = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
-miden-client-sqlite-store = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
+miden-client              = { version = "0.14.0-alpha.1" }
+miden-client-cli          = { version = "0.14.0-alpha.1" }
+miden-client-sqlite-store = { version = "0.14.0-alpha.1" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
