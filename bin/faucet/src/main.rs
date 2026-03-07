@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::component::{AuthFalcon512Rpo, BasicFungibleFaucet};
+use miden_client::account::component::BasicFungibleFaucet;
 use miden_client::account::{
     Account,
     AccountBuilder,
@@ -22,7 +22,7 @@ use miden_client::account::{
     AccountType,
 };
 use miden_client::asset::TokenSymbol;
-use miden_client::auth::AuthSecretKey;
+use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
 use miden_client::crypto::RpoRandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::note_transport::grpc::GrpcNoteTransportClient;
@@ -504,7 +504,8 @@ fn create_faucet_account(
     let max_supply = Felt::try_from(max_supply)
         .map_err(anyhow::Error::msg)
         .context("max supply value is greater than or equal to the field modulus")?;
-    let auth_component = AuthFalcon512Rpo::new(secret.public_key().to_commitment().into());
+    let auth_component =
+        AuthSingleSig::new(secret.public_key().to_commitment().into(), AuthSchemeId::Falcon512Rpo);
 
     let account = AccountBuilder::new(rng.random())
         .account_type(AccountType::FungibleFaucet)

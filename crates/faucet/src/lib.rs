@@ -4,17 +4,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use miden_client::account::component::{BasicFungibleFaucet, FungibleFaucetExt};
-use miden_client::account::{Account, AccountId, AccountStorage, Address, NetworkId};
+use miden_client::account::component::BasicFungibleFaucet;
+use miden_client::account::{Account, AccountId, Address, NetworkId};
 use miden_client::asset::FungibleAsset;
 use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{Rpo256, RpoRandomCoin};
-use miden_client::keystore::FilesystemKeyStore;
-use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, create_p2id_note};
+use miden_client::keystore::{FilesystemKeyStore, Keystore};
+use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, P2idNote};
 use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
-use miden_client::sync::{StateSync, SyncSummary};
+use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
     LocalTransactionProver,
     TransactionId,
@@ -107,7 +107,7 @@ impl Faucet {
     ) -> anyhow::Result<()> {
         let keystore =
             FilesystemKeyStore::new(KEYSTORE_PATH.into()).context("failed to create keystore")?;
-        keystore.add_key(secret_key)?;
+        keystore.add_key(secret_key, account.id()).await?;
 
         let sqlite_store = Arc::new(SqliteStore::new(config.store_path.clone()).await?);
 
@@ -157,7 +157,7 @@ impl Faucet {
         let span = tracing::Span::current();
         let mut client = ClientBuilder::new()
             .grpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
-            .filesystem_keystore(KEYSTORE_PATH)
+            .filesystem_keystore(KEYSTORE_PATH)?
             .store(Arc::new(SqliteStore::new(config.store_path.clone()).await?))
             .build()
             .await
@@ -174,8 +174,7 @@ impl Faucet {
             info!("Received faucet account state from the node");
         });
 
-        let record = client.get_account(account_id).await?.context("no account found")?;
-        let account = Account::try_from(record)?;
+        let account = client.get_account(account_id).await?.context("no account found")?;
 
         let faucet = BasicFungibleFaucet::try_from(account.clone())?;
         let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
@@ -215,28 +214,30 @@ impl Faucet {
     ) -> anyhow::Result<SyncSummary> {
         // Get current state of the client
         let accounts = client
-            .get_account_header_by_id(account_id)
-            .await?
+            .account_reader(account_id)
+            .header()
+            .await
+            .ok()
             .map(|(header, _)| vec![header])
             .unwrap_or_default();
-        let note_tags = BTreeSet::new();
-        let input_notes = vec![];
-        let expected_output_notes = client.get_output_notes(NoteFilter::Expected).await?;
+        let output_notes = client.get_output_notes(NoteFilter::Expected).await?;
         let uncommitted_transactions =
             client.get_transactions(TransactionFilter::Uncommitted).await?;
 
         // Build current partial MMR
-        let current_partial_mmr = client.get_current_partial_mmr().await?;
+        let mut current_partial_mmr = client.get_current_partial_mmr().await?;
 
         // Get the sync update from the network
         let state_sync_update = state_sync
             .sync_state(
-                current_partial_mmr,
-                accounts,
-                note_tags,
-                input_notes,
-                expected_output_notes,
-                uncommitted_transactions,
+                &mut current_partial_mmr,
+                StateSyncInput {
+                    accounts,
+                    note_tags: BTreeSet::new(),
+                    input_notes: vec![],
+                    output_notes,
+                    uncommitted_transactions,
+                },
             )
             .await
             .context("failed to sync state")?;
@@ -464,8 +465,7 @@ impl Faucet {
         self.client
             .get_account(self.id.account_id)
             .await?
-            .ok_or(ClientError::AccountDataNotFound(self.id.account_id))?
-            .try_into()
+            .ok_or(ClientError::AccountDataNotFound(self.id.account_id))
     }
 
     /// Returns the id of the faucet account.
@@ -497,14 +497,12 @@ impl Faucet {
         client: &Client<FilesystemKeyStore>,
         account_id: AccountId,
     ) -> anyhow::Result<AssetAmount> {
-        let faucet_sysdata = client
-            .new_storage_reader(account_id)
-            .get_item(AccountStorage::faucet_sysdata_slot().clone())
-            .await
-            .context("failed to get faucet sysdata slot")?;
-        let issuance_felt = faucet_sysdata[Account::ISSUANCE_ELEMENT_INDEX];
-
-        Ok(AssetAmount::new(issuance_felt.as_int())?)
+        let account = client
+            .get_account(account_id)
+            .await?
+            .context("account not found in store")?;
+        let faucet = BasicFungibleFaucet::try_from(account)?;
+        Ok(AssetAmount::new(faucet.token_supply().as_int())?)
     }
 }
 
@@ -529,7 +527,7 @@ fn build_p2id_notes(
         // SAFETY: source is definitely a faucet account, and the amount is valid.
         let asset =
             FungibleAsset::new(source.account_id, request.asset_amount.base_units()).unwrap();
-        let note = create_p2id_note(
+        let note = P2idNote::create(
             source.account_id,
             request.account_id,
             vec![asset.into()],
@@ -549,16 +547,13 @@ fn build_p2id_notes(
 mod tests {
     use std::env::temp_dir;
 
-    use miden_client::ExecutionOptions;
-    use miden_client::account::component::AuthFalcon512Rpo;
     use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
     use miden_client::asset::TokenSymbol;
-    use miden_client::auth::AuthSecretKey;
+    use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
     use miden_client::crypto::rpo_falcon512::SecretKey;
     use miden_client::store::{NoteFilter, Store};
     use miden_client::testing::MockChain;
-    use miden_client::testing::mock::{MockClient, MockRpcApi};
-    use miden_client_sqlite_store::SqliteStore;
+    use miden_client::testing::mock::MockRpcApi;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
@@ -593,29 +588,21 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        let faucet_handle = run_faucet(rx_mint_requests, batch_size, store.clone());
-
-        // Give the faucet thread time to initialize
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        let faucet = build_faucet(store.clone()).await;
+        Box::pin(faucet.run(rx_mint_requests, batch_size)).await.unwrap();
 
         for receiver in receivers {
             let response = receiver.await.unwrap().unwrap();
             let notes = store.get_output_notes(NoteFilter::Unique(response.note_id)).await.unwrap();
             assert_eq!(notes.len(), 1);
         }
-
-        faucet_handle.join().unwrap();
     }
 
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
 
-    /// Runs a faucet on a separate thread using a mock client.
-    fn run_faucet(
-        rx_mint_requests: mpsc::Receiver<(MintRequest, MintResponseSender)>,
-        batch_size: usize,
-        store: Arc<dyn Store>,
-    ) -> std::thread::JoinHandle<()> {
+    /// Builds a faucet using a mock client.
+    async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
         let secret = SecretKey::new();
         let symbol = TokenSymbol::new("TEST").unwrap();
         let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
@@ -623,55 +610,43 @@ mod tests {
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
-            .with_auth_component(AuthFalcon512Rpo::new(secret.public_key().to_commitment().into()))
+            .with_auth_component(AuthSingleSig::new(
+                secret.public_key().to_commitment().into(),
+                AuthSchemeId::Falcon512Rpo,
+            ))
             .build()
             .unwrap();
         let key = AuthSecretKey::Falcon512Rpo(secret);
 
-        std::thread::spawn(move || {
-            // Create a new runtime for this thread
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .enable_io()
-                .build()
-                .expect("Failed to build runtime");
+        let keystore_path = temp_dir().join(format!("keystore-{}", Uuid::new_v4()));
+        let keystore = FilesystemKeyStore::new(keystore_path.clone()).unwrap();
+        keystore.add_key(&key, account.id()).await.unwrap();
 
-            // Run the faucet on this thread's runtime
-            rt.block_on(async {
-                let keystore = FilesystemKeyStore::new(PathBuf::from("keystore")).unwrap();
-                keystore.add_key(&key).unwrap();
+        let mock_rpc = Arc::new(MockRpcApi::new(MockChain::new()));
+        let mut client = ClientBuilder::new()
+            .rpc(mock_rpc.clone())
+            .store(store.clone())
+            .filesystem_keystore(keystore_path.to_str().unwrap())
+            .expect("keystore should be created")
+            .build()
+            .await
+            .unwrap();
+        client.ensure_genesis_in_place().await.unwrap();
+        client.add_account(&account, false).await.unwrap();
 
-                let mut client = MockClient::new(
-                    Arc::new(MockRpcApi::new(MockChain::new())),
-                    Box::new(RpoRandomCoin::new(Word::empty())),
-                    store.clone(),
-                    Some(Arc::new(keystore)),
-                    ExecutionOptions::new(None, 4096, false, false).unwrap(),
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-                .await
-                .unwrap();
-                client.ensure_genesis_in_place().await.unwrap();
-                client.add_account(&account, false).await.unwrap();
-                let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
-                let faucet = Faucet {
-                    id: FaucetId::new(account.id(), NetworkId::Testnet),
-                    client,
-                    state_sync_component: StateSync::new(
-                        Arc::new(MockRpcApi::new(MockChain::new())),
-                        Arc::new(NoteScreener::new(store.clone())),
-                        None,
-                    ),
-                    tx_prover: Arc::new(LocalTransactionProver::default()),
-                    issuance,
-                    max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
-                    script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
-                };
-                Box::pin(faucet.run(rx_mint_requests, batch_size)).await.unwrap();
-            });
-        })
+        let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
+        Faucet {
+            id: FaucetId::new(account.id(), NetworkId::Testnet),
+            client,
+            state_sync_component: StateSync::new(
+                mock_rpc,
+                Arc::new(NoteScreener::new(store.clone())),
+                None,
+            ),
+            tx_prover: Arc::new(LocalTransactionProver::default()),
+            issuance,
+            max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
+            script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
+        }
     }
 }
