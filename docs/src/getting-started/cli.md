@@ -13,7 +13,9 @@ The faucet comes with two CLI tools:
 |---------|-------------|
 | `init` | Create the faucet account and initialize the client |
 | `start` | Start the faucet server |
-| `create-api-key` | Generate an API key for authentication |
+| `create-api-key` | Generate an API key and persist it to the store |
+| `remove-api-key` | Remove a persisted API key from the store |
+| `list-api-keys` | List all persisted API keys in the store |
 | `help` | Show help information |
 
 ## Configuration Methods
@@ -96,7 +98,6 @@ miden-faucet start \
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
 | `--remote-tx-prover-url` | Remote transaction prover | - | No |
-| `--api-keys` | Comma-separated API keys | - | No |
 | `--enable-otel` | Enable OpenTelemetry | `false` | No |
 | `--batch-size` | Maximum number of P2ID notes to create per transaction | `32` | No |
 
@@ -139,7 +140,6 @@ export MIDEN_FAUCET_POW_BASELINE=12
 export MIDEN_FAUCET_POW_CHALLENGE_LIFETIME=30s
 export MIDEN_FAUCET_POW_CLEANUP_INTERVAL=2s
 export MIDEN_FAUCET_POW_GROWTH_RATE=0.1
-export MIDEN_FAUCET_API_KEYS=key1,key2,key3
 ```
 
 ## Network Configurations
@@ -179,15 +179,50 @@ export MIDEN_FAUCET_API_KEYS=key1,key2,key3
 - **Address Display**: `mcst`
 - **Use Case**: Run your custom network
 
-## API Key Configuration
+## API Key Management
 
-### Generate API Keys
+API keys are persisted in the faucet's SQLite store and automatically loaded when the faucet starts.
+
+### Create an API Key
 
 ```bash
 miden-faucet create-api-key
 ```
 
-This generates an API key that can be used for authentication. It is printed to stdout.
+Generates a new API key, persists it to the store, and prints it to stdout.
+
+| Option | Description | Default | Required |
+|--------|-------------|---------|----------|
+| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+
+### List API Keys
+
+```bash
+miden-faucet list-api-keys
+```
+
+Lists all persisted API keys in the store.
+
+| Option | Description | Default | Required |
+|--------|-------------|---------|----------|
+| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+
+### Remove an API Key
+
+```bash
+miden-faucet remove-api-key <KEY>
+```
+
+Removes a persisted API key from the store.
+
+| Argument/Option | Description | Default | Required |
+|--------|-------------|---------|----------|
+| `<KEY>` | The API key to remove (encoded string) | - | Yes |
+| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+
+### API Key Loading
+
+When the faucet starts, it automatically loads all API keys persisted in the store via the `create-api-key` command.
 
 ### API Key Benefits
 
