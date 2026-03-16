@@ -181,8 +181,9 @@ impl Faucet {
             None => Arc::new(LocalTransactionProver::default()),
         };
         let id = FaucetId::new(account.id(), config.network_id.clone());
-        let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
-        let issuance = Arc::new(RwLock::new(AssetAmount::new(faucet.token_supply().as_int())?));
+        let max_supply = AssetAmount::new(faucet.max_supply().as_canonical_u64())?;
+        let issuance =
+            Arc::new(RwLock::new(AssetAmount::new(faucet.token_supply().as_canonical_u64())?));
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
@@ -586,11 +587,11 @@ mod tests {
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
             .with_auth_component(AuthSingleSig::new(
                 secret.public_key().to_commitment().into(),
-                AuthSchemeId::Falcon512Rpo,
+                AuthSchemeId::Falcon512Poseidon2,
             ))
             .build()
             .unwrap();
-        let key = AuthSecretKey::Falcon512Rpo(secret);
+        let key = AuthSecretKey::Falcon512Poseidon2(secret);
 
         let keystore_path = temp_dir().join(format!("keystore-{}", Uuid::new_v4()));
         let keystore = FilesystemKeyStore::new(keystore_path.clone()).unwrap();

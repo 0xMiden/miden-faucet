@@ -387,7 +387,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             };
             let faucet_account = faucet.faucet_account().await?;
             let faucet_component = BasicFungibleFaucet::try_from(&faucet_account)?;
-            let max_supply = AssetAmount::new(faucet_component.max_supply().as_int())?;
+            let max_supply = AssetAmount::new(faucet_component.max_supply().as_canonical_u64())?;
             let decimals = faucet_component.decimals();
 
             let metadata = Metadata {
@@ -503,8 +503,10 @@ fn create_faucet_account(
     let max_supply = Felt::try_from(max_supply)
         .map_err(anyhow::Error::msg)
         .context("max supply value is greater than or equal to the field modulus")?;
-    let auth_component =
-        AuthSingleSig::new(secret.public_key().to_commitment().into(), AuthSchemeId::Falcon512Rpo);
+    let auth_component = AuthSingleSig::new(
+        secret.public_key().to_commitment().into(),
+        AuthSchemeId::Falcon512Poseidon2,
+    );
 
     let account = AccountBuilder::new(rng.random())
         .account_type(AccountType::FungibleFaucet)
@@ -514,7 +516,7 @@ fn create_faucet_account(
         .build()
         .context("failed to create basic fungible faucet account")?;
 
-    Ok((account, AuthSecretKey::Falcon512Rpo(secret)))
+    Ok((account, AuthSecretKey::Falcon512Poseidon2(secret)))
 }
 
 // TESTS

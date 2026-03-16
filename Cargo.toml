@@ -23,9 +23,9 @@ miden-faucet-lib       = { path = "crates/faucet", version = "0.14.0-beta.1" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.14.0-beta.1" }
 
 # Miden dependencies.
-miden-client              = { git = "https://github.com/0xMiden/miden-client.git", branch = "release/v0.14.0-beta" }
-miden-client-cli          = { git = "https://github.com/0xMiden/miden-client.git", branch = "release/v0.14.0-beta" }
-miden-client-sqlite-store = { git = "https://github.com/0xMiden/miden-client.git", branch = "release/v0.14.0-beta" }
+miden-client              = { branch = "release/v0.14.0-beta", git = "https://github.com/0xMiden/miden-client.git" }
+miden-client-cli          = { branch = "release/v0.14.0-beta", git = "https://github.com/0xMiden/miden-client.git" }
+miden-client-sqlite-store = { branch = "release/v0.14.0-beta", git = "https://github.com/0xMiden/miden-client.git" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
@@ -65,3 +65,11 @@ module_name_repetitions     = "allow" # Many triggers, and is a stylistic choice
 must_use_candidate          = "allow" # This marks many fn's which isn't helpful.
 should_panic_without_expect = "allow" # We don't care about the specific panic message.
 # End of pedantic lints.
+
+# Unify miden-base crates: the client uses git tags while the node uses crates.io versions.
+# Patch crates.io to the git tag so Cargo treats them as the same source.
+[patch.crates-io]
+miden-protocol  = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.2" }
+miden-standards = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.2" }
+miden-testing   = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.2" }
+miden-tx        = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.2" }
