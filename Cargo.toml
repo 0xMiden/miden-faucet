@@ -69,7 +69,7 @@ should_panic_without_expect = "allow" # We don't care about the specific panic m
 # Unify miden-base crates: the client uses git tags while the node uses crates.io versions.
 # Patch crates.io to the git tag so Cargo treats them as the same source.
 [patch.crates-io]
-miden-protocol  = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.2" }
-miden-standards = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.2" }
-miden-testing   = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.2" }
-miden-tx        = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.2" }
+miden-protocol  = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.4" }
+miden-standards = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.4" }
+miden-testing   = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.4" }
+miden-tx        = { git = "https://github.com/0xMiden/miden-base", tag = "v0.14.0-beta.4" }
