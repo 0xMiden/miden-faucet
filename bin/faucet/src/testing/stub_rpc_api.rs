@@ -155,6 +155,13 @@ impl api_server::Api for StubRpcApi {
             mmr_delta: None,
         }))
     }
+
+    async fn get_note_error(
+        &self,
+        _request: Request<proto::note::NoteId>,
+    ) -> Result<Response<proto::rpc::GetNoteErrorResponse>, Status> {
+        unimplemented!();
+    }
 }
 
 pub async fn serve_stub(endpoint: &Url) -> anyhow::Result<()> {
