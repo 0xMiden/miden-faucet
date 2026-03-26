@@ -11,7 +11,7 @@ homepage     = "https://miden.xyz"
 license      = "MIT"
 readme       = "README.md"
 repository   = "https://github.com/0xMiden/miden-faucet"
-rust-version = "1.91"
+rust-version = "1.93"
 version      = "0.14.0-alpha.2"
 
 # Optimize the cryptography for faster tests involving account creation.
