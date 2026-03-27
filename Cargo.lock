@@ -750,6 +750,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
 name = "deadpool"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1153,6 +1167,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "forwarded-header-value"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8835f84f38484cc86f110a805655697908257fb9a7af005234060891557198e9"
+dependencies = [
+ "nonempty",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "fs-err"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1237,6 +1261,12 @@ name = "futures-task"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393"
+
+[[package]]
+name = "futures-timer"
+version = "3.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
 
 [[package]]
 name = "futures-util"
@@ -1336,6 +1366,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
+name = "governor"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9efcab3c1958580ff1f25a2a41be1668f7603d849bb63af523b208a3cc1223b8"
+dependencies = [
+ "cfg-if",
+ "dashmap",
+ "futures-sink",
+ "futures-timer",
+ "futures-util",
+ "getrandom 0.3.4",
+ "hashbrown 0.16.1",
+ "nonzero_ext",
+ "parking_lot",
+ "portable-atomic",
+ "quanta",
+ "rand",
+ "smallvec",
+ "spinning_top",
+ "web-time",
+]
+
+[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1364,6 +1417,12 @@ dependencies = [
  "tokio-util",
  "tracing",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
@@ -2158,9 +2217,9 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "miden-agglayer"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e492a6044cf8875a64d7eec130d260f2eda1c783795261f00d5d52837ed027bd"
+checksum = "563f709601fc773bcb1782f0f5f1930894dbc627341df4af2bbd5040f21f4532"
 dependencies = [
  "fs-err",
  "miden-assembly",
@@ -2230,9 +2289,9 @@ dependencies = [
 
 [[package]]
 name = "miden-block-prover"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9564dfb23c529aad68369845b6897a6f62bacdeab7c00db432a5f16670764d4"
+checksum = "af7a73ebc8160af69c330a722263a83bd7f01103ff3c91b47b8ee7fb6b887726"
 dependencies = [
  "miden-protocol",
  "thiserror 2.0.18",
@@ -2240,9 +2299,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcc7b886a676fbcb9d70f7c1b7b66149a94c87ad6ea5b69e709e00071474c385"
+checksum = "ac85760df62002ef7fa1cbb331a57f46c345d4a23aba1efddd7e473789956c75"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2277,9 +2336,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client-cli"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8a33fc95239fd49e67d64fef39b1bf87fe634dc35674f32b6ab9ecb62314632"
+checksum = "c009379ea72354c9fe3f241b198b6256188c5788f48c312c1fee213546a9606f"
 dependencies = [
  "clap",
  "comfy-table",
@@ -2299,9 +2358,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client-sqlite-store"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c171ed7d78afc047095f6f2a2c9896fd271184f6427d1e0af21dc9f89dda20b"
+checksum = "3b69b188db7fb283c1579aa703b86403b3ba8b653c411921d0473e79a47a8dd2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2419,7 +2478,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2461,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-client"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -2482,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-lib"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 dependencies = [
  "anyhow",
  "miden-client",
@@ -2561,9 +2620,9 @@ dependencies = [
 
 [[package]]
 name = "miden-node-grpc-error-macro"
-version = "0.14.0-alpha.4"
+version = "0.14.0-alpha.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f133ba98d42f5cad906dd1ec56b577e3ba951ff290f4ec29c28645e01f949604"
+checksum = "37ab0e78bf3dd4a16e3fea5b160e9b1fa881f33871c8761c4cb6fbfcfff75a68"
 dependencies = [
  "quote",
  "syn 2.0.117",
@@ -2571,9 +2630,9 @@ dependencies = [
 
 [[package]]
 name = "miden-node-proto"
-version = "0.14.0-alpha.4"
+version = "0.14.0-alpha.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a23721a329b692e70ff281d1b9c431e5e69683919d608e976b14946b306bc230"
+checksum = "e3305416fa8ca7b1c34670902e40ef71f27cd1bde57be867490ffe8c4f93ee5f"
 dependencies = [
  "anyhow",
  "build-rs",
@@ -2582,7 +2641,6 @@ dependencies = [
  "http 1.4.0",
  "miden-node-grpc-error-macro",
  "miden-node-proto-build",
- "miden-node-rocksdb-cxx-linkage-fix",
  "miden-node-utils",
  "miden-protocol",
  "miden-standards",
@@ -2597,9 +2655,9 @@ dependencies = [
 
 [[package]]
 name = "miden-node-proto-build"
-version = "0.14.0-alpha.4"
+version = "0.14.0-alpha.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20ac57ddec6bf630b5301630c953ed23661575b70e2fcc3ff221c660f3006a30"
+checksum = "e1e6113851886056eb02a72b9a179ab4b57ea9aecfe7dd000064bccc3d78ed58"
 dependencies = [
  "build-rs",
  "fs-err",
@@ -2609,24 +2667,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "miden-node-rocksdb-cxx-linkage-fix"
-version = "0.14.0-alpha.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da4e79626aae4683ad8b00828d184ab437152402f3c1e5dce7c94456b361cec6"
-
-[[package]]
 name = "miden-node-utils"
-version = "0.14.0-alpha.4"
+version = "0.14.0-alpha.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ec7a7f77ee57b5b84632fd1facc5fb466b77f1fe9b9fbb8ad1689b2d7f43478"
+checksum = "9fa6ed87039445ecf9dcfd719cabd54e47581343f9b8513929d29135b24d3d8c"
 dependencies = [
  "anyhow",
  "bytes",
+ "clap",
+ "fs-err",
+ "governor",
  "http 1.4.0",
  "http-body-util",
+ "humantime",
  "itertools",
  "lru",
- "miden-node-rocksdb-cxx-linkage-fix",
  "miden-protocol",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -2635,7 +2690,9 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tonic",
+ "tower",
  "tower-http",
+ "tower_governor",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -2644,9 +2701,9 @@ dependencies = [
 
 [[package]]
 name = "miden-note-transport-proto-build"
-version = "0.2.0"
+version = "0.3.0-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec23738a2eee393524a849a8dce982ad824050cc54abde145d4fb62b92c84198"
+checksum = "14b66412c3b7b9c6341410a67e2add82a0573c98b47bad166aa73e3c260066f6"
 dependencies = [
  "fs-err",
  "miette",
@@ -2656,7 +2713,7 @@ dependencies = [
 
 [[package]]
 name = "miden-pow-rate-limiter"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 dependencies = [
  "serde_json",
  "sha2",
@@ -2686,9 +2743,9 @@ dependencies = [
 
 [[package]]
 name = "miden-protocol"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a88effeac994eb55b8dc4f93fbfd71a5d916dfaba1099896e27a0ee42c488c1"
+checksum = "9fa3569c557146d3c4a4f48449f5c14ec94c43b6d22491d79c2b87617ac06ce8"
 dependencies = [
  "bech32",
  "fs-err",
@@ -2717,9 +2774,9 @@ dependencies = [
 
 [[package]]
 name = "miden-protocol-macros"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bb28b730005e5f8b08d615ea9216f8cab77b3a7439fa54d5e39d2ec43ef53a3"
+checksum = "6e32fb40b2bc29e534da52691d3cd32d0207878171128d0ce5c2d2ecfa019fc5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2742,9 +2799,9 @@ dependencies = [
 
 [[package]]
 name = "miden-remote-prover-client"
-version = "0.14.0-alpha.4"
+version = "0.14.0-alpha.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64fae30a877ba6481e62ed2a553277633c91a592686afa73ba91c2f15ed7e17f"
+checksum = "9aba9c7409a6643d6fb224698a031687e5f013c0cc2a1ecc4d77110a1ee9d52a"
 dependencies = [
  "build-rs",
  "fs-err",
@@ -2764,9 +2821,9 @@ dependencies = [
 
 [[package]]
 name = "miden-standards"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cef036bbfec29acba92751a13d05844bbcf080140201097b419c9ad1927e367"
+checksum = "d83ef3e49765ac3aa2a1defc853e0b130dfbd8480d91c9e49696d51186cdf839"
 dependencies = [
  "fs-err",
  "miden-assembly",
@@ -2782,9 +2839,9 @@ dependencies = [
 
 [[package]]
 name = "miden-testing"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e980777d0f7e6069942b14d4e7cb3d4d137b323ddfa15722a3bd21e9d13fdd2e"
+checksum = "98fb3700334c2b30c1e92966e3585c6790efb647b70c9eeef7c02423137c1782"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2806,9 +2863,9 @@ dependencies = [
 
 [[package]]
 name = "miden-tx"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c67e0df9adcf29c9111df65acf408ae05952b8bc6569f571963676f97668d83f"
+checksum = "396e32105298b8fc6d0b9ae9f037c3243bcca5a1f31c27f90310856e468c01f8"
 dependencies = [
  "miden-processor",
  "miden-protocol",
@@ -2820,9 +2877,9 @@ dependencies = [
 
 [[package]]
 name = "miden-tx-batch-prover"
-version = "0.14.0-alpha.1"
+version = "0.14.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba29f8f6ecae671eff8b52b4c19eca8db5964c0b45b5d68c3ce38a57a8367931"
+checksum = "d4d4ac3e1778203c3336630311c8cfd0af77672356f96cd623d3c3e2398456fd"
 dependencies = [
  "miden-protocol",
  "miden-tx",
@@ -2990,6 +3047,18 @@ name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
+
+[[package]]
+name = "nonempty"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9e591e719385e6ebaeb5ce5d3887f7d5676fceca6411d1925ccc95745f3d6f7"
+
+[[package]]
+name = "nonzero_ext"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38bf9645c8b145698bb0b18a4637dcacbc421ea49bef2317e4fd8065a387cf21"
 
 [[package]]
 name = "nu-ansi-term"
@@ -3617,6 +3686,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "quanta"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3ab5a9d756f0d97bdc89019bd2e4ea098cf9cde50ee7564dde6b81ccc8f06c7"
+dependencies = [
+ "crossbeam-utils",
+ "libc",
+ "once_cell",
+ "raw-cpuid",
+ "wasi",
+ "web-sys",
+ "winapi",
+]
+
+[[package]]
 name = "quinn"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3756,6 +3840,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f703f4665700daf5512dcca5f43afa6af89f09db47fb56be587f80636bda2d41"
 dependencies = [
  "rand_core 0.9.5",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "11.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
+dependencies = [
+ "bitflags",
 ]
 
 [[package]]
@@ -4335,6 +4428,15 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+dependencies = [
+ "lock_api",
+]
+
+[[package]]
+name = "spinning_top"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d96d2d1d716fb500937168cc09353ffdc7a012be8475ac7308e1bdf0e3923300"
 dependencies = [
  "lock_api",
 ]
@@ -4995,6 +5097,23 @@ name = "tower-service"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
+
+[[package]]
+name = "tower_governor"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44de9b94d849d3c46e06a883d72d408c2de6403367b39df2b1c9d9e7b6736fe6"
+dependencies = [
+ "axum",
+ "forwarded-header-value",
+ "governor",
+ "http 1.4.0",
+ "pin-project",
+ "thiserror 2.0.18",
+ "tonic",
+ "tower",
+ "tracing",
+]
 
 [[package]]
 name = "tracing"
