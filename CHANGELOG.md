@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.0 (TBD)
+
+- Replaced metadata polling with Server-Sent Events (SSE) for issuance updates ([#224](https://github.com/0xMiden/miden-faucet/pull/224)).
+
 ## 0.13.0 (2026-01-28)
 
 - Added web-client to wait for note commitment on the node ([#174](https://github.com/0xMiden/miden-faucet/pull/174)).

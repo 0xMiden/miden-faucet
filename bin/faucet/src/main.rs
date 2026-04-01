@@ -366,6 +366,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 remote_tx_prover_url,
             };
             let faucet = Faucet::load(&config).await.context("failed to load faucet")?;
+            let issuance_receiver = faucet.subscribe_issuance();
 
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
@@ -392,7 +393,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             let metadata = Metadata {
                 id: faucet.faucet_id(),
-                issuance: faucet.issuance().clone(),
                 max_supply,
                 decimals,
                 explorer_url,
@@ -423,6 +423,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 &api_keys,
                 store,
                 note_transport_client,
+                issuance_receiver,
             );
 
             // Use select to concurrently:

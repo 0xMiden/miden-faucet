@@ -144,20 +144,29 @@ export class MidenFaucetApp {
             console.error('Error fetching metadata:', error);
         }
 
-        // Poll every 4 seconds
-        this.metadataInterval = setInterval(() => {
-            try {
-                this.fetchMetadata();
-            } catch (error) {
-                console.error('Error fetching metadata:', error);
+        this.connectSSE();
+    }
+
+    connectSSE() {
+        const source = new EventSource(this.apiUrl + '/issuance');
+
+        source.addEventListener('issuance', (event) => {
+            const issuance = Number(event.data);
+            if (this.maxSupply != null && this.decimals != null) {
+                this.ui.setIssuanceAndSupply(issuance, this.maxSupply, this.decimals);
             }
-        }, 4 * SECOND);
+        });
+
+        source.onerror = () => {
+            console.warn('SSE connection lost, reconnecting...');
+        };
     }
 
     async fetchMetadata() {
         const data = await getMetadata(this.apiUrl);
 
-        this.ui.setIssuanceAndSupply(data.issuance, data.max_supply, data.decimals);
+        this.maxSupply = data.max_supply;
+        this.decimals = data.decimals;
         this.powLoadDifficulty = data.pow_load_difficulty;
         this.baseAmount = data.base_amount;
 

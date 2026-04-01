@@ -24,11 +24,12 @@ use miden_client::transaction::{
     TransactionRequestError,
     TransactionScript,
 };
-use miden_client::utils::{Deserializable, RwLock};
+use miden_client::utils::Deserializable;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
+use tokio::sync::watch;
 use tracing::{Instrument, error, info, info_span, instrument, warn};
 use url::Url;
 
@@ -75,7 +76,7 @@ pub struct Faucet {
     client: Client<FilesystemKeyStore>,
     state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
-    issuance: Arc<RwLock<AssetAmount>>,
+    issuance: watch::Sender<AssetAmount>,
     max_supply: AssetAmount,
     script: TransactionScript,
 }
@@ -183,8 +184,8 @@ impl Faucet {
         };
         let id = FaucetId::new(account.id(), config.network_id.clone());
         let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
-        let issuance =
-            Arc::new(RwLock::new(Self::read_issuance_from_store(&client, account.id()).await?));
+        let issuance_value = Self::read_issuance_from_store(&client, account.id()).await?;
+        let (issuance, _) = watch::channel(issuance_value);
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
@@ -358,7 +359,7 @@ impl Faucet {
     ) -> (Vec<MintRequest>, Vec<MintResponseSender>) {
         let mut valid_requests = vec![];
         let mut response_senders = vec![];
-        let mut issuance = *self.issuance.read();
+        let mut issuance = *self.issuance.borrow();
         for (request, response_sender) in requests {
             let requested_amount = request.asset_amount;
             let available_amount = self.available_supply(issuance).unwrap_or_default();
@@ -477,18 +478,18 @@ impl Faucet {
         self.max_supply.checked_sub(issuance)
     }
 
-    /// Returns a reference to the shared issuance tracker. Its value is updated after each
-    /// minting transaction.
-    pub fn issuance(&self) -> &Arc<RwLock<AssetAmount>> {
-        &self.issuance
+    /// Returns a watch receiver that yields the current issuance value whenever it changes.
+    /// The receiver immediately produces the latest value on subscription.
+    pub fn subscribe_issuance(&self) -> watch::Receiver<AssetAmount> {
+        self.issuance.subscribe()
     }
 
-    /// Reads the current issuance from the client's store and updates the in-memory cache.
+    /// Reads the current issuance from the client's store and updates the watch channel.
     async fn refresh_issuance(&self) {
         let new_issuance = Self::read_issuance_from_store(&self.client, self.id.account_id)
             .await
             .unwrap_or(AssetAmount::max());
-        *self.issuance.write() = new_issuance;
+        self.issuance.send_replace(new_issuance);
     }
 
     /// Reads the current issuance from the client's store.
@@ -655,6 +656,7 @@ mod tests {
                 .unwrap();
                 client.ensure_genesis_in_place().await.unwrap();
                 client.add_account(&account, false).await.unwrap();
+                let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
                 let faucet = Faucet {
                     id: FaucetId::new(account.id(), NetworkId::Testnet),
                     client,
@@ -664,7 +666,7 @@ mod tests {
                         None,
                     ),
                     tx_prover: Arc::new(LocalTransactionProver::default()),
-                    issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
+                    issuance,
                     max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
                     script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
                 };
