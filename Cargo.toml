@@ -23,9 +23,9 @@ miden-faucet-lib       = { path = "crates/faucet", version = "0.14.0-alpha.1" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.14.0-alpha.1" }
 
 # Miden dependencies.
-miden-client              = { version = "0.14.0-alpha.1" }
-miden-client-cli          = { version = "0.14.0-alpha.1" }
-miden-client-sqlite-store = { version = "0.14.0-alpha.1" }
+miden-client              = { git = "https://github.com/0xMiden/miden-client", branch = "tomasarrachea-sync-notes-rework" }
+miden-client-cli          = { git = "https://github.com/0xMiden/miden-client", branch = "tomasarrachea-sync-notes-rework" }
+miden-client-sqlite-store = { git = "https://github.com/0xMiden/miden-client", branch = "tomasarrachea-sync-notes-rework" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
