@@ -142,7 +142,7 @@ impl Faucet {
             let mut faucet = Self::load(config).await?;
 
             let empty_tx_request = TransactionRequestBuilder::new().build()?;
-            faucet.submit_new_transaction(empty_tx_request).await?;
+            Box::pin(faucet.submit_new_transaction(empty_tx_request)).await?;
         }
 
         Ok(())
@@ -269,7 +269,7 @@ impl Faucet {
         let mut buffer = Vec::new();
 
         while requests.recv_many(&mut buffer, batch_size).await > 0 {
-            match self.mint(buffer.drain(..)).await {
+            match Box::pin(self.mint(buffer.drain(..))).await {
                 Ok(()) => (),
                 Err(error) => {
                     if let Some(ClientError::RpcError(_)) = error.downcast_ref::<ClientError>() {
@@ -320,8 +320,7 @@ impl Faucet {
         // Build and submit transaction
         let tx_request =
             self.create_transaction(&notes).context("faucet failed to create transaction")?;
-        let tx_id = self
-            .submit_new_transaction(tx_request)
+        let tx_id = Box::pin(self.submit_new_transaction(tx_request))
             .await
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());

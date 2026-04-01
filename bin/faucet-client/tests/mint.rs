@@ -90,7 +90,7 @@ async fn mint_command_requests_public_note() {
         "--no-consume",
     ]);
 
-    cli.execute().await.unwrap();
+    Box::pin(cli.execute()).await.unwrap();
 
     let recorded = app_state.recorded.lock().await.clone();
 
