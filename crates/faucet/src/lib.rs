@@ -497,10 +497,8 @@ impl Faucet {
         client: &Client<FilesystemKeyStore>,
         account_id: AccountId,
     ) -> anyhow::Result<AssetAmount> {
-        let account = client
-            .get_account(account_id)
-            .await?
-            .context("account not found in store")?;
+        let account =
+            client.get_account(account_id).await?.context("account not found in store")?;
         let faucet = BasicFungibleFaucet::try_from(account)?;
         Ok(AssetAmount::new(faucet.token_supply().as_int())?)
     }
