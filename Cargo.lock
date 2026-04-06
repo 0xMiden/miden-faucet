@@ -2422,7 +2422,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.14.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-sync-notes-rework#61f98d4f23afa2b782bb795b85d6bbbaf5c7fe26"
+source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-sync-notes-rework#8bd4e9037f720242b856431508ed55ee0775b39f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2459,7 +2459,7 @@ dependencies = [
 [[package]]
 name = "miden-client-cli"
 version = "0.14.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-sync-notes-rework#61f98d4f23afa2b782bb795b85d6bbbaf5c7fe26"
+source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-sync-notes-rework#8bd4e9037f720242b856431508ed55ee0775b39f"
 dependencies = [
  "clap",
  "comfy-table",
@@ -2480,7 +2480,7 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.14.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-sync-notes-rework#61f98d4f23afa2b782bb795b85d6bbbaf5c7fe26"
+source = "git+https://github.com/0xMiden/miden-client?branch=tomasarrachea-sync-notes-rework#8bd4e9037f720242b856431508ed55ee0775b39f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2605,7 +2605,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet"
-version = "0.14.0-alpha.1"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2647,7 +2647,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-client"
-version = "0.14.0-alpha.1"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2668,7 +2668,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-lib"
-version = "0.14.0-alpha.1"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "miden-client",
@@ -2853,7 +2853,7 @@ dependencies = [
 
 [[package]]
 name = "miden-pow-rate-limiter"
-version = "0.14.0-alpha.1"
+version = "0.14.0"
 dependencies = [
  "serde_json",
  "sha2",

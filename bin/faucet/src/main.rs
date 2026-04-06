@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::component::BasicFungibleFaucet;
+use miden_client::account::component::{AuthControlled, BasicFungibleFaucet};
 use miden_client::account::{
     Account,
     AccountBuilder,
@@ -512,6 +512,7 @@ fn create_faucet_account(
         .account_type(AccountType::FungibleFaucet)
         .storage_mode(AccountStorageMode::Public)
         .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
+        .with_component(AuthControlled::allow_all())
         .with_auth_component(auth_component)
         .build()
         .context("failed to create basic fungible faucet account")?;

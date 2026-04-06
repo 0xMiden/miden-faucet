@@ -388,14 +388,15 @@ impl Faucet {
         notes: &[Note],
     ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
-        let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
+        let expected_output_recipients: Vec<_> =
+            notes.iter().map(Note::recipient).cloned().collect();
         let n = notes.len() as u64;
         let mut note_data = vec![Felt::new(n)];
         for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
             let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
 
-            note_data.extend(note.recipient().digest().iter());
+            note_data.extend(note.recipient().digest().iter().rev());
             note_data.push(Felt::from(note.metadata().note_type()));
             note_data.push(Felt::from(note.metadata().tag()));
             note_data.push(Felt::new(amount));
@@ -521,6 +522,7 @@ fn build_p2id_notes(
 mod tests {
     use std::env::temp_dir;
 
+    use miden_client::account::component::AuthControlled;
     use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
     use miden_client::asset::TokenSymbol;
     use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
@@ -584,6 +586,7 @@ mod tests {
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
+            .with_component(AuthControlled::allow_all())
             .with_auth_component(AuthSingleSig::new(
                 secret.public_key().to_commitment().into(),
                 AuthSchemeId::Falcon512Poseidon2,

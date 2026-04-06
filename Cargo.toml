@@ -12,15 +12,15 @@ license      = "MIT"
 readme       = "README.md"
 repository   = "https://github.com/0xMiden/miden-faucet"
 rust-version = "1.93"
-version      = "0.14.0-alpha.1"
+version      = "0.14.0"
 
 # Optimize the cryptography for faster tests involving account creation.
 [profile.test.package.miden-crypto]
 opt-level = 2
 
 [workspace.dependencies]
-miden-faucet-lib       = { path = "crates/faucet", version = "0.14.0-alpha.1" }
-miden-pow-rate-limiter = { path = "crates/pow", version = "0.14.0-alpha.1" }
+miden-faucet-lib       = { path = "crates/faucet", version = "0.14.0" }
+miden-pow-rate-limiter = { path = "crates/pow", version = "0.14.0" }
 
 # Miden dependencies.
 miden-client              = { branch = "tomasarrachea-sync-notes-rework", git = "https://github.com/0xMiden/miden-client" }
