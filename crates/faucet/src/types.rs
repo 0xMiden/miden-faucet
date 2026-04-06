@@ -30,6 +30,11 @@ impl AssetAmount {
         Ok(Self(base_units))
     }
 
+    /// Creates an [`AssetAmount`] with the maximum allowed amount ([`FungibleAsset::MAX_AMOUNT`]).
+    pub fn max() -> Self {
+        Self(Self::MAX)
+    }
+
     /// Returns the asset amount in base units.
     pub fn base_units(&self) -> u64 {
         self.0

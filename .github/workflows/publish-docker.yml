@@ -1,0 +1,64 @@
+name: Publish Faucet Docker Image
+
+on:
+  release:
+    types: [prereleased, released]
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (E.G. v0.10.0-rc.1, v0.10.0). Corresponding git tag must already exist."
+        required: true
+        type: string
+
+env:
+  version: ${{ inputs.version || github.ref_name }}
+  registry: ghcr.io
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on:
+      labels: "ubuntu-24.04"
+    strategy:
+      matrix:
+        component: [faucet]
+    name: Publish ${{ matrix.component }} ${{ inputs.version }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@main
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.version }}
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ${{ env.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          cache-binary: true
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.registry }}/0xmiden/miden-faucet
+          tags: |
+            type=raw,value=${{ env.version }}
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          labels: ${{ steps.meta.outputs.labels }}
+          file: ./Dockerfile
+          tags: ${{ env.registry }}/0xmiden/miden-faucet:${{ env.version }}

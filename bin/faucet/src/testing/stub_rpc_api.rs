@@ -1,5 +1,4 @@
 use anyhow::Context;
-use miden_client::crypto::{Forest, MmrDelta};
 use miden_node_proto::generated::rpc::api_server;
 use miden_node_proto::generated::{self as proto};
 use miden_testing::MockChain;
@@ -17,7 +16,7 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc::NullifierList>,
     ) -> Result<Response<proto::rpc::CheckNullifiersResponse>, Status> {
-        unimplemented!();
+        unimplemented!()
     }
 
     async fn get_block_header_by_number(
@@ -33,41 +32,24 @@ impl api_server::Api for StubRpcApi {
         }))
     }
 
-    async fn sync_state(
-        &self,
-        _request: Request<proto::rpc::SyncStateRequest>,
-    ) -> Result<Response<proto::rpc::SyncStateResponse>, Status> {
-        let mock_chain = MockChain::new();
-        let header = mock_chain.latest_block_header();
-        let mmr_peaks = mock_chain.blockchain().peaks_at(header.block_num()).unwrap();
-        let mmr_delta: MmrDelta = mock_chain
-            .blockchain()
-            .as_mmr()
-            .get_delta(Forest::empty(), mmr_peaks.forest())
-            .unwrap();
-
-        Ok(Response::new(proto::rpc::SyncStateResponse {
-            chain_tip: header.block_num().as_u32(),
-            block_header: Some(header.into()),
-            mmr_delta: Some(mmr_delta.into()),
-            accounts: vec![],
-            transactions: vec![],
-            notes: vec![],
-        }))
-    }
-
     async fn sync_notes(
         &self,
         _request: Request<proto::rpc::SyncNotesRequest>,
     ) -> Result<Response<proto::rpc::SyncNotesResponse>, Status> {
-        unimplemented!();
+        let mock_chain = MockChain::new();
+        Ok(Response::new(proto::rpc::SyncNotesResponse {
+            pagination_info: Some(proto::rpc::PaginationInfo { chain_tip: 0, block_num: 0 }),
+            block_header: Some(mock_chain.latest_block_header().into()),
+            mmr_path: Some(proto::primitives::MerklePath { siblings: vec![] }),
+            notes: vec![],
+        }))
     }
 
     async fn get_notes_by_id(
         &self,
         _request: Request<proto::note::NoteIdList>,
     ) -> Result<Response<proto::note::CommittedNoteList>, Status> {
-        unimplemented!();
+        unimplemented!()
     }
 
     async fn submit_proven_transaction(
@@ -121,7 +103,7 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_note_script_by_root(
         &self,
-        _request: Request<proto::note::NoteRoot>,
+        _request: Request<proto::note::NoteScriptRoot>,
     ) -> Result<Response<proto::rpc::MaybeNoteScript>, Status> {
         unimplemented!()
     }
@@ -132,7 +114,7 @@ impl api_server::Api for StubRpcApi {
     ) -> Result<Response<proto::rpc::SyncNullifiersResponse>, Status> {
         Ok(Response::new(proto::rpc::SyncNullifiersResponse {
             nullifiers: vec![],
-            pagination_info: None,
+            pagination_info: Some(proto::rpc::PaginationInfo { chain_tip: 0, block_num: 0 }),
         }))
     }
 
@@ -147,7 +129,31 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<()>,
     ) -> Result<Response<proto::rpc::RpcLimits>, Status> {
-        unimplemented!()
+        use std::collections::HashMap;
+
+        let make_endpoint = |params: Vec<(&str, u32)>| proto::rpc::EndpointLimits {
+            parameters: params.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
+        };
+
+        let endpoints = HashMap::from([
+            ("GetNotesById".to_string(), make_endpoint(vec![("note_id", 100)])),
+            ("CheckNullifiers".to_string(), make_endpoint(vec![("nullifier", 1000)])),
+            ("SyncNullifiers".to_string(), make_endpoint(vec![("nullifier", 1000)])),
+            ("SyncTransactions".to_string(), make_endpoint(vec![("account_id", 1000)])),
+            ("SyncNotes".to_string(), make_endpoint(vec![("note_tag", 1000)])),
+        ]);
+
+        Ok(Response::new(proto::rpc::RpcLimits { endpoints }))
+    }
+
+    async fn sync_chain_mmr(
+        &self,
+        _request: Request<proto::rpc::SyncChainMmrRequest>,
+    ) -> Result<Response<proto::rpc::SyncChainMmrResponse>, Status> {
+        Ok(Response::new(proto::rpc::SyncChainMmrResponse {
+            block_range: None,
+            mmr_delta: None,
+        }))
     }
 }
 
