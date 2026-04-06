@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.14.0 (TBD)
+## 0.14.0 (2026-04-06)
 
 - OpenTelemetry traces are now flushed before program termination on panic ([#222](https://github.com/0xMiden/miden-faucet/pull/222)).
 
