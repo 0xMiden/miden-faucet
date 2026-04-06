@@ -2,6 +2,7 @@
 
 ## 0.14.0 (2026-04-06)
 
+- Replaced metadata polling with Server-Sent Events (SSE) for issuance updates ([#224](https://github.com/0xMiden/miden-faucet/pull/224)).
 - OpenTelemetry traces are now flushed before program termination on panic ([#222](https://github.com/0xMiden/miden-faucet/pull/222)).
 
 ## 0.13.1 (2026-02-18)

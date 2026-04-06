@@ -24,11 +24,12 @@ use miden_client::transaction::{
     TransactionRequestError,
     TransactionScript,
 };
-use miden_client::utils::{Deserializable, RwLock};
+use miden_client::utils::Deserializable;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
 use rand::{Rng, rng};
 use tokio::sync::mpsc::Receiver;
+use tokio::sync::watch;
 use tracing::{Instrument, error, info, info_span, instrument, warn};
 use url::Url;
 
@@ -75,7 +76,7 @@ pub struct Faucet {
     client: Client<FilesystemKeyStore>,
     state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
-    issuance: Arc<RwLock<AssetAmount>>,
+    issuance: watch::Sender<AssetAmount>,
     max_supply: AssetAmount,
     script: TransactionScript,
 }
@@ -182,8 +183,8 @@ impl Faucet {
         };
         let id = FaucetId::new(account.id(), config.network_id.clone());
         let max_supply = AssetAmount::new(faucet.max_supply().as_canonical_u64())?;
-        let issuance =
-            Arc::new(RwLock::new(AssetAmount::new(faucet.token_supply().as_canonical_u64())?));
+        let issuance_value = Self::read_issuance_from_store(&client, account.id()).await?;
+        let (issuance, _) = watch::channel(issuance_value);
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
@@ -325,6 +326,9 @@ impl Faucet {
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
 
+        // Refresh the issuance cache from the store after submitting the transaction
+        self.refresh_issuance().await;
+
         Self::send_responses(response_senders, note_ids, tx_id);
         Ok(())
     }
@@ -355,9 +359,10 @@ impl Faucet {
     ) -> (Vec<MintRequest>, Vec<MintResponseSender>) {
         let mut valid_requests = vec![];
         let mut response_senders = vec![];
+        let mut issuance = *self.issuance.borrow();
         for (request, response_sender) in requests {
-            let available_amount = self.available_supply().unwrap_or_default();
             let requested_amount = request.asset_amount;
+            let available_amount = self.available_supply(issuance).unwrap_or_default();
             if available_amount < requested_amount {
                 error!(
                     requested_amount = requested_amount.base_units(),
@@ -370,12 +375,10 @@ impl Faucet {
             }
             valid_requests.push(request);
             response_senders.push(response_sender);
-            let mut issuance = self.issuance.write();
-            *issuance = issuance
-                .checked_add(requested_amount)
-                .expect("issuance should never be an invalid amount");
+            // SAFETY: creating an asset amount with the max is always valid
+            issuance = issuance.checked_add(requested_amount).unwrap_or(AssetAmount::max());
         }
-        if self.available_supply().is_none() {
+        if self.available_supply(issuance).is_none() {
             error!("Faucet has run out of tokens");
         }
         (valid_requests, response_senders)
@@ -471,13 +474,33 @@ impl Faucet {
     }
 
     /// Returns the available supply of the faucet.
-    pub fn available_supply(&self) -> Option<AssetAmount> {
-        self.max_supply.checked_sub(*self.issuance.read())
+    pub fn available_supply(&self, issuance: AssetAmount) -> Option<AssetAmount> {
+        self.max_supply.checked_sub(issuance)
     }
 
-    /// Returns the amount of tokens issued by the faucet.
-    pub fn issuance(&self) -> Arc<RwLock<AssetAmount>> {
-        self.issuance.clone()
+    /// Returns a watch receiver that yields the current issuance value whenever it changes.
+    /// The receiver immediately produces the latest value on subscription.
+    pub fn subscribe_issuance(&self) -> watch::Receiver<AssetAmount> {
+        self.issuance.subscribe()
+    }
+
+    /// Reads the current issuance from the client's store and updates the watch channel.
+    async fn refresh_issuance(&self) {
+        let new_issuance = Self::read_issuance_from_store(&self.client, self.id.account_id)
+            .await
+            .unwrap_or(AssetAmount::max());
+        self.issuance.send_replace(new_issuance);
+    }
+
+    /// Reads the current issuance from the client's store.
+    async fn read_issuance_from_store(
+        client: &Client<FilesystemKeyStore>,
+        account_id: AccountId,
+    ) -> anyhow::Result<AssetAmount> {
+        let account =
+            client.get_account(account_id).await?.context("account not found in store")?;
+        let faucet = BasicFungibleFaucet::try_from(account)?;
+        Ok(AssetAmount::new(faucet.token_supply().as_canonical_u64())?)
     }
 }
 
@@ -611,6 +634,7 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&account, false).await.unwrap();
 
+        let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
         Faucet {
             id: FaucetId::new(account.id(), NetworkId::Testnet),
             client,
@@ -620,7 +644,7 @@ mod tests {
                 None,
             ),
             tx_prover: Arc::new(LocalTransactionProver::default()),
-            issuance: Arc::new(RwLock::new(AssetAmount::new(0).unwrap())),
+            issuance,
             max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
             script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
         }
