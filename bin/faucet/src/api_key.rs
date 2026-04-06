@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 
 const API_KEY_PREFIX: &str = "miden_faucet_";
 
-/// Setting key used to store the list of API keys in the settings table.
-pub const API_KEYS_SETTING: &str = "api_keys";
+/// Prefix for API key entries in the settings table. Each key is stored as a separate setting
+/// entry.
+pub const API_KEY_SETTING_PREFIX: &str = "api_key:";
 
 /// The API key is a random 32-byte array.
 ///

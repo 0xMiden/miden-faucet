@@ -345,9 +345,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let mut rng = ChaCha20Rng::from_seed(rand::random());
             let key = ApiKey::generate(&mut rng);
 
-            let mut keys = load_api_keys_from_store(&store).await?;
-            keys.push(key.clone());
-            save_api_keys_to_store(&store, &keys).await?;
+            add_api_key_to_store(&store, &key).await?;
 
             println!("{}", key.encode());
         },
@@ -356,23 +354,19 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let store = SqliteStore::new(store_path).await.context("failed to open store")?;
             let key = ApiKey::decode(&api_key).context("failed to decode API key")?;
 
-            let mut keys = load_api_keys_from_store(&store).await?;
-            let original_len = keys.len();
-            keys.retain(|k| k != &key);
-            anyhow::ensure!(keys.len() < original_len, "API key not found in store");
-            save_api_keys_to_store(&store, &keys).await?;
+            remove_api_key_from_store(&store, &key).await?;
 
             println!("API key removed");
         },
 
         Command::ListApiKeys { store_path } => {
             let store = SqliteStore::new(store_path).await.context("failed to open store")?;
-            let keys = load_api_keys_from_store(&store).await?;
-            if keys.is_empty() {
+            let encoded_keys = list_api_keys_from_store(&store).await?;
+            if encoded_keys.is_empty() {
                 println!("No API keys found.");
             } else {
-                for key in keys {
-                    println!("{}", key.encode());
+                for key in encoded_keys {
+                    println!("{key}");
                 }
             }
         },
@@ -517,23 +511,32 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
 /// Loads all API keys from the store's settings table.
 async fn load_api_keys_from_store(store: &SqliteStore) -> anyhow::Result<Vec<ApiKey>> {
-    let value = store
-        .get_setting(api_key::API_KEYS_SETTING.to_owned())
-        .await
-        .context("failed to read API keys setting")?;
-    match value {
-        Some(bytes) => serde_json::from_slice(&bytes).context("failed to deserialize API keys"),
-        None => Ok(Vec::new()),
-    }
+    list_api_keys_from_store(store)
+        .await?
+        .iter()
+        .map(|encoded| ApiKey::decode(encoded).map_err(|e| anyhow::anyhow!(e)))
+        .collect()
 }
 
-/// Saves the list of API keys to the store's settings table.
-async fn save_api_keys_to_store(store: &SqliteStore, keys: &[ApiKey]) -> anyhow::Result<()> {
-    let bytes = serde_json::to_vec(keys).context("failed to serialize API keys")?;
-    store
-        .set_setting(api_key::API_KEYS_SETTING.to_owned(), bytes)
-        .await
-        .context("failed to write API keys setting")
+/// Lists all API keys from the store as encoded strings.
+async fn list_api_keys_from_store(store: &SqliteStore) -> anyhow::Result<Vec<String>> {
+    let all_keys = store.list_setting_keys().await.context("failed to list settings")?;
+    Ok(all_keys
+        .into_iter()
+        .filter_map(|key| key.strip_prefix(api_key::API_KEY_SETTING_PREFIX).map(String::from))
+        .collect())
+}
+
+/// Stores a single API key in the settings table.
+async fn add_api_key_to_store(store: &SqliteStore, key: &ApiKey) -> anyhow::Result<()> {
+    let setting_key = format!("{}{}", api_key::API_KEY_SETTING_PREFIX, key.encode());
+    store.set_setting(setting_key, vec![]).await.context("failed to store API key")
+}
+
+/// Removes a single API key from the settings table.
+async fn remove_api_key_from_store(store: &SqliteStore, key: &ApiKey) -> anyhow::Result<()> {
+    let setting_key = format!("{}{}", api_key::API_KEY_SETTING_PREFIX, key.encode());
+    store.remove_setting(setting_key).await.context("failed to remove API key")
 }
 
 /// Parses the node endpoint from the cli arguments. If an explicit url is provided, it is used.
@@ -763,7 +766,7 @@ mod tests {
         let store = SqliteStore::new(store_path.clone()).await.unwrap();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(rand::random());
         let key = crate::api_key::ApiKey::generate(&mut rng);
-        crate::save_api_keys_to_store(&store, &[key.clone()]).await.unwrap();
+        crate::add_api_key_to_store(&store, &key).await.unwrap();
 
         // Verify the key exists.
         let keys = crate::load_api_keys_from_store(&store).await.unwrap();
