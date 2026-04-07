@@ -123,31 +123,10 @@ pub enum Command {
         deploy: bool,
     },
 
-    /// Generate an API key and persist it to the store.
-    ///
-    /// Prints out the generated API key to stdout. The key is also stored in the faucet's database
-    /// so that it is automatically loaded when the faucet starts.
-    CreateApiKey {
-        /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
-        store_path: PathBuf,
-    },
-
-    /// Remove an API key from the store.
-    RemoveApiKey {
-        /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
-        store_path: PathBuf,
-
-        /// The API key to remove (encoded string).
-        api_key: String,
-    },
-
-    /// List all API keys in the store.
-    ListApiKeys {
-        /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
-        store_path: PathBuf,
+    /// Manage API keys.
+    ApiKey {
+        #[command(subcommand)]
+        command: ApiKeyCommand,
     },
 
     /// Start the faucet server
@@ -234,6 +213,36 @@ pub enum Command {
         /// Note transport endpoint. If not set, no note transport will be used.
         #[arg(long = "note-transport-url", value_name = "URL", env = ENV_NOTE_TRANSPORT_URL)]
         note_transport_url: Option<Url>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ApiKeyCommand {
+    /// Generate an API key and persist it to the store.
+    ///
+    /// Prints out the generated API key to stdout. The key is also stored in the faucet's
+    /// database so that it is automatically loaded when the faucet starts.
+    Create {
+        /// Path to the `SQLite` store.
+        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
+        store_path: PathBuf,
+    },
+
+    /// Remove an API key from the store.
+    Remove {
+        /// Path to the `SQLite` store.
+        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
+        store_path: PathBuf,
+
+        /// The API key to remove (encoded string).
+        api_key: String,
+    },
+
+    /// List all API keys in the store.
+    List {
+        /// Path to the `SQLite` store.
+        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
+        store_path: PathBuf,
     },
 }
 
@@ -340,35 +349,37 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             println!("Faucet account successfully initialized");
         },
 
-        Command::CreateApiKey { store_path } => {
-            let store = SqliteStore::new(store_path).await.context("failed to open store")?;
-            let mut rng = ChaCha20Rng::from_seed(rand::random());
-            let key = ApiKey::generate(&mut rng);
+        Command::ApiKey { command } => match command {
+            ApiKeyCommand::Create { store_path } => {
+                let store = SqliteStore::new(store_path).await.context("failed to open store")?;
+                let mut rng = ChaCha20Rng::from_seed(rand::random());
+                let key = ApiKey::generate(&mut rng);
 
-            add_api_key_to_store(&store, &key).await?;
+                add_api_key_to_store(&store, &key).await?;
 
-            println!("{}", key.encode());
-        },
+                println!("{}", key.encode());
+            },
 
-        Command::RemoveApiKey { store_path, api_key } => {
-            let store = SqliteStore::new(store_path).await.context("failed to open store")?;
-            let key = ApiKey::decode(&api_key).context("failed to decode API key")?;
+            ApiKeyCommand::Remove { store_path, api_key } => {
+                let store = SqliteStore::new(store_path).await.context("failed to open store")?;
+                let key = ApiKey::decode(&api_key).context("failed to decode API key")?;
 
-            remove_api_key_from_store(&store, &key).await?;
+                remove_api_key_from_store(&store, &key).await?;
 
-            println!("API key removed");
-        },
+                println!("API key removed");
+            },
 
-        Command::ListApiKeys { store_path } => {
-            let store = SqliteStore::new(store_path).await.context("failed to open store")?;
-            let encoded_keys = list_api_keys_from_store(&store).await?;
-            if encoded_keys.is_empty() {
-                println!("No API keys found.");
-            } else {
-                for key in encoded_keys {
-                    println!("{key}");
+            ApiKeyCommand::List { store_path } => {
+                let store = SqliteStore::new(store_path).await.context("failed to open store")?;
+                let encoded_keys = list_api_keys_from_store(&store).await?;
+                if encoded_keys.is_empty() {
+                    println!("No API keys found.");
+                } else {
+                    for key in encoded_keys {
+                        println!("{key}");
+                    }
                 }
-            }
+            },
         },
 
         Command::Start {
@@ -713,7 +724,8 @@ mod tests {
         // Create an API key via the CLI command.
         let result = Box::pin(run_faucet_command(Cli::parse_from([
             "miden-faucet",
-            "create-api-key",
+            "api-key",
+            "create",
             "--store",
             store_path.to_str().unwrap(),
         ])))
@@ -734,7 +746,8 @@ mod tests {
         for _ in 0..2 {
             Box::pin(run_faucet_command(Cli::parse_from([
                 "miden-faucet",
-                "create-api-key",
+                "api-key",
+                "create",
                 "--store",
                 store_path.to_str().unwrap(),
             ])))
@@ -750,7 +763,8 @@ mod tests {
         // Also verify the list-api-keys command runs without error.
         let result = Box::pin(run_faucet_command(Cli::parse_from([
             "miden-faucet",
-            "list-api-keys",
+            "api-key",
+            "list",
             "--store",
             store_path.to_str().unwrap(),
         ])))
@@ -775,7 +789,8 @@ mod tests {
         // Remove the key via the CLI command.
         let result = Box::pin(run_faucet_command(Cli::parse_from([
             "miden-faucet",
-            "remove-api-key",
+            "api-key",
+            "remove",
             "--store",
             store_path.to_str().unwrap(),
             &key.encode(),

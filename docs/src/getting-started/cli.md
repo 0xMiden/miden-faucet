@@ -13,9 +13,9 @@ The faucet comes with two CLI tools:
 |---------|-------------|
 | `init` | Create the faucet account and initialize the client |
 | `start` | Start the faucet server |
-| `create-api-key` | Generate an API key and persist it to the store |
-| `remove-api-key` | Remove a persisted API key from the store |
-| `list-api-keys` | List all persisted API keys in the store |
+| `api-key create` | Generate an API key and persist it to the store |
+| `api-key remove` | Remove a persisted API key from the store |
+| `api-key list` | List all persisted API keys in the store |
 | `help` | Show help information |
 
 ## Configuration Methods
@@ -186,7 +186,7 @@ API keys are persisted in the faucet's SQLite store and automatically loaded whe
 ### Create an API Key
 
 ```bash
-miden-faucet create-api-key
+miden-faucet api-key create
 ```
 
 Generates a new API key, persists it to the store, and prints it to stdout.
@@ -198,7 +198,7 @@ Generates a new API key, persists it to the store, and prints it to stdout.
 ### List API Keys
 
 ```bash
-miden-faucet list-api-keys
+miden-faucet api-key list
 ```
 
 Lists all persisted API keys in the store.
@@ -210,7 +210,7 @@ Lists all persisted API keys in the store.
 ### Remove an API Key
 
 ```bash
-miden-faucet remove-api-key <KEY>
+miden-faucet api-key remove <KEY>
 ```
 
 Removes a persisted API key from the store.
@@ -222,7 +222,7 @@ Removes a persisted API key from the store.
 
 ### API Key Loading
 
-When the faucet starts, it automatically loads all API keys persisted in the store via the `create-api-key` command.
+When the faucet starts, it automatically loads all API keys persisted in the store via the `api-key create` command.
 
 ### API Key Benefits
 
