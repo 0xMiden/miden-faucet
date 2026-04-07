@@ -23,9 +23,9 @@ miden-faucet-lib       = { path = "crates/faucet", version = "0.14.0" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.14.0" }
 
 # Miden dependencies.
-miden-client              = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
-miden-client-cli          = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
-miden-client-sqlite-store = { branch = "next", git = "https://github.com/0xMiden/miden-client" }
+miden-client              = { branch = "igamigo-protocol-0.14.3", git = "https://github.com/0xMiden/miden-client" }
+miden-client-cli          = { branch = "igamigo-protocol-0.14.3", git = "https://github.com/0xMiden/miden-client" }
+miden-client-sqlite-store = { branch = "igamigo-protocol-0.14.3", git = "https://github.com/0xMiden/miden-client" }
 
 # External dependencies
 anyhow                = { version = "1.0" }

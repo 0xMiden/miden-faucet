@@ -147,9 +147,12 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc::SyncChainMmrRequest>,
     ) -> Result<Response<proto::rpc::SyncChainMmrResponse>, Status> {
+        let mock_chain = MockChain::new();
+
         Ok(Response::new(proto::rpc::SyncChainMmrResponse {
-            block_range: None,
-            mmr_delta: None,
+            block_range: Some(proto::rpc::BlockRange { block_from: 0, block_to: Some(0) }),
+            mmr_delta: Some(proto::primitives::MmrDelta { forest: 0, data: vec![] }),
+            block_header: Some(mock_chain.latest_block_header().into()),
         }))
     }
 
