@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Mint(cmd) => {
-            cmd.execute().await.map_err(anyhow::Error::from)?;
+            Box::pin(cmd.execute()).await.map_err(anyhow::Error::from)?;
         },
     }
 

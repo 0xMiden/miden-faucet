@@ -92,7 +92,7 @@ impl MintCmd {
             return Ok(());
         }
 
-        self.consume_note(account_id, mint_response.note_id).await
+        Box::pin(self.consume_note(account_id, mint_response.note_id)).await
     }
 
     /// Consumes the minted note instantiating a new client instance with the global user
@@ -103,7 +103,7 @@ impl MintCmd {
         note_id: NoteId,
     ) -> Result<(), MintClientError> {
         println!("Initializing client...");
-        let mut client = CliClient::from_system_user_config(DebugMode::Disabled)
+        let mut client = CliClient::new(DebugMode::Disabled)
             .await
             .map_err(|e| MintClientError::ClientConfig(e.to_string()))?;
 

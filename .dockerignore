@@ -1,0 +1,22 @@
+# Rust
+target/
+debug/
+
+# Git
+.git/
+.github/
+
+# Docs build output
+book/
+
+# Node
+**/node_modules/
+**/package-lock.json
+**/pnpm-lock.yaml
+**/yarn.lock
+
+# Local env files
+.env
+
+# OS / editor
+.DS_Store
