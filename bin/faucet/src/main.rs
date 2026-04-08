@@ -399,17 +399,12 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 base_amount,
             };
 
-            let note_transport_client = if let Some(note_transport_url) = note_transport_url {
-                Some(Arc::new(
-                    GrpcNoteTransportClient::connect(
-                        note_transport_url.to_string(),
-                        timeout.as_millis().try_into().unwrap(),
-                    )
-                    .await?,
+            let note_transport_client = note_transport_url.map(|url| {
+                Arc::new(GrpcNoteTransportClient::new(
+                    url.to_string(),
+                    timeout.as_millis().try_into().expect("timeout should fit into u64"),
                 ))
-            } else {
-                None
-            };
+            });
 
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.

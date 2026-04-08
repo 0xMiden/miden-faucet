@@ -2469,7 +2469,8 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.14.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=igamigo-protocol-0.14.3#0dea6c9133e7376bf9073e840fe1fc9fb6a08d98"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49957f76717961769c911237113bb9c1841c3b13970c15ca09a0ae639c33fc45"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2506,7 +2507,8 @@ dependencies = [
 [[package]]
 name = "miden-client-cli"
 version = "0.14.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=igamigo-protocol-0.14.3#0dea6c9133e7376bf9073e840fe1fc9fb6a08d98"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72eaa5fdd768164a2725e3050e78515d39b13ee82118333f72a8e29612b71331"
 dependencies = [
  "clap",
  "comfy-table",
@@ -2527,7 +2529,8 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.14.0"
-source = "git+https://github.com/0xMiden/miden-client?branch=igamigo-protocol-0.14.3#0dea6c9133e7376bf9073e840fe1fc9fb6a08d98"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ab146099a4bf8319f5cac47e110eca7d3e3caa9d2fc354693458f905f4750a7"
 dependencies = [
  "anyhow",
  "async-trait",
