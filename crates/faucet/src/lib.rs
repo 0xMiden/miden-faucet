@@ -9,7 +9,7 @@ use miden_client::account::{Account, AccountId, Address, NetworkId};
 use miden_client::asset::FungibleAsset;
 use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
-use miden_client::crypto::{Rpo256, RpoRandomCoin};
+use miden_client::crypto::{RandomCoin, Rpo256};
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
 use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, P2idNote};
 use miden_client::rpc::{Endpoint, GrpcClient};
@@ -143,7 +143,7 @@ impl Faucet {
             let mut faucet = Self::load(config).await?;
 
             let empty_tx_request = TransactionRequestBuilder::new().build()?;
-            faucet.submit_new_transaction(empty_tx_request).await?;
+            Box::pin(faucet.submit_new_transaction(empty_tx_request)).await?;
         }
 
         Ok(())
@@ -182,7 +182,7 @@ impl Faucet {
             None => Arc::new(LocalTransactionProver::default()),
         };
         let id = FaucetId::new(account.id(), config.network_id.clone());
-        let max_supply = AssetAmount::new(faucet.max_supply().as_int())?;
+        let max_supply = AssetAmount::new(faucet.max_supply().as_canonical_u64())?;
         let issuance_value = Self::read_issuance_from_store(&client, account.id()).await?;
         let (issuance, _) = watch::channel(issuance_value);
 
@@ -270,7 +270,7 @@ impl Faucet {
         let mut buffer = Vec::new();
 
         while requests.recv_many(&mut buffer, batch_size).await > 0 {
-            match self.mint(buffer.drain(..)).await {
+            match Box::pin(self.mint(buffer.drain(..))).await {
                 Ok(()) => (),
                 Err(error) => {
                     if let Some(ClientError::RpcError(_)) = error.downcast_ref::<ClientError>() {
@@ -313,7 +313,7 @@ impl Faucet {
         let mut rng = {
             let auth_seed: [u64; 4] = rng().random();
             let rng_seed = Word::from(auth_seed.map(Felt::new));
-            RpoRandomCoin::new(rng_seed)
+            RandomCoin::new(rng_seed)
         };
         let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
         let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
@@ -321,8 +321,7 @@ impl Faucet {
         // Build and submit transaction
         let tx_request =
             self.create_transaction(&notes).context("faucet failed to create transaction")?;
-        let tx_id = self
-            .submit_new_transaction(tx_request)
+        let tx_id = Box::pin(self.submit_new_transaction(tx_request))
             .await
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
@@ -392,14 +391,15 @@ impl Faucet {
         notes: &[Note],
     ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
-        let expected_output_recipients = notes.iter().map(Note::recipient).cloned().collect();
+        let expected_output_recipients: Vec<_> =
+            notes.iter().map(Note::recipient).cloned().collect();
         let n = notes.len() as u64;
         let mut note_data = vec![Felt::new(n)];
         for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
             let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
 
-            note_data.extend(note.recipient().digest().iter());
+            note_data.extend(note.recipient().digest().iter().rev());
             note_data.push(Felt::from(note.metadata().note_type()));
             note_data.push(Felt::from(note.metadata().tag()));
             note_data.push(Felt::new(amount));
@@ -500,7 +500,7 @@ impl Faucet {
         let account =
             client.get_account(account_id).await?.context("account not found in store")?;
         let faucet = BasicFungibleFaucet::try_from(account)?;
-        Ok(AssetAmount::new(faucet.token_supply().as_int())?)
+        Ok(AssetAmount::new(faucet.token_supply().as_canonical_u64())?)
     }
 }
 
@@ -516,7 +516,7 @@ impl Faucet {
 fn build_p2id_notes(
     source: &FaucetId,
     requests: &[MintRequest],
-    rng: &mut RpoRandomCoin,
+    rng: &mut RandomCoin,
 ) -> Result<Vec<Note>, NoteError> {
     // If building a note fails, we discard the whole batch. Should never happen, since account
     // ids are validated on the request level.
@@ -545,6 +545,7 @@ fn build_p2id_notes(
 mod tests {
     use std::env::temp_dir;
 
+    use miden_client::account::component::AuthControlled;
     use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
     use miden_client::asset::TokenSymbol;
     use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
@@ -608,13 +609,14 @@ mod tests {
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
             .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
+            .with_component(AuthControlled::allow_all())
             .with_auth_component(AuthSingleSig::new(
                 secret.public_key().to_commitment().into(),
-                AuthSchemeId::Falcon512Rpo,
+                AuthSchemeId::Falcon512Poseidon2,
             ))
             .build()
             .unwrap();
-        let key = AuthSecretKey::Falcon512Rpo(secret);
+        let key = AuthSecretKey::Falcon512Poseidon2(secret);
 
         let keystore_path = temp_dir().join(format!("keystore-{}", Uuid::new_v4()));
         let keystore = FilesystemKeyStore::new(keystore_path.clone()).unwrap();

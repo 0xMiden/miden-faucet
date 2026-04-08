@@ -36,12 +36,9 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc::SyncNotesRequest>,
     ) -> Result<Response<proto::rpc::SyncNotesResponse>, Status> {
-        let mock_chain = MockChain::new();
         Ok(Response::new(proto::rpc::SyncNotesResponse {
             pagination_info: Some(proto::rpc::PaginationInfo { chain_tip: 0, block_num: 0 }),
-            block_header: Some(mock_chain.latest_block_header().into()),
-            mmr_path: Some(proto::primitives::MerklePath { siblings: vec![] }),
-            notes: vec![],
+            blocks: vec![],
         }))
     }
 
@@ -61,7 +58,7 @@ impl api_server::Api for StubRpcApi {
 
     async fn submit_proven_batch(
         &self,
-        _request: Request<proto::transaction::ProvenTransactionBatch>,
+        _request: Request<proto::transaction::TransactionBatch>,
     ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
         unimplemented!()
     }
@@ -150,10 +147,20 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc::SyncChainMmrRequest>,
     ) -> Result<Response<proto::rpc::SyncChainMmrResponse>, Status> {
+        let mock_chain = MockChain::new();
+
         Ok(Response::new(proto::rpc::SyncChainMmrResponse {
-            block_range: None,
-            mmr_delta: None,
+            block_range: Some(proto::rpc::BlockRange { block_from: 0, block_to: Some(0) }),
+            mmr_delta: Some(proto::primitives::MmrDelta { forest: 0, data: vec![] }),
+            block_header: Some(mock_chain.latest_block_header().into()),
         }))
+    }
+
+    async fn get_note_error(
+        &self,
+        _request: Request<proto::note::NoteId>,
+    ) -> Result<Response<proto::rpc::GetNoteErrorResponse>, Status> {
+        unimplemented!()
     }
 }
 

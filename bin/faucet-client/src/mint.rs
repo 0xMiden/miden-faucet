@@ -92,7 +92,7 @@ impl MintCmd {
             return Ok(());
         }
 
-        self.consume_note(account_id, mint_response.note_id).await
+        Box::pin(self.consume_note(account_id, mint_response.note_id)).await
     }
 
     /// Consumes the minted note instantiating a new client instance with the global user
