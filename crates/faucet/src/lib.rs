@@ -645,13 +645,10 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&account, false).await.unwrap();
 
-        let package =
-            build_project_in_dir(Path::new("../contracts/mint-tx"), true).unwrap();
+        let package = build_project_in_dir(Path::new("../contracts/mint-tx"), true).unwrap();
         let program = package.unwrap_program();
-        let script = TransactionScript::from_parts(
-            program.mast_forest().clone(),
-            program.entrypoint(),
-        );
+        let script =
+            TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());
 
         let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
         Faucet {

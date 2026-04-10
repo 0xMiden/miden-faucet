@@ -17,6 +17,9 @@ crate-type = ["cdylib"]
 [dependencies]
 miden = { workspace = true }
 
+[build-dependencies]
+blake3 = "1"
+
 [package.metadata.component]
 package = "miden:mint-tx"
 
