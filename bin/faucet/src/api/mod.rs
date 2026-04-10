@@ -5,9 +5,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Context;
 use axum::Router;
 use axum::extract::FromRef;
-use axum::routing::get;
+use axum::routing::{get, post};
 use http::HeaderValue;
 use miden_client::account::{AccountId, AccountIdError, AddressError};
+use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::store::Store;
 use miden_client::utils::hex_to_bytes;
 use miden_faucet_lib::requests::MintRequestSender;
@@ -15,6 +16,7 @@ use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
 use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
+use tokio::sync::watch;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -22,16 +24,20 @@ use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
+use crate::api::events::issuance_stream;
 use crate::api::get_metadata::get_metadata;
 use crate::api::get_note::get_note;
 use crate::api::get_pow::get_pow;
 use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
+use crate::api::send_note::send_note;
 use crate::api_key::ApiKey;
 
+mod events;
 mod get_metadata;
 mod get_note;
 mod get_pow;
 mod get_tokens;
+mod send_note;
 
 pub use get_metadata::Metadata;
 
@@ -43,12 +49,15 @@ pub use get_metadata::Metadata;
 pub struct ApiServer {
     mint_state: GetTokensState,
     metadata: Metadata,
+    issuance_receiver: watch::Receiver<AssetAmount>,
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
     store: Arc<dyn Store>,
+    note_transport_client: Option<Arc<GrpcNoteTransportClient>>,
 }
 
 impl ApiServer {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         metadata: Metadata,
         max_claimable_amount: AssetAmount,
@@ -57,6 +66,8 @@ impl ApiServer {
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
+        note_transport_client: Option<Arc<GrpcNoteTransportClient>>,
+        issuance_receiver: watch::Receiver<AssetAmount>,
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
 
@@ -70,9 +81,11 @@ impl ApiServer {
         ApiServer {
             mint_state,
             metadata,
+            issuance_receiver,
             rate_limiter,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
             store,
+            note_transport_client,
         }
     }
 
@@ -80,9 +93,11 @@ impl ApiServer {
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
             .route("/get_metadata", get(get_metadata))
+            .route("/issuance", get(issuance_stream))
             .route("/pow", get(get_pow))
             .route("/get_tokens", get(get_tokens))
             .route("/get_note", get(get_note))
+            .route("/send_note", post(send_note))
             .layer(
                 ServiceBuilder::new()
                     .layer(SetResponseHeaderLayer::if_not_present(

@@ -8,12 +8,16 @@ For comprehensive guides, API reference, and examples, see the [Miden Faucet Doc
 
 ## Running the faucet
 
-1. Install the faucet:
+The faucet comes with two CLI tools:
+- **miden-faucet**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
+
+1. Install both faucet binaries:
 ```bash
 make install-faucet
 ```
 
-2. Initialize the faucet. This will generate a new account with the specified token configuration and save the account data to a local SQLite store:
+2. Initialize the faucet server. This will generate a new account with the specified token configuration and save the account data to a local SQLite store:
 
 ```bash
 miden-faucet init \
@@ -30,6 +34,57 @@ miden-faucet init \
 miden-faucet start \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
+```
+## Docker
+
+```bash
+docker pull ghcr.io/0xmiden/miden-faucet:latest
+```
+
+**Data dir:** Store defaults to `/faucet/store.sqlite`. Mount a volume at `/faucet` for persistence.
+
+Run `init` first, then `start`. 
+
+**1. Init — new account (testnet):**
+
+```bash
+docker run --rm -v miden-faucet-data:/faucet \
+  -e MIDEN_FAUCET_NETWORK=testnet \
+  -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
+  -e MIDEN_FAUCET_TOKEN_SYMBOL=MIDEN \
+  -e MIDEN_FAUCET_DECIMALS=6 \
+  -e MIDEN_FAUCET_MAX_SUPPLY=100000000000000000 \
+  ghcr.io/0xmiden/miden-faucet:latest init
+```
+
+**2. Init — import existing account:**
+
+```bash
+docker run --rm -v miden-faucet-data:/faucet \
+  -e MIDEN_FAUCET_NETWORK=testnet \
+  -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
+  -e MIDEN_FAUCET_IMPORT_ACCOUNT_PATH=/faucet/accounts/faucet_miden.mac \
+  -v /path/to/your/accounts:/faucet/accounts:ro \
+  ghcr.io/0xmiden/miden-faucet:latest init
+```
+
+Put `faucet_miden.mac` in your local `./accounts` dir before running.
+
+**3. Start the faucet:**
+
+```bash
+docker run --rm -p 8000:8000 -p 8080:8080 \
+  -v miden-faucet-data:/faucet \
+  ghcr.io/0xmiden/miden-faucet:latest
+```
+
+See `bin/faucet/.env` for all options.
+
+## Requesting tokens from a live faucet
+
+You can use the `miden-faucet-client` binary to request tokens from any running faucet instance, whether it's your local faucet or the remote testnet faucet:
+```bash
+miden-faucet-client mint --url <FAUCET_API_URL> --target-account <ACCOUNT_ID> --amount <BASE_UNITS>
 ```
 
 After a few seconds you may go to `http://localhost:8080` and see the faucet UI.

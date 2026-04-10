@@ -2,13 +2,20 @@
 
 This guide shows the available commands and their configuration options to run with the Miden Faucet CLI.
 
+The faucet comes with two CLI tools:
+
+- **miden-faucet**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
+
 ## Available Commands
 
 | Command | Description |
 |---------|-------------|
 | `init` | Create the faucet account and initialize the client |
 | `start` | Start the faucet server |
-| `create-api-key` | Generate an API key for authentication |
+| `api-key create` | Generate an API key and persist it to the store |
+| `api-key remove` | Remove a persisted API key from the store |
+| `api-key list` | List all persisted API keys in the store |
 | `help` | Show help information |
 
 ## Configuration Methods
@@ -91,7 +98,6 @@ miden-faucet start \
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
 | `--remote-tx-prover-url` | Remote transaction prover | - | No |
-| `--api-keys` | Comma-separated API keys | - | No |
 | `--enable-otel` | Enable OpenTelemetry | `false` | No |
 | `--batch-size` | Maximum number of P2ID notes to create per transaction | `32` | No |
 
@@ -134,7 +140,6 @@ export MIDEN_FAUCET_POW_BASELINE=12
 export MIDEN_FAUCET_POW_CHALLENGE_LIFETIME=30s
 export MIDEN_FAUCET_POW_CLEANUP_INTERVAL=2s
 export MIDEN_FAUCET_POW_GROWTH_RATE=0.1
-export MIDEN_FAUCET_API_KEYS=key1,key2,key3
 ```
 
 ## Network Configurations
@@ -174,15 +179,50 @@ export MIDEN_FAUCET_API_KEYS=key1,key2,key3
 - **Address Display**: `mcst`
 - **Use Case**: Run your custom network
 
-## API Key Configuration
+## API Key Management
 
-### Generate API Keys
+API keys are persisted in the faucet's SQLite store and automatically loaded when the faucet starts.
+
+### Create an API Key
 
 ```bash
-miden-faucet create-api-key
+miden-faucet api-key create
 ```
 
-This generates an API key that can be used for authentication. It is printed to stdout.
+Generates a new API key, persists it to the store, and prints it to stdout.
+
+| Option | Description | Default | Required |
+|--------|-------------|---------|----------|
+| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+
+### List API Keys
+
+```bash
+miden-faucet api-key list
+```
+
+Lists all persisted API keys in the store.
+
+| Option | Description | Default | Required |
+|--------|-------------|---------|----------|
+| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+
+### Remove an API Key
+
+```bash
+miden-faucet api-key remove <KEY>
+```
+
+Removes a persisted API key from the store.
+
+| Argument/Option | Description | Default | Required |
+|--------|-------------|---------|----------|
+| `<KEY>` | The API key to remove (encoded string) | - | Yes |
+| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+
+### API Key Loading
+
+When the faucet starts, it automatically loads all API keys persisted in the store via the `api-key create` command.
 
 ### API Key Benefits
 
@@ -225,4 +265,18 @@ miden-faucet start \
   --network localhost
 ```
 
-For detailed options, run `miden-faucet [COMMAND] --help`. 
+For detailed options, run `miden-faucet [COMMAND] --help`.
+
+## Requesting tokens from a live faucet
+
+You can use the `miden-faucet-client` binary to request tokens from any running faucet instance, whether it's your local faucet or the remote testnet faucet:
+```bash
+miden-faucet-client mint --url <FAUCET_API_URL> --target-account <ACCOUNT_ID> --amount <BASE_UNITS>
+```
+
+Although the command is named `mint`, in technical terms it makes a request to the faucet to request a public P2ID note.
+
+To see available options:
+```bash
+miden-faucet-client mint --help
+```
