@@ -405,7 +405,8 @@ impl Faucet {
         // Build the transaction
         let expected_output_recipients: Vec<_> =
             notes.iter().map(Note::recipient).cloned().collect();
-        let mut note_data = vec![];
+        let n = notes.len() as u64;
+        let mut note_data = vec![Felt::new(n)];
         for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
             let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
@@ -570,6 +571,7 @@ mod tests {
     use super::*;
     use crate::types::NoteType;
 
+
     #[tokio::test]
     async fn batch_requests() {
         let batch_size = 32;
@@ -645,10 +647,11 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&account, false).await.unwrap();
 
-        let package = build_project_in_dir(Path::new("../contracts/mint-tx"), true).unwrap();
-        let program = package.unwrap_program();
-        let script =
-            TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());
+        let script = {
+            use miden_client::assembly::CodeBuilder;
+            let masm_code = include_str!("../../../target/masm/mint.masm");
+            CodeBuilder::new().compile_tx_script(masm_code).unwrap()
+        };
 
         let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
         Faucet {

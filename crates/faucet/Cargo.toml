@@ -30,5 +30,7 @@ tracing   = { workspace = true }
 url       = { workspace = true }
 
 [dev-dependencies]
-miden-client = { features = ["testing", "tonic"], workspace = true }
-uuid         = { workspace = true }
+miden-client   = { features = ["testing", "tonic"], workspace = true }
+midenc-compile = { git = "https://github.com/0xMiden/compiler", branch = "next" }
+midenc-session = { git = "https://github.com/0xMiden/compiler", branch = "next" }
+uuid           = { workspace = true }
