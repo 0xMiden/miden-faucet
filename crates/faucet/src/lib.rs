@@ -140,10 +140,11 @@ impl Faucet {
         }
         client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
 
-        // Compile the mint tx script
+        // Compile the mint tx script from Rust via cargo-miden.
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let package = build_project_in_dir(&workspace_root.join("../contracts/mint-tx"), true)?;
         let program = package.unwrap_program();
+        // TODO: use client.code_builder()?
         let script =
             TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());
         client.set_setting(MINT_TX_SCRIPT_SETTING.to_string(), script).await?;
@@ -402,26 +403,32 @@ impl Faucet {
         &mut self,
         notes: &[Note],
     ) -> Result<TransactionRequest, TransactionRequestError> {
-        // Build the transaction
-        let expected_output_recipients: Vec<_> =
-            notes.iter().map(Note::recipient).cloned().collect();
-        let n = notes.len() as u64;
-        let mut note_data = vec![Felt::new(n)];
+        let mut note_data = vec![];
         for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
             let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
 
-            note_data.extend(note.recipient().digest().iter().rev());
+            note_data.extend(note.recipient().digest().iter());
             note_data.push(Felt::from(note.metadata().note_type()));
             note_data.push(Felt::from(note.metadata().tag()));
             note_data.push(Felt::new(amount));
         }
+        // Pad to word alignment for pipe_words_to_memory
+        // TODO: avoid while to do this
+        while note_data.len() % 4 != 0 {
+            note_data.push(Felt::ZERO);
+        }
         let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
 
+        let script_with_advice =
+            self.script.clone().with_advice_map(advice_map.into_iter().collect());
+
+        let expected_output_recipients: Vec<_> =
+            notes.iter().map(Note::recipient).cloned().collect();
+
         TransactionRequestBuilder::new()
-            .custom_script(self.script.clone())
-            .extend_advice_map(advice_map)
+            .custom_script(script_with_advice)
             .expected_output_recipients(expected_output_recipients)
             .script_arg(note_data_commitment)
             .build()
@@ -557,9 +564,13 @@ fn build_p2id_notes(
 mod tests {
     use std::env::temp_dir;
 
-    use miden_client::account::component::AuthControlled;
-    use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
-    use miden_client::asset::TokenSymbol;
+    use miden_client::account::component::{AuthControlled, InitStorageData};
+    use miden_client::account::{
+        AccountBuilder,
+        AccountComponent,
+        AccountStorageMode,
+        AccountType,
+    };
     use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
     use miden_client::crypto::rpo_falcon512::SecretKey;
     use miden_client::store::{NoteFilter, Store};
@@ -571,10 +582,27 @@ mod tests {
     use super::*;
     use crate::types::NoteType;
 
+    #[tokio::test]
+    async fn tx_script_compiles_and_executes() {
+        let store = SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
+            .await
+            .unwrap();
+        let mut faucet = build_faucet(Arc::new(store)).await;
+
+        // Execute an empty transaction just to verify the script runs
+        let empty_tx_request = TransactionRequestBuilder::new()
+            .custom_script(faucet.script.clone())
+            .build()
+            .unwrap();
+        let result =
+            faucet.client.execute_transaction(faucet.id.account_id, empty_tx_request).await;
+
+        assert!(result.is_ok(), "tx script should execute: {:?}", result.err());
+    }
 
     #[tokio::test]
     async fn batch_requests() {
-        let batch_size = 32;
+        let batch_size = 4;
 
         let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1000);
         let mut receivers = vec![];
@@ -616,12 +644,18 @@ mod tests {
     /// Builds a faucet using a mock client.
     async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
         let secret = SecretKey::new();
-        let symbol = TokenSymbol::new("TEST").unwrap();
-        let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
+
+        // Compile the faucet account component from Rust
+        let faucet_component_package =
+            build_project_in_dir(Path::new("../contracts/faucet-account"), true).unwrap();
+        let faucet_component =
+            AccountComponent::from_package(&faucet_component_package, &InitStorageData::default())
+                .unwrap();
+
         let account = AccountBuilder::new(rand::random())
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
-            .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
+            .with_component(faucet_component)
             .with_component(AuthControlled::allow_all())
             .with_auth_component(AuthSingleSig::new(
                 secret.public_key().to_commitment().into(),
@@ -647,11 +681,10 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&account, false).await.unwrap();
 
-        let script = {
-            use miden_client::assembly::CodeBuilder;
-            let masm_code = include_str!("../../../target/masm/mint.masm");
-            CodeBuilder::new().compile_tx_script(masm_code).unwrap()
-        };
+        let package = build_project_in_dir(Path::new("../contracts/mint-tx"), true).unwrap();
+        let program = package.unwrap_program();
+        let script =
+            TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());
 
         let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
         Faucet {

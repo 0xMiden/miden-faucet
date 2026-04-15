@@ -1,5 +1,5 @@
 [workspace]
-members = ["bin/faucet", "bin/faucet-client", "crates/faucet", "crates/pow", "crates/contracts/mint-tx"]
+members = ["bin/faucet", "bin/faucet-client", "crates/faucet", "crates/pow", "crates/contracts/mint-tx", "crates/contracts/faucet-account"]
 default-members = ["bin/faucet", "crates/faucet", "crates/pow"]
 
 resolver = "2"
