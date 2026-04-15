@@ -1,0 +1,31 @@
+[package]
+authors.workspace      = true
+description            = "Miden faucet's mint transaction script"
+edition.workspace      = true
+homepage.workspace     = true
+keywords               = ["faucet", "miden", "mint"]
+license.workspace      = true
+name                   = "miden-faucet-mint-tx"
+readme                 = "README.md"
+repository.workspace   = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+miden = { workspace = true }
+
+[package.metadata.component]
+package = "miden:mint-tx"
+
+[package.metadata.miden]
+project-kind = "transaction-script"
+
+# Miden dependencies for cargo-miden build/linking
+[package.metadata.miden.dependencies]
+"miden:faucet-account" = { path = "../faucet-account" }
+
+[package.metadata.component.target.dependencies]
+"miden:faucet-account" = { path = "../faucet-account/target/generated-wit/" }

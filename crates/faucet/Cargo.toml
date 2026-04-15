@@ -16,6 +16,7 @@ workspace = true
 
 [dependencies]
 # Miden dependencies.
+cargo-miden               = { workspace = true }
 miden-client              = { features = ["tonic"], workspace = true }
 miden-client-sqlite-store = { workspace = true }
 
@@ -27,9 +28,6 @@ thiserror = { workspace = true }
 tokio     = { features = ["fs"], workspace = true }
 tracing   = { workspace = true }
 url       = { workspace = true }
-
-[build-dependencies]
-miden-client = { workspace = true }
 
 [dev-dependencies]
 miden-client = { features = ["testing", "tonic"], workspace = true }
