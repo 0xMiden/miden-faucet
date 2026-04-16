@@ -1,6 +1,6 @@
 import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
 import { PrivateDataPermission, WalletAdapterNetwork, WalletReadyState } from "@demox-labs/miden-wallet-adapter-base";
-import { Endpoint, NoteId, RpcClient } from "@miden-sdk/miden-sdk";
+import { Endpoint, NoteId, RpcClient, getWasmOrThrow } from "@miden-sdk/miden-sdk";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
 import { getConfig, getMetadata, getPowChallenge, getTokens, get_note, send_note } from "./api.js";
@@ -32,6 +32,7 @@ export class MidenFaucetApp {
 
     async init() {
         try {
+            await getWasmOrThrow();
             let config = await getConfig();
             this.apiUrl = config.api_url;
             this.rpcClient = new RpcClient(new Endpoint(config.node_url));
