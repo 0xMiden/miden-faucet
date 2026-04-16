@@ -32,8 +32,7 @@ export class MidenFaucetApp {
 
     async init() {
         try {
-            await getWasmOrThrow();
-            let config = await getConfig();
+            const [config] = await Promise.all([getConfig(), getWasmOrThrow()]);
             this.apiUrl = config.api_url;
             this.rpcClient = new RpcClient(new Endpoint(config.node_url));
             this.setupEventListeners();
