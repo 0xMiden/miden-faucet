@@ -126,7 +126,7 @@ impl Faucet {
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component =
-            StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
+            StateSync::new(grpc_client.clone(), None, Arc::new(note_screener), None);
         Self::sync_state(account.id(), &mut client, &state_sync_component).await?;
 
         let add_result = client.add_account(&account, false).await;
@@ -192,7 +192,7 @@ impl Faucet {
             NoteScreener::new(Arc::new(SqliteStore::new(config.store_path.clone()).await?));
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
-        let state_sync_component = StateSync::new(grpc_client, Arc::new(note_screener), None);
+        let state_sync_component = StateSync::new(grpc_client, None, Arc::new(note_screener), None);
 
         Ok(Self {
             id,
@@ -640,6 +640,7 @@ mod tests {
             client,
             state_sync_component: StateSync::new(
                 mock_rpc,
+                None,
                 Arc::new(NoteScreener::new(store.clone())),
                 None,
             ),
