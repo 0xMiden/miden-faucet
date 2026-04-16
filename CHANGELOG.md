@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.1 (2026-04-16)
+
+- Updated miden-client dependency to v0.14.2 (TBD).
+
 ## 0.14.0 (2026-04-08)
 
 - [BREAKING] Removed `--api-key` param from the `start` command, API keys are now persisted in the store and automatically loaded on startup.  ([#225](https://github.com/0xMiden/miden-faucet/pull/225)).
