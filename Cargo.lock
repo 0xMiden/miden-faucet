@@ -2468,9 +2468,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client"
-version = "0.14.0"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49957f76717961769c911237113bb9c1841c3b13970c15ca09a0ae639c33fc45"
+checksum = "79084e6771b3deefaea4775607a7e17c3e23b95e50694b9d3d562ea33d0d529f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2492,6 +2492,7 @@ dependencies = [
  "rand 0.9.2",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tonic",
@@ -2506,9 +2507,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client-cli"
-version = "0.14.0"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72eaa5fdd768164a2725e3050e78515d39b13ee82118333f72a8e29612b71331"
+checksum = "e207e52f5bf9bf8d308b70bcb670f3f7295856632b876d01a615abe9ffb55104"
 dependencies = [
  "clap",
  "comfy-table",
@@ -2528,9 +2529,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client-sqlite-store"
-version = "0.14.0"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ab146099a4bf8319f5cac47e110eca7d3e3caa9d2fc354693458f905f4750a7"
+checksum = "17e50b86f89b94cfcc65018d9f1490c60945a346960a466086795062c7fe9718"
 dependencies = [
  "anyhow",
  "async-trait",
