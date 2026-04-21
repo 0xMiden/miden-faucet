@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.15.0 (TBD)
 
-- Added `note_transport_url` field to the `/get_metadata` endpoint response ([#238](https://github.com/0xMiden/faucet/issues/238)).
+- Added `note_transport_url` field to the `/get_metadata` endpoint response ([#243](https://github.com/0xMiden/faucet/pull/243)).
 
 ## 0.14.2 (2026-04-21)
 
