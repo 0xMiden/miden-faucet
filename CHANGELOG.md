@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added `note_transport_url` field to the `/get_metadata` endpoint response ([#238](https://github.com/0xMiden/faucet/issues/238)).
+
 ## 0.14.2 (2026-04-21)
 
 - Fixed faucet state sync to request storage map details for tracked public accounts ([#241](https://github.com/0xMiden/faucet/pull/241)).
