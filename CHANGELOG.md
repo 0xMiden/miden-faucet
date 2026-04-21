@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.2 (2026-04-21)
+
+- Fixed faucet state sync to request storage map details for tracked public accounts ([#241](https://github.com/0xMiden/faucet/pull/241)).
+
 ## 0.14.1 (2026-04-16)
 
 - Updated miden-client dependency to v0.14.3 ([#239](https://github.com/0xMiden/faucet/pull/239)).
