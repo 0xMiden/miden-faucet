@@ -16,13 +16,8 @@ use miden_client::rpc::{Endpoint, GrpcClient};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequest,
-    TransactionRequestBuilder,
-    TransactionRequestError,
-    TransactionScript,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
+    TransactionRequestBuilder, TransactionRequestError, TransactionScript,
 };
 use miden_client::utils::Deserializable;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -125,8 +120,12 @@ impl Faucet {
         let note_screener = NoteScreener::new(sqlite_store.clone());
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
-        let state_sync_component =
-            StateSync::new(grpc_client.clone(), None, Arc::new(note_screener), None);
+        let state_sync_component = StateSync::new(
+            grpc_client.clone(),
+            Some(sqlite_store.clone()),
+            Arc::new(note_screener),
+            None,
+        );
         Self::sync_state(account.id(), &mut client, &state_sync_component).await?;
 
         let add_result = client.add_account(&account, false).await;
@@ -155,10 +154,11 @@ impl Faucet {
     #[instrument(target = COMPONENT, name = "faucet.load", fields(account_id), skip_all, err)]
     pub async fn load(config: &FaucetConfig) -> anyhow::Result<Self> {
         let span = tracing::Span::current();
+        let sqlite_store = Arc::new(SqliteStore::new(config.store_path.clone()).await?);
         let mut client = ClientBuilder::new()
             .grpc_client(&config.node_endpoint, Some(config.timeout.as_millis() as u64))
             .filesystem_keystore(KEYSTORE_PATH)?
-            .store(Arc::new(SqliteStore::new(config.store_path.clone()).await?))
+            .store(sqlite_store.clone())
             .build()
             .await
             .context("failed to build client")?;
@@ -188,11 +188,11 @@ impl Faucet {
 
         let script = TransactionScript::read_from_bytes(TX_SCRIPT)?;
 
-        let note_screener =
-            NoteScreener::new(Arc::new(SqliteStore::new(config.store_path.clone()).await?));
+        let note_screener = NoteScreener::new(sqlite_store.clone());
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
-        let state_sync_component = StateSync::new(grpc_client, None, Arc::new(note_screener), None);
+        let state_sync_component =
+            StateSync::new(grpc_client, Some(sqlite_store.clone()), Arc::new(note_screener), None);
 
         Ok(Self {
             id,
@@ -640,7 +640,7 @@ mod tests {
             client,
             state_sync_component: StateSync::new(
                 mock_rpc,
-                None,
+                Some(store.clone()),
                 Arc::new(NoteScreener::new(store.clone())),
                 None,
             ),
