@@ -12,7 +12,7 @@ use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{RandomCoin, Rpo256};
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
 use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, P2idNote};
-use miden_client::rpc::{Endpoint, GrpcClient};
+use miden_client::rpc::{Endpoint, GrpcClient, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
@@ -279,7 +279,8 @@ impl Faucet {
                 Ok(()) => (),
                 Err(error) => {
                     if let Some(ClientError::RpcError(_)) = error.downcast_ref::<ClientError>() {
-                        error!(?error, "RPC error, discarding batch");
+                        let error_chain = format!("{error:#}");
+                        error!(error = %error_chain, "RPC error, discarding batch");
                     } else {
                         anyhow::bail!(error.context("failed to mint batch"));
                     }
@@ -423,44 +424,98 @@ impl Faucet {
     /// Executes, proves, and then submits a transaction using the local miden-client.
     /// This results in submitting the transaction to the node and updating the local db to track
     /// the created notes.
-    #[instrument(target = COMPONENT, name = "faucet.mint.submit_new_transaction", skip_all, err)]
+    #[instrument(
+        target = COMPONENT,
+        name = "faucet.mint.submit_new_transaction",
+        skip_all,
+        err,
+        fields(
+            grpc.endpoint = tracing::field::Empty,
+            grpc.code = tracing::field::Empty,
+            grpc.endpoint_error = tracing::field::Empty,
+            rpc.error_kind = tracing::field::Empty,
+        )
+    )]
     async fn submit_new_transaction(
         &mut self,
         tx_request: TransactionRequest,
     ) -> Result<TransactionId, ClientError> {
         // Execute the transaction
+        let execute_span = info_span!(target: COMPONENT, "faucet.mint.execute", error.message = tracing::field::Empty);
         let tx_result = self
             .client
             .execute_transaction(self.id.account_id, tx_request)
-            .instrument(info_span!(target: COMPONENT, "faucet.mint.execute"))
-            .await?;
+            .instrument(execute_span.clone())
+            .await
+            .inspect_err(|e| {
+                execute_span.record("error.message", tracing::field::display(e));
+                record_grpc_error_fields(e);
+            })?;
         let tx_id = tx_result.executed_transaction().id();
 
         let proven_transaction = {
+            let remote_span = info_span!(
+                target: COMPONENT,
+                "faucet.mint.prove_remote",
+                error.message = tracing::field::Empty,
+            );
             let remote_proven_transaction = self
                 .client
                 .prove_transaction_with(&tx_result, self.tx_prover.clone())
-                .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_remote"))
-                .await;
+                .instrument(remote_span.clone())
+                .await
+                .inspect_err(|e| {
+                    remote_span.record("error.message", tracing::field::display(e));
+                });
             match remote_proven_transaction {
                 Ok(proven_transaction) => proven_transaction,
                 Err(error) => {
                     error!(?error, "Failed to prove transaction with remote prover");
+                    let local_span = info_span!(
+                        target: COMPONENT,
+                        "faucet.mint.prove_local",
+                        error.message = tracing::field::Empty,
+                    );
                     self.client
                         .prove_transaction(&tx_result)
-                        .instrument(info_span!(target: COMPONENT, "faucet.mint.prove_local"))
-                        .await?
+                        .instrument(local_span.clone())
+                        .await
+                        .inspect_err(|e| {
+                        local_span.record("error.message", tracing::field::display(e));
+                        record_grpc_error_fields(e);
+                    })?
                 },
             }
         };
 
+        let submit_span = info_span!(
+            target: COMPONENT,
+            "faucet.mint.submit_transaction",
+            error.message = tracing::field::Empty,
+        );
         let submission_height = self
             .client
             .submit_proven_transaction(proven_transaction, &tx_result)
-            .instrument(info_span!(target: COMPONENT, "faucet.mint.submit_transaction"))
-            .await?;
+            .instrument(submit_span.clone())
+            .await
+            .inspect_err(|e| {
+                submit_span.record("error.message", tracing::field::display(e));
+                record_grpc_error_fields(e);
+            })?;
 
-        self.client.apply_transaction(&tx_result, submission_height).await?;
+        let apply_span = info_span!(
+            target: COMPONENT,
+            "faucet.mint.apply_transaction",
+            error.message = tracing::field::Empty,
+        );
+        self.client
+            .apply_transaction(&tx_result, submission_height)
+            .instrument(apply_span.clone())
+            .await
+            .inspect_err(|e| {
+                apply_span.record("error.message", tracing::field::display(e));
+                record_grpc_error_fields(e);
+            })?;
 
         Ok(tx_id)
     }
@@ -511,6 +566,26 @@ impl Faucet {
 
 // HELPER FUNCTIONS
 // ================================================================================================
+
+/// Records gRPC error details from a [`ClientError`] onto the current tracing span.
+///
+/// Sub-step errors propagate up to the parent `submit_new_transaction` span via `?`, but the
+/// `#[instrument(..., err)]` macro only captures the error's `Display` output. This pulls the
+/// structured fields out of [`RpcError::RequestError`] so the gRPC code, endpoint, and any
+/// node-side `EndpointError` becomes queryable.
+fn record_grpc_error_fields(err: &ClientError) {
+    let span = tracing::Span::current();
+    if let ClientError::RpcError(rpc_err) = err {
+        span.record("rpc.error_kind", tracing::field::display(rpc_err));
+        if let RpcError::RequestError { endpoint, error_kind, endpoint_error, .. } = rpc_err {
+            span.record("grpc.endpoint", tracing::field::display(endpoint));
+            span.record("grpc.code", tracing::field::debug(error_kind));
+            if let Some(ee) = endpoint_error {
+                span.record("grpc.endpoint_error", tracing::field::display(ee));
+            }
+        }
+    }
+}
 
 /// Builds a collection of `P2ID` notes from a set of mint requests.
 ///
