@@ -2,7 +2,7 @@
 
 ## 0.14.3 (2026-04-28)
 
-- Updated miden-client dependency to v0.14.5 ([#TBD](https://github.com/0xMiden/faucet/pull/TBD)).
+- Updated miden-client dependency to v0.14.5 ([#244](https://github.com/0xMiden/faucet/pull/244)).
 
 ## 0.14.2 (2026-04-21)
 
