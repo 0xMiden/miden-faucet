@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.14.3 (2026-04-28)
+## 0.14.3 (2026-04-29)
 
-- Improved mint failure observability: each step inside `submit_new_transaction` now records its own error, `apply_transaction` is instrumented as a sibling span, and `RpcError` propagations record structured `grpc.endpoint`/`grpc.code`/`grpc.endpoint_error` fields on the parent span.
+- Updated miden-client dependency to v0.14.5 ([#244](https://github.com/0xMiden/faucet/pull/244)).
+- Improved mint failure observability: each step inside `submit_new_transaction` now records its own error, `apply_transaction` is instrumented as a sibling span, and `RpcError` propagations record structured `grpc.endpoint`/`grpc.code`/`grpc.endpoint_error` fields on the parent span ([#245](https://github.com/0xMiden/faucet/pull/245)).
 
 ## 0.14.2 (2026-04-21)
 
