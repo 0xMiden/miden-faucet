@@ -12,7 +12,7 @@ use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{RandomCoin, Rpo256};
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
 use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, P2idNote};
-use miden_client::rpc::{Endpoint, GrpcClient, RpcError};
+use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
@@ -430,10 +430,11 @@ impl Faucet {
         skip_all,
         err,
         fields(
-            grpc.endpoint = tracing::field::Empty,
-            grpc.code = tracing::field::Empty,
-            grpc.endpoint_error = tracing::field::Empty,
-            rpc.error_kind = tracing::field::Empty,
+            rpc.system = tracing::field::Empty,
+            rpc.method = tracing::field::Empty,
+            rpc.grpc.status_code = tracing::field::Empty,
+            exception.type = tracing::field::Empty,
+            exception.message = tracing::field::Empty,
         )
     )]
     async fn submit_new_transaction(
@@ -441,14 +442,14 @@ impl Faucet {
         tx_request: TransactionRequest,
     ) -> Result<TransactionId, ClientError> {
         // Execute the transaction
-        let execute_span = info_span!(target: COMPONENT, "faucet.mint.execute", error.message = tracing::field::Empty);
+        let execute_span = info_span!(target: COMPONENT, "faucet.mint.execute", exception.message = tracing::field::Empty);
         let tx_result = self
             .client
             .execute_transaction(self.id.account_id, tx_request)
             .instrument(execute_span.clone())
             .await
             .inspect_err(|e| {
-                execute_span.record("error.message", tracing::field::display(e));
+                execute_span.record("exception.message", tracing::field::display(e));
                 record_grpc_error_fields(e);
             })?;
         let tx_id = tx_result.executed_transaction().id();
@@ -457,7 +458,7 @@ impl Faucet {
             let remote_span = info_span!(
                 target: COMPONENT,
                 "faucet.mint.prove_remote",
-                error.message = tracing::field::Empty,
+                exception.message = tracing::field::Empty,
             );
             let remote_proven_transaction = self
                 .client
@@ -465,7 +466,7 @@ impl Faucet {
                 .instrument(remote_span.clone())
                 .await
                 .inspect_err(|e| {
-                    remote_span.record("error.message", tracing::field::display(e));
+                    remote_span.record("exception.message", tracing::field::display(e));
                 });
             match remote_proven_transaction {
                 Ok(proven_transaction) => proven_transaction,
@@ -474,14 +475,14 @@ impl Faucet {
                     let local_span = info_span!(
                         target: COMPONENT,
                         "faucet.mint.prove_local",
-                        error.message = tracing::field::Empty,
+                        exception.message = tracing::field::Empty,
                     );
                     self.client
                         .prove_transaction(&tx_result)
                         .instrument(local_span.clone())
                         .await
                         .inspect_err(|e| {
-                        local_span.record("error.message", tracing::field::display(e));
+                        local_span.record("exception.message", tracing::field::display(e));
                         record_grpc_error_fields(e);
                     })?
                 },
@@ -491,7 +492,7 @@ impl Faucet {
         let submit_span = info_span!(
             target: COMPONENT,
             "faucet.mint.submit_transaction",
-            error.message = tracing::field::Empty,
+            exception.message = tracing::field::Empty,
         );
         let submission_height = self
             .client
@@ -499,21 +500,21 @@ impl Faucet {
             .instrument(submit_span.clone())
             .await
             .inspect_err(|e| {
-                submit_span.record("error.message", tracing::field::display(e));
+                submit_span.record("exception.message", tracing::field::display(e));
                 record_grpc_error_fields(e);
             })?;
 
         let apply_span = info_span!(
             target: COMPONENT,
             "faucet.mint.apply_transaction",
-            error.message = tracing::field::Empty,
+            exception.message = tracing::field::Empty,
         );
         self.client
             .apply_transaction(&tx_result, submission_height)
             .instrument(apply_span.clone())
             .await
             .inspect_err(|e| {
-                apply_span.record("error.message", tracing::field::display(e));
+                apply_span.record("exception.message", tracing::field::display(e));
                 record_grpc_error_fields(e);
             })?;
 
@@ -567,23 +568,52 @@ impl Faucet {
 // HELPER FUNCTIONS
 // ================================================================================================
 
-/// Records gRPC error details from a [`ClientError`] onto the current tracing span.
+/// Records gRPC error details from a [`ClientError`] onto the current tracing span using the
+/// OpenTelemetry RPC and exception semantic conventions
+/// (<https://opentelemetry.io/docs/specs/semconv/rpc/grpc/>).
 ///
 /// Sub-step errors propagate up to the parent `submit_new_transaction` span via `?`, but the
 /// `#[instrument(..., err)]` macro only captures the error's `Display` output. This pulls the
-/// structured fields out of [`RpcError::RequestError`] so the gRPC code, endpoint, and any
-/// node-side `EndpointError` becomes queryable.
+/// structured fields out of [`RpcError::RequestError`] and records them as `rpc.system`,
+/// `rpc.method`, `rpc.grpc.status_code`, `exception.type`, and `exception.message`.
 fn record_grpc_error_fields(err: &ClientError) {
     let span = tracing::Span::current();
     if let ClientError::RpcError(rpc_err) = err {
-        span.record("rpc.error_kind", tracing::field::display(rpc_err));
+        span.record("exception.message", tracing::field::display(rpc_err));
         if let RpcError::RequestError { endpoint, error_kind, endpoint_error, .. } = rpc_err {
-            span.record("grpc.endpoint", tracing::field::display(endpoint));
-            span.record("grpc.code", tracing::field::debug(error_kind));
+            span.record("rpc.system", "grpc");
+            span.record("rpc.method", tracing::field::display(endpoint));
+            span.record("rpc.grpc.status_code", grpc_status_code(error_kind));
+            span.record("exception.type", tracing::field::debug(error_kind));
             if let Some(ee) = endpoint_error {
-                span.record("grpc.endpoint_error", tracing::field::display(ee));
+                // Override with the more specific node-side message when available.
+                span.record("exception.message", tracing::field::display(ee));
             }
         }
+    }
+}
+
+/// Maps a [`GrpcError`] variant to its canonical gRPC numeric status code, as defined by
+/// <https://github.com/grpc/grpc/blob/master/doc/statuscodes.md>. Used for the
+/// `rpc.grpc.status_code` OpenTelemetry attribute.
+fn grpc_status_code(kind: &GrpcError) -> i64 {
+    match kind {
+        GrpcError::Cancelled => 1,
+        GrpcError::Unknown(_) => 2,
+        GrpcError::InvalidArgument => 3,
+        GrpcError::DeadlineExceeded => 4,
+        GrpcError::NotFound => 5,
+        GrpcError::AlreadyExists => 6,
+        GrpcError::PermissionDenied => 7,
+        GrpcError::ResourceExhausted => 8,
+        GrpcError::FailedPrecondition => 9,
+        GrpcError::Aborted => 10,
+        GrpcError::OutOfRange => 11,
+        GrpcError::Unimplemented => 12,
+        GrpcError::Internal => 13,
+        GrpcError::Unavailable => 14,
+        GrpcError::DataLoss => 15,
+        GrpcError::Unauthenticated => 16,
     }
 }
 
