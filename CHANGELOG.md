@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.0-alpha.1 (TBD)
+
+- Updated miden-client dependency to v0.16.0-alpha.1 ([#259](https://github.com/0xMiden/faucet/pull/259))
+
+## 0.15.1 (2026-06-15)
+
+- Fixed faucet minting to stamp generated assets with the callback flag derived from the faucet account.
+
 ## 0.15.0 (2026-06-12)
 
 - Added `note_transport_url` field to the `/get_metadata` endpoint response ([#243](https://github.com/0xMiden/faucet/pull/243)).
