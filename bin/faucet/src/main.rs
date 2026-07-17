@@ -16,18 +16,23 @@ use clap::{Parser, Subcommand};
 use miden_client::account::component::{
     AccessControl,
     AuthScheme,
-    BurnPolicyConfig,
+    BurnPolicy,
     FungibleFaucet,
-    MintPolicyConfig,
-    PolicyRegistration,
+    MintPolicy,
     TokenName,
     TokenPolicyManager,
     TransferPolicy,
-    create_fungible_faucet,
+    create_singlesig_user_fungible_faucet,
 };
 use miden_client::account::{Account, AccountFile, AccountType};
 use miden_client::asset::TokenSymbol;
-use miden_client::auth::{AuthMethod, AuthSecretKey};
+use miden_client::auth::{
+    Approver,
+    AuthSecretKey,
+    AuthSingleSigAcl,
+    AuthSingleSigAclConfig,
+    PublicKeyCommitment,
+};
 use miden_client::crypto::RandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::note_transport::grpc::GrpcNoteTransportClient;
@@ -603,28 +608,28 @@ fn create_faucet_account(
         .build()
         .context("failed to build fungible faucet component")?;
 
-    let auth_method = AuthMethod::SingleSig {
-        approver: (secret.public_key().to_commitment().into(), AuthScheme::Falcon512Poseidon2),
-    };
+    let auth_component = AuthSingleSigAcl::new(
+        Approver::new(
+            PublicKeyCommitment::from(secret.public_key()),
+            AuthScheme::Falcon512Poseidon2,
+        ),
+        AuthSingleSigAclConfig::default(),
+    );
 
     // Permissionless mint/burn/send/receive policies.
-    let token_policy_manager = TokenPolicyManager::new()
-        .with_mint_policy(MintPolicyConfig::AllowAll, PolicyRegistration::Active)
-        .context("failed to set mint policy")?
-        .with_burn_policy(BurnPolicyConfig::AllowAll, PolicyRegistration::Active)
-        .context("failed to set burn policy")?
-        .with_send_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
-        .context("failed to set send policy")?
-        .with_receive_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
-        .context("failed to set receive policy")?;
+    let token_policy_manager = TokenPolicyManager::builder()
+        .active_mint_policy(MintPolicy::allow_all())
+        .active_burn_policy(BurnPolicy::allow_all())
+        .active_send_policy(TransferPolicy::allow_all())
+        .active_receive_policy(TransferPolicy::allow_all())
+        .build();
 
-    let account = create_fungible_faucet(
+    let account = create_singlesig_user_fungible_faucet(
         rng.random(),
         faucet,
-        AccountType::Public,
-        auth_method,
-        AccessControl::AuthControlled,
+        auth_component,
         token_policy_manager,
+        AccountType::Public,
     )
     .context("failed to create basic fungible faucet account")?;
 

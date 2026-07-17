@@ -6,12 +6,12 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::FungibleFaucet;
 use miden_client::account::{Account, AccountId, Address, NetworkId};
-use miden_client::asset::{AssetCallbackFlag, FungibleAsset};
+use miden_client::asset::FungibleAsset;
 use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{RandomCoin, Rpo256};
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
-use miden_client::note::{Note, NoteAttachments, NoteError, NoteId, P2idNote};
+use miden_client::note::{Note, NoteError, NoteId, P2idNote};
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
@@ -399,8 +399,8 @@ impl Faucet {
             // SAFETY: these are p2id notes with only one fungible asset
             let asset = note.assets().iter().next().unwrap().unwrap_fungible();
             let amount = asset.amount().as_u64();
-            // The faucet registers transfer policies, which enable asset callbacks.
-            let asset_key = asset.with_callbacks(AssetCallbackFlag::Enabled).to_key_word();
+            // Match the key `mint_and_send` derives for this faucet.
+            let asset_key = asset.to_id_word();
 
             note_data.extend(note.recipient().digest().iter().rev());
             note_data.push(Felt::from(note.metadata().note_type()));
@@ -633,23 +633,21 @@ fn build_p2id_notes(
     // ids are validated on the request level.
     let mut notes = Vec::new();
     for request in requests {
-        // The faucet enables asset callbacks (it registers transfer policies), so the asset it
-        // mints carries the `Enabled` callbacks flag
+        // Match the asset `mint_and_send` mints, so the local note id matches on-chain.
         // SAFETY: source is definitely a faucet account, and the amount is valid.
-        let asset = FungibleAsset::new(source.account_id, request.asset_amount.base_units())
-            .unwrap()
-            .with_callbacks(AssetCallbackFlag::Enabled);
-        let note = P2idNote::create(
-            source.account_id,
-            request.account_id,
-            vec![asset.into()],
-            request.note_type.into(),
-            NoteAttachments::default(),
-            rng,
-        )
+        let asset =
+            FungibleAsset::new(source.account_id, request.asset_amount.base_units()).unwrap();
+        let note = Note::from(
+            P2idNote::builder()
+                .sender(source.account_id)
+                .target(request.account_id)
+                .asset(asset)
+                .note_type(request.note_type.into())
+                .generate_serial_number(rng)
+                .build()
         .inspect_err(
             |err| error!(request.account_id=%request.account_id, ?err, "failed to build note"),
-        )?;
+        )?);
         notes.push(note);
     }
     Ok(notes)
@@ -661,19 +659,23 @@ mod tests {
 
     use miden_client::account::AccountType;
     use miden_client::account::component::{
-        AccessControl,
         AuthScheme,
-        BurnPolicyConfig,
+        BurnPolicy,
         FungibleFaucet,
-        MintPolicyConfig,
-        PolicyRegistration,
+        MintPolicy,
         TokenName,
         TokenPolicyManager,
         TransferPolicy,
-        create_fungible_faucet,
+        create_singlesig_user_fungible_faucet,
     };
     use miden_client::asset::TokenSymbol;
-    use miden_client::auth::{AuthMethod, AuthSecretKey};
+    use miden_client::auth::{
+        Approver,
+        AuthSecretKey,
+        AuthSingleSigAcl,
+        AuthSingleSigAclConfig,
+        PublicKeyCommitment,
+    };
     use miden_client::crypto::rpo_falcon512::SecretKey;
     use miden_client::store::{NoteFilter, Store};
     use miden_client::testing::MockChain;
@@ -741,27 +743,27 @@ mod tests {
             .build()
             .unwrap();
 
-        let auth_method = AuthMethod::SingleSig {
-            approver: (secret.public_key().to_commitment().into(), AuthScheme::Falcon512Poseidon2),
-        };
+        let approver = Approver::new(
+            PublicKeyCommitment::from(secret.public_key()),
+            AuthScheme::Falcon512Poseidon2,
+        );
 
-        let token_policy_manager = TokenPolicyManager::new()
-            .with_mint_policy(MintPolicyConfig::AllowAll, PolicyRegistration::Active)
-            .unwrap()
-            .with_burn_policy(BurnPolicyConfig::AllowAll, PolicyRegistration::Active)
-            .unwrap()
-            .with_send_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
-            .unwrap()
-            .with_receive_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
-            .unwrap();
+        let auth_component =
+            AuthSingleSigAcl::new(approver, AuthSingleSigAclConfig::new(BTreeSet::new()).unwrap());
 
-        let account = create_fungible_faucet(
+        let token_policy_manager = TokenPolicyManager::builder()
+            .active_mint_policy(MintPolicy::allow_all())
+            .active_burn_policy(BurnPolicy::allow_all())
+            .active_send_policy(TransferPolicy::allow_all())
+            .active_receive_policy(TransferPolicy::allow_all())
+            .build();
+
+        let account = create_singlesig_user_fungible_faucet(
             rand::random(),
             faucet,
-            AccountType::Public,
-            auth_method,
-            AccessControl::AuthControlled,
+            auth_component,
             token_policy_manager,
+            AccountType::Public,
         )
         .unwrap();
         let key = AuthSecretKey::Falcon512Poseidon2(secret);
