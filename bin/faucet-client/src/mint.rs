@@ -11,7 +11,11 @@ use miden_client::store::NoteRecordError;
 use miden_client::transaction::{TransactionId, TransactionRequestBuilder};
 use miden_client_cli::CliClient;
 use miden_faucet_lib::requests::{
-    GetPowResponse, GetTokensQueryParams, GetTokensResponse, MintResponse, PowQueryParams,
+    GetPowResponse,
+    GetTokensQueryParams,
+    GetTokensResponse,
+    MintResponse,
+    PowQueryParams,
 };
 use miden_pow_rate_limiter::{Challenge, ChallengeError};
 use rand::Rng;
