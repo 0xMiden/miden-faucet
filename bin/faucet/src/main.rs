@@ -14,7 +14,6 @@ use std::time::Duration;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use miden_client::account::component::{
-    AccessControl,
     AuthScheme,
     BurnPolicy,
     FungibleFaucet,
