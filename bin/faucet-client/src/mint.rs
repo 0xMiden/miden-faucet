@@ -9,7 +9,7 @@ use miden_client::address::AddressId;
 use miden_client::note::{NoteId, get_input_note_with_id_prefix};
 use miden_client::store::NoteRecordError;
 use miden_client::transaction::{TransactionId, TransactionRequestBuilder};
-use miden_client_cli::{CliClient, DebugMode};
+use miden_client_cli::CliClient;
 use miden_faucet_lib::requests::{
     GetPowResponse,
     GetTokensQueryParams,
@@ -103,7 +103,7 @@ impl MintCmd {
         note_id: NoteId,
     ) -> Result<(), MintClientError> {
         println!("Initializing client...");
-        let mut client = CliClient::new(DebugMode::Disabled)
+        let mut client = CliClient::new()
             .await
             .map_err(|e| MintClientError::ClientConfig(e.to_string()))?;
 
@@ -152,8 +152,7 @@ impl MintCmd {
             .build()
             .map_err(|e| MintClientError::ConsumeTransaction(e.to_string()))?;
 
-        client
-            .submit_new_transaction(account_id, tx_request)
+        Box::pin(client.submit_new_transaction(account_id, tx_request))
             .await
             .map_err(|e| MintClientError::ConsumeTransaction(e.to_string()))?;
 

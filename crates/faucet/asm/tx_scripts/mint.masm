@@ -32,7 +32,8 @@ end
 #! - RECIPIENT is the recipient of the asset, i.e.,
 #!   hash(hash(hash(serial_num, [0; 4]), script_root), storage_commitment).
 #! - ASSET_KEY is the vault key of the fungible asset to mint (constant per faucet).
-begin
+@transaction_script
+pub proc main
     # Set the transaction expiration delta (10 blocks)
     push.EXPIRATION_DELTA
     exec.::miden::protocol::tx::update_expiration_block_delta

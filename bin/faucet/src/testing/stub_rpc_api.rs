@@ -1,12 +1,14 @@
 use anyhow::Context;
-use miden_node_proto::generated::rpc::api_server;
-use miden_node_proto::generated::{self as proto};
 use miden_testing::MockChain;
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{Request, Response, Status};
 use tonic_web::GrpcWebLayer;
 use url::Url;
+
+use super::proto;
+use super::proto::rpc::api_server;
+use super::proto::to_proto_block_header;
 
 pub struct StubRpcApi;
 
@@ -19,7 +21,7 @@ impl api_server::Api for StubRpcApi {
         let mock_chain = MockChain::new();
 
         Ok(Response::new(proto::rpc::BlockHeaderByNumberResponse {
-            block_header: Some(mock_chain.latest_block_header().into()),
+            block_header: Some(to_proto_block_header(&mock_chain.latest_block_header())),
             mmr_path: None,
             chain_length: None,
         }))
@@ -173,7 +175,7 @@ impl api_server::Api for StubRpcApi {
         Ok(Response::new(proto::rpc::SyncChainMmrResponse {
             block_range: Some(proto::rpc::BlockRange { block_from: 0, block_to: 0 }),
             mmr_delta: Some(proto::primitives::MmrDelta { forest: 0, data: vec![] }),
-            block_header: Some(mock_chain.latest_block_header().into()),
+            block_header: Some(to_proto_block_header(&mock_chain.latest_block_header())),
             block_signature: None,
         }))
     }
