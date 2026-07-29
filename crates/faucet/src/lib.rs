@@ -676,7 +676,10 @@ mod tests {
         AuthSingleSigAclConfig,
         PublicKeyCommitment,
     };
+    use miden_client::block::BlockNumber;
+    use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::crypto::rpo_falcon512::SecretKey;
+    use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::{NoteFilter, Store};
     use miden_client::testing::MockChain;
     use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
@@ -783,6 +786,24 @@ mod tests {
             .unwrap();
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&account, false).await.unwrap();
+
+        // The mock RPC serves no transaction encryption key, so seed an unattested one:
+        // submission seals against it and the mock node ignores the sealed payload.
+        let genesis_commitment = client
+            .get_block_header_by_num(BlockNumber::GENESIS)
+            .await
+            .unwrap()
+            .expect("genesis header must be in place")
+            .0
+            .commitment();
+        client
+            .seed_transaction_encryption_key(TransactionEncryptionKey::new_unattested(
+                b"mock-key-id".to_vec(),
+                KeyExchangeKey::new().public_key(),
+                genesis_commitment,
+            ))
+            .await
+            .unwrap();
 
         let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
         Faucet {
