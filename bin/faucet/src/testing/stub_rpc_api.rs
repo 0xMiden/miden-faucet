@@ -2,10 +2,10 @@ use std::sync::OnceLock;
 
 use anyhow::Context;
 use miden_client::block::{BlockHeader, ValidatorKeys};
+use miden_client::crypto::ecdsa_k256_keccak::SigningKey;
 use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
 use miden_client::rpc::encryption::attestation_commitment;
 use miden_client::utils::Serializable;
-use miden_protocol::crypto::dsa::ecdsa_k256_keccak::SigningKey;
 use miden_testing::MockChain;
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -258,7 +258,7 @@ impl api_server::Api for StubRpcApi {
             block_range: Some(proto::rpc::BlockRange { block_from: 0, block_to: 0 }),
             mmr_delta: Some(proto::primitives::MmrDelta { forest: 0, data: vec![] }),
             block_header: Some(to_proto_block_header(&stub_chain().genesis)),
-            block_signature: None,
+            block_signatures: vec![],
         }))
     }
 

@@ -66,12 +66,12 @@ must_use_candidate          = "allow" # This marks many fn's which isn't helpful
 should_panic_without_expect = "allow" # We don't care about the specific panic message.
 # End of pedantic lints.
 
-# TEMPORARY: points the client crates at the encrypted-transaction-inputs branch
-# (0xMiden/rust-sdk#2341), pending the next alpha release.
+# TEMPORARY: points the client crates at the rust-sdk next branch, which carries the
+# encrypted-transaction-inputs work (0xMiden/rust-sdk#2341), pending the next alpha release.
 [patch.crates-io]
-miden-client              = { branch = "encrypted-tx-inputs", git = "https://github.com/0xMiden/rust-sdk" }
-miden-client-cli          = { branch = "encrypted-tx-inputs", git = "https://github.com/0xMiden/rust-sdk" }
-miden-client-sqlite-store = { branch = "encrypted-tx-inputs", git = "https://github.com/0xMiden/rust-sdk" }
+miden-client              = { branch = "next", git = "https://github.com/0xMiden/rust-sdk" }
+miden-client-cli          = { branch = "next", git = "https://github.com/0xMiden/rust-sdk" }
+miden-client-sqlite-store = { branch = "next", git = "https://github.com/0xMiden/rust-sdk" }
 # The stub node's protos must match the node line the patched client speaks, which includes
 # the transaction encryption key endpoint.
-miden-node-proto-build = { git = "https://github.com/0xMiden/node.git", rev = "74e4f327b8f654d95afefaea0e9f74a7a4571cd9" }
+miden-node-proto-build = { git = "https://github.com/0xMiden/node.git", rev = "b4ece8c9036745840e1cdd904a10b573283c37e2" }
