@@ -23,9 +23,9 @@ miden-faucet-lib       = { path = "crates/faucet", version = "0.16.0-alpha.1" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.16.0-alpha.1" }
 
 # Miden dependencies.
-miden-client              = { version = "0.16.0-alpha.1" }
-miden-client-cli          = { version = "0.16.0-alpha.1" }
-miden-client-sqlite-store = { version = "0.16.0-alpha.1" }
+miden-client              = { branch = "next", git = "https://github.com/0xMiden/rust-sdk" }
+miden-client-cli          = { branch = "next", git = "https://github.com/0xMiden/rust-sdk" }
+miden-client-sqlite-store = { branch = "next", git = "https://github.com/0xMiden/rust-sdk" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
@@ -65,13 +65,3 @@ module_name_repetitions     = "allow" # Many triggers, and is a stylistic choice
 must_use_candidate          = "allow" # This marks many fn's which isn't helpful.
 should_panic_without_expect = "allow" # We don't care about the specific panic message.
 # End of pedantic lints.
-
-# TEMPORARY: points the client crates at the rust-sdk next branch, which carries the
-# encrypted-transaction-inputs work (0xMiden/rust-sdk#2341), pending the next alpha release.
-[patch.crates-io]
-miden-client              = { branch = "next", git = "https://github.com/0xMiden/rust-sdk" }
-miden-client-cli          = { branch = "next", git = "https://github.com/0xMiden/rust-sdk" }
-miden-client-sqlite-store = { branch = "next", git = "https://github.com/0xMiden/rust-sdk" }
-# The stub node's protos must match the node line the patched client speaks, which includes
-# the transaction encryption key endpoint.
-miden-node-proto-build = { git = "https://github.com/0xMiden/node.git", rev = "b4ece8c9036745840e1cdd904a10b573283c37e2" }
