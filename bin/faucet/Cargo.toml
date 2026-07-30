@@ -65,7 +65,7 @@ uuid          = { workspace = true }
 # Used to generate the node RPC types for the stub node used in tests 
 # (so the dependency only lies in the protobuf interface).
 [build-dependencies]
-miden-node-proto-build = { version = "0.16.0-alpha.2" }
+miden-node-proto-build = { git = "https://github.com/0xMiden/node.git", rev = "b4ece8c9036745840e1cdd904a10b573283c37e2" }
 tonic-prost-build      = { version = "0.14" }
 
 # Required to avoid false positives in cargo-machete
