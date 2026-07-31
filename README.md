@@ -17,7 +17,7 @@ The faucet comes with two CLI tools:
 make install-faucet
 ```
 
-2. Initialize the faucet server. This will generate a new account with the specified token configuration and save the account data to a local SQLite store:
+2. Initialize the faucet server. This will generate an new operator account and a network faucet account with the specified token configuration, and save the account data to a local SQLite store:
 
 ```bash
 miden-faucet init \
@@ -26,8 +26,19 @@ miden-faucet init \
   --max-supply 100000000000000000 \
   --network testnet
 ```
+
 > [!TIP]
-> This account will not be created on chain yet, creation on chain will happen on the first minting transaction.
+> `miden-faucet init` can also be run with existing operator and faucet accounts:
+>
+> ```bash
+> miden-faucet init \
+>   --import /path/to/operator_account.mac \
+>   --faucet-account-id 0x<faucet_account_id> \
+>   --network testnet
+> ```
+>
+> - `--import` — path to an exported operator account file
+> - `--faucet-account-id` — ID of a faucet account that already exists on the target network
 
 3. Start the faucet:
 ```bash

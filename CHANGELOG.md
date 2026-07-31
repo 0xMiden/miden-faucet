@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.16.0 (TBD)
+
+- Migrate faucet to using a network account ([#262](https://github.com/0xMiden/faucet/pull/262)).
+
 ## 0.16.0-alpha.1 (2026-07-20)
 
 - Updated miden-client dependency to v0.16.0-alpha.1 ([#259](https://github.com/0xMiden/faucet/pull/259))
