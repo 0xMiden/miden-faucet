@@ -428,7 +428,11 @@ impl Faucet {
         {
             let mut cache = self.p2id_notes.write().expect("p2id note cache is poisoned");
             prune_stale_p2id_notes(&mut cache, after_block_num);
-            for note in p2id_notes {
+            // Only private notes are cached
+            let private_notes = p2id_notes
+                .into_iter()
+                .filter(|note| matches!(note.metadata().note_type(), ProtocolNoteType::Private));
+            for note in private_notes {
                 cache.insert(note.id().to_hex(), CachedP2idNote { note, after_block_num });
             }
         }
@@ -903,13 +907,13 @@ pub fn create_faucet_operator_account() -> anyhow::Result<(Account, AuthSecretKe
 mod tests {
     use std::env::temp_dir;
 
-    use miden_client::block::BlockNumber;
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
     use miden_client::testing::MockChain;
     use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client::testing::mock::MockRpcApi;
+    use miden_client::{block::BlockNumber, testing::NoteBuilder};
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
@@ -994,10 +998,16 @@ mod tests {
         let mut faucet = build_faucet(store.clone()).await;
         faucet.run(rx_mint_requests, batch_size).await.unwrap();
 
-        for receiver in receivers {
+        // Requests alternate public/private, and `receivers` preserves that order. Only the private
+        // notes are cached; a public note's details are on chain, so the faucet needn't keep them.
+        for (i, receiver) in receivers.into_iter().enumerate() {
             let response = receiver.await.unwrap().unwrap();
-            let note = faucet.get_p2id_note(response.note_id);
-            assert!(note.is_some());
+            let cached = faucet.get_p2id_note(response.note_id);
+            if i % 2 == 0 {
+                assert!(cached.is_none(), "public note {i} should not be cached");
+            } else {
+                assert!(cached.is_some(), "private note {i} should be cached");
+            }
         }
     }
 
