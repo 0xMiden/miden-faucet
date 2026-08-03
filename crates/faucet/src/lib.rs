@@ -5,11 +5,25 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{
-    AccessControl, BasicWallet, BurnPolicy, FungibleFaucet, MintPolicy, Ownable2Step, TokenName,
-    TokenPolicyManager, TransferPolicy, create_network_fungible_faucet,
+    AccessControl,
+    BasicWallet,
+    BurnPolicy,
+    FungibleFaucet,
+    MintPolicy,
+    Ownable2Step,
+    TokenName,
+    TokenPolicyManager,
+    TransferPolicy,
+    create_network_fungible_faucet,
 };
 use miden_client::account::{
-    Account, AccountBuilder, AccountComponent, AccountId, AccountType, Address, NetworkId,
+    Account,
+    AccountBuilder,
+    AccountComponent,
+    AccountId,
+    AccountType,
+    Address,
+    NetworkId,
 };
 use miden_client::asset::{FungibleAsset, TokenSymbol};
 use miden_client::auth::{Approver, AuthScheme, AuthSecretKey, AuthSingleSig};
@@ -19,15 +33,26 @@ use miden_client::crypto::RandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
 use miden_client::note::{
-    MintNote, MintNoteStorage, NetworkAccountTarget, Note, NoteError, NoteExecutionHint, NoteId,
-    NoteType as ProtocolNoteType, P2idNote,
+    MintNote,
+    MintNoteStorage,
+    NetworkAccountTarget,
+    Note,
+    NoteError,
+    NoteExecutionHint,
+    NoteId,
+    NoteType as ProtocolNoteType,
+    P2idNote,
 };
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
-    TransactionRequestBuilder, TransactionRequestError,
+    LocalTransactionProver,
+    TransactionId,
+    TransactionProver,
+    TransactionRequest,
+    TransactionRequestBuilder,
+    TransactionRequestError,
 };
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
@@ -907,13 +932,13 @@ pub fn create_faucet_operator_account() -> anyhow::Result<(Account, AuthSecretKe
 mod tests {
     use std::env::temp_dir;
 
+    use miden_client::block::BlockNumber;
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
-    use miden_client::testing::MockChain;
     use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client::testing::mock::MockRpcApi;
-    use miden_client::{block::BlockNumber, testing::NoteBuilder};
+    use miden_client::testing::MockChain;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
