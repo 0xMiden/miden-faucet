@@ -37,8 +37,8 @@ miden-faucet start \
 ```
 ## Docker
 
-Images are published for every release. Pick a version from the
-[releases](https://github.com/0xMiden/faucet/releases) page.
+Every release is published as an image tagged with that release's version. Replace `<version>` below with a tag
+from the [releases](https://github.com/0xMiden/faucet/releases) page, for example `v0.16.0-alpha.1`.
 
 ```bash
 docker pull ghcr.io/0xmiden/miden-faucet:<version>
