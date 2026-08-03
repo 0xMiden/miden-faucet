@@ -48,6 +48,8 @@ use crate::types::AssetAmount;
 const COMPONENT: &str = "miden-faucet-client";
 
 const KEYSTORE_PATH: &str = "keystore";
+/// How long a P2ID note is kept in the cache, in blocks, before it is pruned.
+const NOTE_RETENTION_BLOCKS: u32 = 100;
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
 
@@ -425,6 +427,7 @@ impl Faucet {
         // They are cached here for `get_note` to serve.
         {
             let mut cache = self.p2id_notes.write().expect("p2id note cache is poisoned");
+            prune_stale_p2id_notes(&mut cache, after_block_num);
             for note in p2id_notes {
                 cache.insert(note.id().to_hex(), CachedP2idNote { note, after_block_num });
             }
@@ -720,6 +723,15 @@ fn grpc_status_code(kind: &GrpcError) -> i64 {
     }
 }
 
+/// Removes cached P2ID notes older than [`NOTE_RETENTION_BLOCKS`], keeping the cache bounded.
+///
+/// `current_block` is the chain tip. A note's `after_block_num` is the tip when it was cached, so
+/// it works as the note's age.
+fn prune_stale_p2id_notes(cache: &mut HashMap<String, CachedP2idNote>, current_block: BlockNumber) {
+    let threshold = current_block.saturating_sub(NOTE_RETENTION_BLOCKS);
+    cache.retain(|_, cached| cached.after_block_num >= threshold);
+}
+
 /// Checks that `operator_account_id` is the owner of `faucet_account`.
 ///
 /// # Errors
@@ -904,6 +916,52 @@ mod tests {
     use super::*;
     use crate::types::NoteType;
 
+    /// Only notes older than the retention window are pruned, and the boundary itself is kept.
+    #[test]
+    fn prunes_only_notes_past_the_retention_window() {
+        let current_block = BlockNumber::from(NOTE_RETENTION_BLOCKS + 10);
+        let note = p2id_note();
+
+        // One note per age: too old, exactly at the oldest kept block, and current.
+        let mut cache = HashMap::new();
+        for after_block_num in [
+            BlockNumber::from(9),
+            current_block.saturating_sub(NOTE_RETENTION_BLOCKS),
+            current_block,
+        ] {
+            cache.insert(
+                after_block_num.as_u32().to_string(),
+                CachedP2idNote { note: note.clone(), after_block_num },
+            );
+        }
+
+        prune_stale_p2id_notes(&mut cache, current_block);
+
+        assert!(!cache.contains_key("9"), "a note past the window should be pruned");
+        assert!(
+            cache.contains_key("10"),
+            "a note exactly at the oldest kept block should be kept"
+        );
+        assert!(cache.contains_key(&current_block.as_u32().to_string()));
+    }
+
+    /// Pruning from a chain younger than the retention window must not underflow.
+    #[test]
+    fn prunes_nothing_before_the_window_has_elapsed() {
+        let note = p2id_note();
+        let mut cache = HashMap::from([(
+            "genesis".to_owned(),
+            CachedP2idNote {
+                note,
+                after_block_num: BlockNumber::GENESIS,
+            },
+        )]);
+
+        prune_stale_p2id_notes(&mut cache, BlockNumber::from(5));
+
+        assert_eq!(cache.len(), 1, "nothing is old enough to prune yet");
+    }
+
     #[tokio::test]
     async fn batch_requests() {
         let batch_size = 32;
@@ -1006,5 +1064,18 @@ mod tests {
             operator_account_id: operator_account.id(),
             p2id_notes: P2idNoteCache::default(),
         }
+    }
+
+    /// Builds an arbitrary P2ID note; only its presence matters to the pruning tests.
+    fn p2id_note() -> Note {
+        let target = AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
+        P2idNote::builder()
+            .sender(target)
+            .target(target)
+            .asset(FungibleAsset::new(target, 1).unwrap())
+            .serial_number(Word::empty())
+            .build()
+            .unwrap()
+            .into()
     }
 }
