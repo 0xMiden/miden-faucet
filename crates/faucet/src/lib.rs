@@ -174,7 +174,7 @@ impl Faucet {
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component =
             StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
-        Self::sync_state(faucet_account_id, &mut client, &state_sync_component).await?;
+        Self::sync_state(&[faucet_account_id], &mut client, &state_sync_component).await?;
 
         let deploy = matches!(faucet_account, FaucetAccount::New(_));
         let add_result = match &faucet_account {
@@ -293,17 +293,17 @@ impl Faucet {
     /// Syncs the state of the client.
     #[instrument(target = COMPONENT, name = "faucet.sync_state", skip_all, err)]
     async fn sync_state(
-        account_id: AccountId,
+        account_ids: &[AccountId],
         client: &mut Client<FilesystemKeyStore>,
         state_sync: &StateSync,
     ) -> anyhow::Result<SyncSummary> {
-        let accounts = client
-            .account_reader(account_id)
-            .header()
-            .await
-            .ok()
-            .map(|(header, _)| vec![header])
-            .unwrap_or_default();
+        // Accounts that aren't tracked yet are skipped: `init` syncs before adding them.
+        let mut accounts = Vec::with_capacity(account_ids.len());
+        for account_id in account_ids {
+            if let Ok((header, _)) = client.account_reader(*account_id).header().await {
+                accounts.push(header);
+            }
+        }
         let output_notes = client.get_output_notes(NoteFilter::Expected).await?;
         let uncommitted_transactions =
             client.get_transactions(TransactionFilter::Uncommitted).await?;
@@ -383,8 +383,10 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
+        // Both accounts need syncing, for different reasons: the operator executes the transaction,
+        // and the faucet holds the token supply that `refresh_issuance` reads.
         let sync_summary = Self::sync_state(
-            self.operator_account_id,
+            &[self.id.account_id, self.operator_account_id],
             &mut self.client,
             &self.state_sync_component,
         )
