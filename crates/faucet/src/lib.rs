@@ -100,7 +100,7 @@ pub struct Faucet {
     issuance: watch::Sender<AssetAmount>,
     max_supply: AssetAmount,
     p2id_notes: P2idNoteCache,
-    pub operator_account_id: AccountId,
+    operator_account_id: AccountId,
 }
 
 /// Configuration for initializing and loading a faucet.
