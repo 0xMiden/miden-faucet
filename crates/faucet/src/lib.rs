@@ -5,53 +5,29 @@ use std::time::Duration;
 
 use anyhow::Context;
 use miden_client::account::component::{
-    AccessControl,
-    BasicWallet,
-    BurnPolicy,
-    FungibleFaucet,
-    MintPolicy,
-    Ownable2Step,
-    TokenName,
-    TokenPolicyManager,
-    TransferPolicy,
-    create_network_fungible_faucet,
+    AccessControl, BasicWallet, BurnPolicy, FungibleFaucet, MintPolicy, Ownable2Step, TokenName,
+    TokenPolicyManager, TransferPolicy, create_network_fungible_faucet,
 };
 use miden_client::account::{
-    Account,
-    AccountBuilder,
-    AccountComponent,
-    AccountId,
-    AccountType,
-    Address,
-    NetworkId,
+    Account, AccountBuilder, AccountComponent, AccountId, AccountType, Address, NetworkId,
 };
 use miden_client::asset::{FungibleAsset, TokenSymbol};
 use miden_client::auth::{Approver, AuthScheme, AuthSecretKey, AuthSingleSig};
+use miden_client::block::BlockNumber;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::RandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
 use miden_client::note::{
-    MintNote,
-    MintNoteStorage,
-    NetworkAccountTarget,
-    Note,
-    NoteError,
-    NoteExecutionHint,
-    NoteId,
-    NoteType as ProtocolNoteType,
-    P2idNote,
+    MintNote, MintNoteStorage, NetworkAccountTarget, Note, NoteError, NoteExecutionHint, NoteId,
+    NoteType as ProtocolNoteType, P2idNote,
 };
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequest,
-    TransactionRequestBuilder,
-    TransactionRequestError,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
+    TransactionRequestBuilder, TransactionRequestError,
 };
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
@@ -104,7 +80,16 @@ impl FaucetId {
 /// The faucet's own transaction only creates MINT notes, so the resulting P2ID notes never land in
 /// the client store. They are reconstructed at mint time and kept here so `get_note` can serve
 /// them.
-pub type P2idNoteCache = Arc<RwLock<HashMap<String, Note>>>;
+pub type P2idNoteCache = Arc<RwLock<HashMap<String, CachedP2idNote>>>;
+
+/// A cached P2ID note together with a lower bound on where it can appear on chain.
+#[derive(Clone)]
+pub struct CachedP2idNote {
+    /// The note the network will mint from the corresponding MINT note.
+    pub note: Note,
+    /// The chain tip when the MINT note was submitted.
+    pub after_block_num: BlockNumber,
+}
 
 /// Stores the current faucet state and handles minting requests.
 pub struct Faucet {
@@ -269,7 +254,7 @@ impl Faucet {
             .get_setting(DEFAULT_OPERATOR_ACCOUNT_ID_SETTING.to_owned())
             .await?
             .context("no default operator account id found")?;
-        span.record("operator_account_id", account_id.to_hex());
+        span.record("operator_account_id", operator_account_id.to_hex());
 
         // Try to update the account state with the node.
         let _ = client.import_account_by_id(account_id).await.inspect(|_| {
@@ -398,8 +383,13 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        Self::sync_state(self.operator_account_id, &mut self.client, &self.state_sync_component)
-            .await?;
+        let sync_summary = Self::sync_state(
+            self.operator_account_id,
+            &mut self.client,
+            &self.state_sync_component,
+        )
+        .await?;
+        let after_block_num = sync_summary.block_num;
 
         let span = tracing::Span::current();
 
@@ -434,7 +424,7 @@ impl Faucet {
         {
             let mut cache = self.p2id_notes.write().expect("p2id note cache is poisoned");
             for note in p2id_notes {
-                cache.insert(note.id().to_hex(), note);
+                cache.insert(note.id().to_hex(), CachedP2idNote { note, after_block_num });
             }
         }
 
@@ -645,7 +635,7 @@ impl Faucet {
     }
 
     /// Returns the cached P2ID note, if it exists. Otherwise returns `None`.
-    pub fn get_p2id_note(&self, note_id: NoteId) -> Option<Note> {
+    pub fn get_p2id_note(&self, note_id: NoteId) -> Option<CachedP2idNote> {
         self.p2id_notes
             .read()
             .expect("p2id note cache is poisoned")

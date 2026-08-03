@@ -4,8 +4,9 @@ use axum::response::IntoResponse;
 use base64::Engine;
 use base64::engine::general_purpose;
 use http::StatusCode;
-use miden_client::note::{NoteFile, NoteId};
+use miden_client::note::{NoteDetails, NoteFile, NoteId, NoteSyncHint};
 use miden_client::utils::Serializable;
+use miden_faucet_lib::CachedP2idNote;
 use serde::Deserialize;
 use tracing::instrument;
 
@@ -29,13 +30,19 @@ pub async fn get_note(
 
     // The P2ID note is minted by the network from the faucet's MINT note, so it never reaches the
     // client store. It is served from the cache the faucet populates at mint time instead.
-    let note = {
+    let CachedP2idNote { note, after_block_num } = {
         let cache = server.p2id_notes.read().expect("p2id note cache is poisoned");
         cache.get(&request.note_id.to_hex()).cloned()
     }
     .ok_or(NoteRequestError::NoteNotFound)?;
 
-    let note_file = NoteFile::from(note);
+    let tag = note.metadata().tag();
+    let (assets, _metadata, recipient, _attachments) = note.into_parts();
+    let note_file = NoteFile::ExpectedNote {
+        details: NoteDetails::new(assets, recipient),
+        sync_hint: NoteSyncHint::new(after_block_num, tag),
+    };
+
     let encoded_note = general_purpose::STANDARD.encode(note_file.to_bytes());
     let note_json = serde_json::json!({
         "note_id": request.note_id.to_string(),
