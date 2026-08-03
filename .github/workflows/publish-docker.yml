@@ -6,59 +6,217 @@ on:
 
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to release (E.G. v0.10.0-rc.1, v0.10.0). Corresponding git tag must already exist."
+      commit:
+        description: "Full git commit SHA to build (40 lowercase hex characters)."
         required: true
+        type: string
+      tag:
+        description: "Image tag to publish (E.G. demo). The v* namespace is reserved for releases."
+        required: true
+        default: demo
         type: string
 
 env:
-  version: ${{ inputs.version || github.ref_name }}
   registry: ghcr.io
+  image: ghcr.io/0xmiden/miden-faucet
+
+concurrency:
+  group: publish-docker-${{ github.event_name == 'release' && github.ref_name || inputs.tag }}
+  cancel-in-progress: false
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
-  publish:
-    runs-on:
-      labels: "ubuntu-24.04"
+  preflight:
+    name: Validate inputs
+    runs-on: ubuntu-24.04
+    if: ${{ github.repository_owner == '0xMiden' }}
+    permissions:
+      contents: read
+    outputs:
+      commit: ${{ steps.metadata.outputs.commit }}
+      created: ${{ steps.metadata.outputs.created }}
+      immutable_tag: ${{ steps.metadata.outputs.immutable_tag }}
+      tag: ${{ steps.inputs.outputs.tag }}
+    steps:
+      - name: Resolve and validate inputs
+        id: inputs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_COMMIT: ${{ inputs.commit }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${EVENT_NAME}" == "release" ]]; then
+            tag="${REF_NAME}"
+            ref="${REF_NAME}"
+          else
+            tag="${INPUT_TAG}"
+            ref="${INPUT_COMMIT}"
+
+            if [[ ! "${INPUT_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::A full, lowercase git commit SHA is required"
+              exit 1
+            fi
+
+            if [[ "${tag}" == v* ]]; then
+              echo "::error::The v* tag namespace is reserved for releases"
+              exit 1
+            fi
+          fi
+
+          if [[ ! "${tag}" =~ ^[0-9A-Za-z_][0-9A-Za-z_.-]{0,127}$ ]]; then
+            echo "::error::Invalid container tag: ${tag}"
+            exit 1
+          fi
+
+          if [[ "${tag}" == "latest" || "${tag}" == sha-* ]]; then
+            echo "::error::The latest and sha-* tag namespaces are reserved"
+            exit 1
+          fi
+
+          {
+            echo "ref=${ref}"
+            echo "tag=${tag}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ steps.inputs.outputs.ref }}
+          persist-credentials: false
+
+      - name: Prepare image metadata
+        id: metadata
+        env:
+          INPUT_COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+
+          commit="$(git rev-parse HEAD)"
+
+          if [[ -n "${INPUT_COMMIT}" && "${commit}" != "${INPUT_COMMIT}" ]]; then
+            echo "::error::Checked out ${commit}, expected ${INPUT_COMMIT}"
+            exit 1
+          fi
+
+          {
+            echo "commit=${commit}"
+            echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "immutable_tag=sha-${commit:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
     strategy:
+      fail-fast: false
       matrix:
-        component: [faucet]
-    name: Publish ${{ matrix.component }} ${{ inputs.version }}
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout repo
-        uses: actions/checkout@main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0
-          ref: ${{ inputs.version }}
+          ref: ${{ needs.preflight.outputs.commit }}
+          persist-credentials: false
 
       - name: Log in to the Container registry
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ${{ env.registry }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          cache-binary: true
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
-          images: ${{ env.registry }}/0xmiden/miden-faucet
-          tags: |
-            type=raw,value=${{ env.version }}
-
-      - name: Build and push Docker image
-        id: push
-        uses: docker/build-push-action@v5
-        with:
-          push: true
-          labels: ${{ steps.meta.outputs.labels }}
+          context: .
           file: ./Dockerfile
-          tags: ${{ env.registry }}/0xmiden/miden-faucet:${{ env.version }}
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.image }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            CREATED=${{ needs.preflight.outputs.created }}
+            VERSION=${{ needs.preflight.outputs.tag }}
+            COMMIT=${{ needs.preflight.outputs.commit }}
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digest-${{ strategy.job-index }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish manifest
+    needs: [preflight, build]
+    runs-on: ubuntu-24.04
+    environment: publish-docker
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ${{ env.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Create and push manifest list
+        env:
+          IMAGE: ${{ env.image }}
+          IMMUTABLE_TAG: ${{ needs.preflight.outputs.immutable_tag }}
+          TAG: ${{ needs.preflight.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          sources=()
+          for digest in /tmp/digests/*; do
+            sources+=("${IMAGE}@sha256:$(basename "${digest}")")
+          done
+
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${TAG}" \
+            --tag "${IMAGE}:${IMMUTABLE_TAG}" \
+            "${sources[@]}"
+
+      - name: Inspect published image
+        env:
+          IMAGE: ${{ env.image }}
+          TAG: ${{ needs.preflight.outputs.tag }}
+        run: docker buildx imagetools inspect "${IMAGE}:${TAG}"
