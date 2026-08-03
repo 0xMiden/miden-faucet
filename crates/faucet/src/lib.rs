@@ -936,9 +936,9 @@ mod tests {
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
+    use miden_client::testing::MockChain;
     use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client::testing::mock::MockRpcApi;
-    use miden_client::testing::MockChain;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
