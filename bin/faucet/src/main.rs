@@ -467,6 +467,16 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let mut faucet = Faucet::load(&config).await.context("failed to load faucet")?;
             let issuance_receiver = faucet.subscribe_issuance();
 
+            tracing::info!(
+                target: COMPONENT,
+                faucet_account_id = %faucet.faucet_id().account_id,
+                operator_account_id = %faucet.operator_id(),
+                node_endpoint = %node_endpoint,
+                note_transport_url = ?note_transport_url.as_ref().map(Url::as_str),
+                batch_size,
+                "Faucet loaded",
+            );
+
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
 
