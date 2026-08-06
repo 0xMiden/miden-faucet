@@ -290,7 +290,7 @@ impl Faucet {
     ///
     /// The requests size is guaranteed to be smaller or equal to the batch size set in
     /// `Faucet::run`.
-    #[instrument(parent = None, target = COMPONENT, name = "faucet.mint", skip_all, fields(num_requests, tx_id), err)]
+    #[instrument(parent = None, target = COMPONENT, name = "faucet.mint", skip_all, fields(num_requests, tx_id), err(Debug))]
     async fn mint(
         &mut self,
         requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
