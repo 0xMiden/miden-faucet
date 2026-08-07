@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.16.0 (TBD)
+
+- Improved mint failure observability: emit the full error chain in the `faucet.mint` span by recording errors with their `Debug` implementation ([#267](https://github.com/0xMiden/faucet/pull/267)).
+
 ## 0.16.0-alpha.1 (2026-07-20)
 
 - Updated miden-client dependency to v0.16.0-alpha.1 ([#259](https://github.com/0xMiden/faucet/pull/259))
