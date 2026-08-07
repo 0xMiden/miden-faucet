@@ -6,8 +6,10 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{
     AccessControl,
+    BasicConstantFeePolicy,
     BasicWallet,
     BurnPolicy,
+    FeePolicyManager,
     FungibleFaucet,
     MintPolicy,
     Ownable2Step,
@@ -25,13 +27,14 @@ use miden_client::account::{
     Address,
     NetworkId,
 };
-use miden_client::asset::{FungibleAsset, TokenSymbol};
+use miden_client::asset::{AssetAmount as ProtocolAssetAmount, FungibleAsset, TokenSymbol};
 use miden_client::auth::{Approver, AuthScheme, AuthSecretKey, AuthSingleSig};
 use miden_client::block::BlockNumber;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::RandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
+use miden_client::note::standards::BurnNote;
 use miden_client::note::{
     MintNote,
     MintNoteStorage,
@@ -43,7 +46,7 @@ use miden_client::note::{
     NoteType as ProtocolNoteType,
     P2idNote,
 };
-use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
+use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, NodeRpcClient, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
@@ -214,7 +217,10 @@ impl Faucet {
             Err(ClientError::AccountAlreadyTracked(_)) => {
                 warn!("Account already tracked, skipping import");
             },
-            Err(error) => anyhow::bail!("failed to add account: {error}"),
+            Err(error) => {
+                dbg!(&error);
+                anyhow::bail!("failed to add account: {error}");
+            },
         }
         // An imported faucet account is an external input, so check that the given operator really
         // is its owner. A newly created one is built with the operator as owner, so there is
@@ -863,12 +869,26 @@ fn build_mint_notes(
     Ok(mint_notes)
 }
 
+/// Reads the ID of the faucet whose asset the chain charges fees in from the genesis block header.
+pub async fn fetch_fee_faucet_id(
+    node_endpoint: &Endpoint,
+    timeout: Duration,
+) -> anyhow::Result<AccountId> {
+    let (genesis, _) = GrpcClient::new(node_endpoint, timeout.as_millis() as u64)
+        .get_block_header_by_number(Some(BlockNumber::GENESIS), false)
+        .await
+        .context("failed to fetch the genesis block header")?;
+
+    Ok(genesis.fee_parameters().fee_faucet_id())
+}
+
 /// Creates a new network faucet account from the given parameters.
 pub fn create_network_faucet_account(
     token_symbol: &str,
     max_supply: u64,
     decimals: u8,
     owner: AccountId,
+    fee_faucet_id: AccountId,
 ) -> anyhow::Result<Account> {
     let symbol = TokenSymbol::try_from(token_symbol).context("failed to parse token symbol")?;
     let name = TokenName::new(&symbol.to_string()).context("failed to derive token name")?;
@@ -878,7 +898,7 @@ pub fn create_network_faucet_account(
         .symbol(symbol)
         .decimals(decimals)
         .max_supply(
-            miden_client::asset::AssetAmount::new(max_supply)
+            ProtocolAssetAmount::new(max_supply)
                 .context("max supply exceeds the maximum asset amount")?,
         )
         .build()
@@ -894,9 +914,24 @@ pub fn create_network_faucet_account(
         .build();
 
     let mut rng = rand::rng();
-    let account =
-        create_network_fungible_faucet(rng.random(), faucet, access_control, token_policy_manager)
-            .context("failed to create basic fungible faucet account")?;
+    let fee_policy = BasicConstantFeePolicy::new()
+        .with_fees([
+            (MintNote::script_root(), ProtocolAssetAmount::ZERO),
+            (BurnNote::script_root(), ProtocolAssetAmount::ZERO),
+        ])
+        .into();
+    let fee_policy_manager = FeePolicyManager::builder()
+        .fee_faucet_id(fee_faucet_id)
+        .active_fee_policy(fee_policy)
+        .build();
+    let account = create_network_fungible_faucet(
+        rng.random(),
+        faucet,
+        access_control,
+        token_policy_manager,
+        fee_policy_manager,
+    )
+    .context("failed to create basic fungible faucet account")?;
 
     Ok(account)
 }
@@ -920,7 +955,7 @@ pub fn create_faucet_operator_account() -> anyhow::Result<(Account, AuthSecretKe
     let init_seed = rng.random();
     let account = AccountBuilder::new(init_seed)
         .account_type(AccountType::Public)
-        .with_auth_component(auth_component)
+        .with_component(auth_component)
         .with_component(BasicWallet)
         .build()?;
 
@@ -1044,15 +1079,21 @@ mod tests {
         let symbol = "TEST";
         let decimals = 6;
         let max_supply = 1_000_000_000_000;
-        let faucet_account =
-            create_network_faucet_account(symbol, max_supply, decimals, operator_account.id())
-                .unwrap();
+        let mock_chain = MockChain::new();
+        let faucet_account = create_network_faucet_account(
+            symbol,
+            max_supply,
+            decimals,
+            operator_account.id(),
+            mock_chain.fee_faucet_id(),
+        )
+        .unwrap();
 
         let keystore_path = temp_dir().join(format!("keystore-{}", Uuid::new_v4()));
         let keystore = FilesystemKeyStore::new(keystore_path.clone()).unwrap();
         keystore.add_key(&operator_secret, operator_account.id()).await.unwrap();
 
-        let mock_rpc = Arc::new(MockRpcApi::new(MockChain::new()));
+        let mock_rpc = Arc::new(MockRpcApi::new(mock_chain));
         let mut client = ClientBuilder::new()
             .rpc(mock_rpc.clone())
             .store(store.clone())
