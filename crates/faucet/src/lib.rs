@@ -447,6 +447,15 @@ impl Faucet {
             self.operator_account_id,
         )?;
 
+        // Build and submit transaction
+        let tx_request = Faucet::create_transaction(&mint_notes)
+            .context("faucet failed to create transaction")?;
+        // The MINT notes are sent by the operator, so the operator must be the executing account.
+        let tx_id = Box::pin(self.submit_new_transaction(self.operator_account_id, tx_request))
+            .await
+            .context("faucet failed to submit transaction")?;
+        span.record("tx_id", tx_id.to_string());
+
         // The faucet's transaction only creates the MINT notes; the P2ID notes are minted later by
         // the network, so they never land in the client store.
         // They are cached here for `get_note` to serve.
@@ -461,16 +470,6 @@ impl Faucet {
                 cache.insert(note.id().to_hex(), CachedP2idNote { note, after_block_num });
             }
         }
-
-        // Build and submit transaction
-        let tx_request = Faucet::create_transaction(&mint_notes)
-            .context("faucet failed to create transaction")?;
-        // The MINT notes are sent by the operator, so the operator must be the executing account.
-        let tx_id = Box::pin(self.submit_new_transaction(self.operator_account_id, tx_request))
-            .await
-            .context("faucet failed to submit transaction")?;
-        span.record("tx_id", tx_id.to_string());
-
         // Refresh the issuance cache from the store after submitting the transaction
         self.refresh_issuance().await;
 
