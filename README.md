@@ -46,6 +46,7 @@ miden-faucet start \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
+
 ## Docker
 
 ```bash
@@ -74,7 +75,8 @@ docker run --rm -v miden-faucet-data:/faucet \
 docker run --rm -v miden-faucet-data:/faucet \
   -e MIDEN_FAUCET_NETWORK=testnet \
   -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
-  -e MIDEN_FAUCET_IMPORT_ACCOUNT_PATH=/faucet/accounts/faucet_miden.mac \
+  -e MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH=/faucet/accounts/faucet_operator_miden.mac \
+  -e MIDEN_FAUCET_FAUCET_ACCOUNT_ID=<FAUCET_ACCOUNT_ID> \
   -v /path/to/your/accounts:/faucet/accounts:ro \
   ghcr.io/0xmiden/miden-faucet:latest init
 ```
