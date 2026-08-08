@@ -114,7 +114,14 @@ impl ChallengeCache {
     /// maps.
     pub fn drop_expired_challenges(&mut self, current_time: u64) {
         // Timestamps lower than this are expired. Add 1 since `BTreeMap::split_off` is inclusive.
-        let limit_timestamp = current_time - self.challenge_lifetime.as_secs() + 1;
+        let Some(limit_timestamp) = current_time
+            .checked_sub(self.challenge_lifetime.as_secs())
+            .and_then(|timestamp| timestamp.checked_add(1))
+        else {
+            // The clock has not yet reached a full challenge lifetime. Since timestamps cannot be
+            // negative, no challenge can be old enough to expire.
+            return;
+        };
 
         let valid_challenges = self.challenges.split_off(&limit_timestamp);
         let expired_challenges = std::mem::replace(&mut self.challenges, valid_challenges);
@@ -186,5 +193,20 @@ mod tests {
         assert!(!cache.challenges.contains_key(&insertion_timestamp));
         assert_eq!(cache.challenges_per_domain.get(&domain), None);
         assert_eq!(cache.challenges_timestamps.get(&(requestor, domain)), None);
+    }
+
+    #[test]
+    fn cleanup_before_one_lifetime_does_not_underflow_or_remove_challenges() {
+        let mut cache = ChallengeCache::new(Duration::from_secs(10));
+        let requestor = [0u8; 32];
+        let domain = [1u8; 32];
+        let challenge = Challenge::from_parts(u64::MAX, 2, 1, requestor, domain, [0u8; 32]);
+        cache.insert_challenge(&challenge, 2).unwrap();
+
+        cache.drop_expired_challenges(5);
+
+        assert!(cache.challenges.contains_key(&2));
+        assert_eq!(cache.challenges_per_domain.get(&domain), Some(&1));
+        assert_eq!(cache.challenges_timestamps.get(&(requestor, domain)), Some(&2));
     }
 }
