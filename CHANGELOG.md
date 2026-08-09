@@ -3,6 +3,7 @@
 ## 0.16.0 (TBD)
 
 - Improved mint failure observability: emit the full error chain in the `faucet.mint` span by recording errors with their `Debug` implementation ([#267](https://github.com/0xMiden/faucet/pull/267)).
+- Fixed PoW challenge cleanup arithmetic and aligned its expiration boundary with challenge validation ([#270](https://github.com/0xMiden/faucet/pull/270)).
 
 ## 0.16.0-alpha.1 (2026-07-20)
 
