@@ -113,17 +113,18 @@ impl ChallengeCache {
     /// Panics if any expired challenge has no corresponding entries on the requestor or domain
     /// maps.
     pub fn drop_expired_challenges(&mut self, current_time: u64) {
-        // Timestamps lower than this are expired. Add 1 since `BTreeMap::split_off` is inclusive.
-        let Some(limit_timestamp) = current_time
-            .checked_sub(self.challenge_lifetime.as_secs())
-            .and_then(|timestamp| timestamp.checked_add(1))
+        // Challenges are expired only after their full lifetime has elapsed. Since
+        // `BTreeMap::split_off` keeps the supplied key, challenges exactly at the lifetime boundary
+        // remain valid, matching `Challenge::is_expired`.
+        let Some(first_valid_timestamp) =
+            current_time.checked_sub(self.challenge_lifetime.as_secs())
         else {
             // The clock has not yet reached a full challenge lifetime. Since timestamps cannot be
             // negative, no challenge can be old enough to expire.
             return;
         };
 
-        let valid_challenges = self.challenges.split_off(&limit_timestamp);
+        let valid_challenges = self.challenges.split_off(&first_valid_timestamp);
         let expired_challenges = std::mem::replace(&mut self.challenges, valid_challenges);
 
         for solvers in expired_challenges.into_values() {
@@ -157,7 +158,7 @@ mod tests {
 
     #[tokio::test]
     async fn expired_challenges_are_cleaned_up() {
-        let challenge_lifetime = Duration::from_millis(100);
+        let challenge_lifetime = Duration::from_secs(1);
         let mut cache = ChallengeCache::new(challenge_lifetime);
 
         let domain = [1u8; 32];
@@ -186,7 +187,7 @@ mod tests {
         );
 
         // wait for expiration + cleanup
-        let expiration_time = insertion_timestamp + challenge_lifetime.as_secs();
+        let expiration_time = insertion_timestamp + challenge_lifetime.as_secs() + 1;
         cache.drop_expired_challenges(expiration_time);
 
         // assert that the challenge was removed
@@ -208,5 +209,44 @@ mod tests {
         assert!(cache.challenges.contains_key(&2));
         assert_eq!(cache.challenges_per_domain.get(&domain), Some(&1));
         assert_eq!(cache.challenges_timestamps.get(&(requestor, domain)), Some(&2));
+    }
+
+    #[test]
+    fn cleanup_matches_challenge_expiration_boundary() {
+        let mut cache = ChallengeCache::new(Duration::from_secs(10));
+        let requestor = [0u8; 32];
+        let domain = [1u8; 32];
+        let challenge = Challenge::from_parts(u64::MAX, 2, 1, requestor, domain, [0u8; 32]);
+        cache.insert_challenge(&challenge, 2).unwrap();
+
+        cache.drop_expired_challenges(12);
+        assert!(cache.challenges.contains_key(&2));
+
+        cache.drop_expired_challenges(13);
+        assert!(!cache.challenges.contains_key(&2));
+        assert_eq!(cache.challenges_per_domain.get(&domain), None);
+        assert_eq!(cache.challenges_timestamps.get(&(requestor, domain)), None);
+    }
+
+    #[test]
+    fn zero_lifetime_cleanup_handles_max_timestamp() {
+        let mut cache = ChallengeCache::new(Duration::ZERO);
+        let current_requestor = [0u8; 32];
+        let expired_requestor = [1u8; 32];
+        let domain = [2u8; 32];
+        let current =
+            Challenge::from_parts(u64::MAX, u64::MAX, 1, current_requestor, domain, [0u8; 32]);
+        let expired =
+            Challenge::from_parts(u64::MAX, u64::MAX - 1, 1, expired_requestor, domain, [0u8; 32]);
+        cache.insert_challenge(&current, u64::MAX).unwrap();
+        cache.insert_challenge(&expired, u64::MAX - 1).unwrap();
+
+        cache.drop_expired_challenges(u64::MAX);
+
+        assert!(cache.challenges.contains_key(&u64::MAX));
+        assert!(!cache.challenges.contains_key(&(u64::MAX - 1)));
+        assert_eq!(cache.challenges_per_domain.get(&domain), Some(&1));
+        assert_eq!(cache.challenges_timestamps.get(&(current_requestor, domain)), Some(&u64::MAX));
+        assert_eq!(cache.challenges_timestamps.get(&(expired_requestor, domain)), None);
     }
 }
