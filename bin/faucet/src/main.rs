@@ -724,7 +724,7 @@ mod tests {
             store_path.to_str().unwrap(),
         ])))
         .await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{:?}", result.err());
     }
 
     /// `--import` and `--faucet-account-id` together take the `FaucetAccount::Existing` path: the
@@ -970,10 +970,7 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let listener_addr = listener.local_addr().unwrap();
         let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
-        tokio::spawn({
-            let stub_node_url = stub_node_url.clone();
-            async move { serve_stub(&stub_node_url).await.unwrap() }
-        });
+        tokio::spawn(async move { serve_stub(listener).await.unwrap() });
         stub_node_url
     }
 

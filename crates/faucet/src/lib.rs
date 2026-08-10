@@ -972,8 +972,11 @@ mod tests {
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
-    use miden_client::testing::MockChain;
-    use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
+    use miden_client::testing::MockChainBuilder;
+    use miden_client::testing::account_id::{
+        ACCOUNT_ID_FEE_FAUCET,
+        ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE,
+    };
     use miden_client::testing::mock::MockRpcApi;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
@@ -1081,13 +1084,13 @@ mod tests {
         let symbol = "TEST";
         let decimals = 6;
         let max_supply = 1_000_000_000_000;
-        let mock_chain = MockChain::new();
+        let fee_faucet_id = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
         let faucet_account = create_network_faucet_account(
             symbol,
             max_supply,
             decimals,
             operator_account.id(),
-            mock_chain.fee_faucet_id(),
+            fee_faucet_id,
         )
         .unwrap();
 
@@ -1095,6 +1098,14 @@ mod tests {
         let keystore = FilesystemKeyStore::new(keystore_path.clone()).unwrap();
         keystore.add_key(&operator_secret, operator_account.id()).await.unwrap();
 
+        // The operator's mint transaction reads the faucet account via FPI, and foreign account
+        // inputs are always fetched over RPC, so the chain must have it committed. The chain
+        // builder only takes deployed accounts, so commit it at nonce 1, which is the state
+        // `Faucet::init` leaves it in after the deployment transaction.
+        let mut deployed_faucet = faucet_account.clone();
+        deployed_faucet.set_nonce(Felt::new_unchecked(1)).unwrap();
+        let mock_chain =
+            MockChainBuilder::with_accounts([deployed_faucet]).unwrap().build().unwrap();
         let mock_rpc = Arc::new(MockRpcApi::new(mock_chain));
         let mut client = ClientBuilder::new()
             .rpc(mock_rpc.clone())
