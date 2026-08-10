@@ -32,6 +32,9 @@ pub(crate) struct ChallengeCache {
 }
 
 impl ChallengeCache {
+    /// Maximum number of concurrent challenges tracked to prevent OOM (DoS protection).
+    pub const MAX_CAPACITY: usize = 100_000;
+
     /// Creates a new challenge cache with the given challenges lifetime.
     pub fn new(challenge_lifetime: Duration) -> Self {
         Self {
@@ -45,13 +48,21 @@ impl ChallengeCache {
     /// Inserts a challenge into the cache.
     ///
     /// # Errors
-    /// Returns an error if the solver is rate limited.
+    /// Returns an error if the solver is rate limited or if the cache is at maximum capacity.
     pub fn insert_challenge(
         &mut self,
         challenge: &Challenge,
         current_time: u64,
     ) -> Result<(), ChallengeError> {
         let solver = (challenge.requestor, challenge.domain);
+
+        // [GÜVENLİK YAMASI]: OOM (Out-of-Memory) DoS Koruması. 
+        // Eğer cache tam kapasiteye ulaştıysa ve bu solver yeni bir kayıt ise,
+        // rate-limit süresi kadar beklemeye zorlayarak isteği reddeder.
+        if self.challenges_timestamps.len() >= Self::MAX_CAPACITY && !self.challenges_timestamps.contains_key(&solver) {
+            tracing::warn!("ChallengeCache is at MAX_CAPACITY ({}). Rejecting new challenge to prevent OOM.", Self::MAX_CAPACITY);
+            return Err(ChallengeError::RateLimited(self.challenge_lifetime.as_secs()));
+        }
 
         // Check if the solver is rate limited. There could still be an expired challenge in the
         // cache for this solver, so in that case we override it.
