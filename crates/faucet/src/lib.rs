@@ -218,7 +218,6 @@ impl Faucet {
                 warn!("Account already tracked, skipping import");
             },
             Err(error) => {
-                dbg!(&error);
                 anyhow::bail!("failed to add account: {error}");
             },
         }
