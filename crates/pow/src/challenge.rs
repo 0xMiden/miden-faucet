@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 use crate::{ChallengeError, Domain, Requestor};
 
@@ -77,16 +78,18 @@ impl Challenge {
     /// Verifies that the signature part of the challenge is valid in the context of the specified
     /// secret.
     pub fn verify_signature(&self, secret: [u8; 32]) -> Result<(), ChallengeError> {
-        if self.signature
-            == Self::compute_signature(
-                secret,
-                self.target,
-                self.timestamp,
-                self.request_complexity,
-                &self.requestor,
-                &self.domain,
-            )
-        {
+        let expected_signature = Self::compute_signature(
+            secret,
+            self.target,
+            self.timestamp,
+            self.request_complexity,
+            &self.requestor,
+            &self.domain,
+        );
+
+        // [GÜVENLİK YAMASI]: Standart '==' operatörü yerine sabit zamanlı (constant-time)
+        // karşılaştırma kullanılarak zamanlama saldırıları (timing attacks) engellendi.
+        if self.signature.ct_eq(&expected_signature).into() {
             Ok(())
         } else {
             Err(ChallengeError::InvalidSignature)
