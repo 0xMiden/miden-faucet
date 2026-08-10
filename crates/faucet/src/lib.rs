@@ -78,6 +78,8 @@ const COMPONENT: &str = "miden-faucet-client";
 const KEYSTORE_PATH: &str = "keystore";
 /// How long a P2ID note is kept in the cache, in blocks, before it is pruned.
 const NOTE_RETENTION_BLOCKS: u32 = 100;
+/// How many blocks after its reference block a mint transaction stays valid for.
+const MINT_TX_EXPIRATION_DELTA: u16 = 10;
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
 
@@ -540,7 +542,7 @@ impl Faucet {
         let notes: Vec<Note> = notes.to_vec();
         TransactionRequestBuilder::new()
             .own_output_notes(notes)
-            .expiration_delta(10)
+            .expiration_delta(MINT_TX_EXPIRATION_DELTA)
             .build()
     }
 
