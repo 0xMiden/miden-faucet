@@ -140,6 +140,18 @@ impl ApiServer {
         api_key: ApiKey,
         request_complexity: u64,
     ) -> Result<(), MintRequestError> {
+        // [GÜVENLİK YAMASI]: Kayıp Yetkilendirme (Missing Authorization) kontrolü eklendi.
+        // Eğer sunucu belirli API anahtarlarıyla başlatılmışsa, gelen `api_key`in
+        // bu set içerisinde olup olmadığı kontrol edilmelidir. Aksi takdirde,
+        // saldırganlar sahte anahtarlarla Rate-Limiter'ı domain bazında atlatabilir.
+        if !self.api_keys.is_empty() && !self.api_keys.contains(&api_key) {
+            tracing::warn!(
+                target: COMPONENT,
+                "Unauthorized API key attempt - blocking potential rate limit bypass"
+            );
+            return Err(MintRequestError::PowError(ChallengeError::InvalidSignature));
+        }
+
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("current timestamp should be greater than unix epoch")
