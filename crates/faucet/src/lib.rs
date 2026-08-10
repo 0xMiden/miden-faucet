@@ -539,7 +539,10 @@ impl Faucet {
     fn create_transaction(notes: &[Note]) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
         let notes: Vec<Note> = notes.to_vec();
-        TransactionRequestBuilder::new().own_output_notes(notes).build()
+        TransactionRequestBuilder::new()
+            .own_output_notes(notes)
+            .expiration_delta(10)
+            .build()
     }
 
     /// Executes, proves, and then submits a transaction using the local miden-client.
