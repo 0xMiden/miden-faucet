@@ -26,12 +26,17 @@ export const Utils = {
 
     baseUnitsToTokens: (baseUnits, decimals) => {
         return (baseUnits / 10 ** decimals).toLocaleString(undefined, {
-            maximumFractionDigits: 0,
+            maximumFractionDigits: decimals,
         });
     },
 
     tokensToBaseUnits: (tokens, decimals) => {
-        return tokens * (10 ** decimals);
+        const [whole, fraction = ''] = String(tokens).split('.');
+        const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals);
+        const scaled =
+            BigInt(whole) * BigInt(10 ** decimals) + BigInt(paddedFraction || '0');
+        const asNumber = Number(scaled);
+        return Number.isSafeInteger(asNumber) ? asNumber : scaled.toString();
     },
 
     idFromBech32: (address) => {
