@@ -240,18 +240,14 @@ impl Faucet {
                 anyhow::bail!("failed to add account: {error}");
             },
         }
-        // An imported faucet account is an external input, so check that the given operator really
-        // is its owner. A newly created one is built with the operator as owner, so there is
-        // nothing to verify.
-        if matches!(faucet_account, FaucetAccount::Existing(_)) {
-            let faucet_account = client
-                .get_account(faucet_account_id)
-                .await
-                .context("failed to read the faucet account from the store")?
-                .with_context(|| format!("faucet account {faucet_account_id} is not tracked"))?;
+        // Check that the given operator is the actual owner of the faucet
+        let faucet_account = client
+            .get_account(faucet_account_id)
+            .await
+            .context("failed to read the faucet account from the store")?
+            .with_context(|| format!("faucet account {faucet_account_id} is not tracked"))?;
+        check_faucet_owner_matches_operator(&faucet_account, operator_account.id())?;
 
-            check_faucet_owner_matches_operator(&faucet_account, operator_account.id())?;
-        }
         client
             .set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), faucet_account_id)
             .await?;
