@@ -223,7 +223,7 @@ impl Faucet {
             );
         }
 
-        Self::sync_state(&[faucet_account_id], &mut client, &state_sync_component).await?;
+        Self::sync_state(&[operator_account.id()], &mut client, &state_sync_component).await?;
 
         let deploy = matches!(faucet_account, FaucetAccount::New(_));
         let add_result = match &faucet_account {
