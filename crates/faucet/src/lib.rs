@@ -46,6 +46,7 @@ use miden_client::note::{
     NoteType as ProtocolNoteType,
     P2idNote,
 };
+use miden_client::rpc::domain::account::GetAccountRequest;
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, NodeRpcClient, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
@@ -206,6 +207,22 @@ impl Faucet {
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component =
             StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
+
+        // An imported faucet account is expected to be a deployed public account. Checking it here
+        // reports a wrong account ID before anything is written to the store.
+        if let FaucetAccount::Existing(account_id) = &faucet_account {
+            let (_, account_proof) = grpc_client
+                .get_account(*account_id, GetAccountRequest::new())
+                .await
+                .with_context(|| {
+                    format!("failed to fetch faucet account {account_id} from the node")
+                })?;
+            anyhow::ensure!(
+                account_proof.account_header().is_some(),
+                "faucet account {account_id} has no public state on the node"
+            );
+        }
+
         Self::sync_state(&[faucet_account_id], &mut client, &state_sync_component).await?;
 
         let deploy = matches!(faucet_account, FaucetAccount::New(_));

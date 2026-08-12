@@ -763,7 +763,7 @@ mod tests {
 
         let error = format!("{:#}", result.expect_err("stub node serves no faucet account"));
         assert!(
-            error.contains("failed to add account"),
+            error.contains("failed to fetch faucet account"),
             "expected the faucet account fetch to fail, got: {error}"
         );
     }
