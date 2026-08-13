@@ -46,8 +46,10 @@ pub async fn send_note(
         .await?;
     info!(
         target: COMPONENT,
-        note_id = %request.note_id.to_hex(),
-        after_block_num = %after_block_num,
+        {
+            note.id = %request.note_id.to_hex(),
+            after_block_num = %after_block_num
+        },
         "Relayed private note through the note transport layer",
     );
     Ok(())

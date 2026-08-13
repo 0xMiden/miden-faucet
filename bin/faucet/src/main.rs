@@ -469,11 +469,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             tracing::info!(
                 target: COMPONENT,
-                faucet_account_id = %faucet.faucet_id().account_id,
-                operator_account_id = %faucet.operator_id(),
-                node_endpoint = %node_endpoint,
-                note_transport_url = ?note_transport_url.as_ref().map(Url::as_str),
-                batch_size,
+                {
+                    faucet.account.id = %faucet.faucet_id().account_id,
+                    operator.account.id = %faucet.operator_id(),
+                    node.endpoint = %node_endpoint,
+                    note_transport.url = ?note_transport_url.as_ref().map(Url::as_str),
+                    batch_size
+                },
                 "Faucet loaded",
             );
 
