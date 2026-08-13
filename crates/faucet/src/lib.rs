@@ -214,8 +214,10 @@ impl Faucet {
             Err(ClientError::AccountAlreadyTracked(_)) => {
                 warn!(
                     target: COMPONENT,
-                    {account.id = %faucet_account_id,
-                    kind = "faucet"},
+                    {
+                        account.id = %faucet_account_id,
+                        kind = "faucet"
+                    },
                     "Faucet account already tracked, skipping import",
                 );
             },
@@ -243,8 +245,10 @@ impl Faucet {
             Err(ClientError::AccountAlreadyTracked(_)) => {
                 warn!(
                     target: COMPONENT,
-                    {account.id = %operator_account.id(),
-                    kind = "operator"},
+                    {
+                        account.id = %operator_account.id(),
+                        kind = "operator"
+                    },
                     "Operator account already tracked, skipping import",
                 );
             },
@@ -265,19 +269,23 @@ impl Faucet {
                     .await?;
             info!(
                 target: COMPONENT,
-                {account.id = %faucet_account_id,
-                tx.id = %tx_id.to_hex()},
+                {
+                    account.id = %faucet_account_id,
+                    tx.id = %tx_id.to_hex()
+                },
                 "Deployed the faucet account",
             );
         }
 
         info!(
             target: COMPONENT,
-            {faucet.account.id = %faucet_account_id,
-            operator.account.id = %operator_account.id(),
-            faucet_account.status = if deploy { "created" } else { "imported" },
-            store.path = %config.store_path.display(),
-            node.endpoint = %config.node_endpoint},
+            {
+                faucet.account.id = %faucet_account_id,
+                operator.account.id = %operator_account.id(),
+                faucet_account.status = if deploy { "created" } else { "imported" },
+                store.path = %config.store_path.display(),
+                node.endpoint = %config.node_endpoint
+            },
             "Faucet initialized",
         );
 
@@ -364,8 +372,10 @@ impl Faucet {
                 Ok((header, _)) => accounts.push(header),
                 Err(error) => warn!(
                     target: COMPONENT,
-                    {account.id=%account_id,
-                    %error},
+                    {
+                        account.id=%account_id,
+                        %error
+                    },
                     "Account is not tracked locally, excluding it from the sync",
                 ),
             }
@@ -492,10 +502,12 @@ impl Faucet {
         {
             info!(
                 target: COMPONENT,
-                {mint_note.id = %mint_note.id().to_hex(),
-                p2id_note.id = %p2id_note.id().to_hex(),
-                target_account.id = %request.account_id,
-                note.type = ?request.note_type},
+                {
+                    mint_note.id = %mint_note.id().to_hex(),
+                    p2id_note.id = %p2id_note.id().to_hex(),
+                    target_account.id = %request.account_id,
+                    note.type = ?request.note_type
+                },
                 "Built mint request",
             );
         }
@@ -525,9 +537,11 @@ impl Faucet {
         span.record("tx_id", tx_id.to_string());
         info!(
             target: COMPONENT,
-            {request_tx.id = %tx_id.to_hex(),
-            mint_notes.num = mint_notes.len(),
-            after_block_num = %after_block_num},
+            {
+                request_tx.id = %tx_id.to_hex(),
+                mint_notes.num = mint_notes.len(),
+                after_block_num = %after_block_num
+            },
             "Submitted MINT notes; the network mints the P2ID notes in a later transaction",
         );
 
