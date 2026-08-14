@@ -5,7 +5,7 @@ use miden_client::note::NoteDetails;
 use miden_client::note_transport::NoteTransportError;
 use miden_client::utils::Serializable;
 use miden_faucet_lib::CachedP2idNote;
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::COMPONENT;
 use crate::api::ApiServer;
@@ -44,6 +44,15 @@ pub async fn send_note(
     note_transport_client
         .send_note_with_block_hint(header, details.to_bytes(), after_block_num)
         .await?;
+    info!(
+        target: COMPONENT,
+        {
+            note.id = %request.note_id.to_hex(),
+            after_block_num = %after_block_num
+        },
+        "Relayed private note through the note transport layer",
+    );
+
     Ok(())
 }
 

@@ -79,8 +79,10 @@ const COMPONENT: &str = "miden-faucet-client";
 const KEYSTORE_PATH: &str = "keystore";
 /// How long a P2ID note is kept in the cache, in blocks, before it is pruned.
 const NOTE_RETENTION_BLOCKS: u32 = 100;
+
 /// How many blocks the transaction that sends the MINT note stays valid after its reference block.
 const MINT_TX_EXPIRATION_DELTA: u16 = 10;
+
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
 
@@ -234,7 +236,14 @@ impl Faucet {
         match add_result {
             Ok(()) => (),
             Err(ClientError::AccountAlreadyTracked(_)) => {
-                warn!("Account already tracked, skipping import");
+                warn!(
+                    target: COMPONENT,
+                    {
+                        account.id = %faucet_account_id,
+                        kind = "faucet"
+                    },
+                    "Faucet account already tracked, skipping import",
+                );
             },
             Err(error) => {
                 anyhow::bail!("failed to add account: {error}");
@@ -256,7 +265,14 @@ impl Faucet {
         match add_result {
             Ok(()) => (),
             Err(ClientError::AccountAlreadyTracked(_)) => {
-                warn!("Account already tracked, skipping import");
+                warn!(
+                    target: COMPONENT,
+                    {
+                        account.id = %operator_account.id(),
+                        kind = "operator"
+                    },
+                    "Operator account already tracked, skipping import",
+                );
             },
             Err(error) => anyhow::bail!("failed to add operator account: {error}"),
         }
@@ -267,11 +283,20 @@ impl Faucet {
         // A newly created faucet account is deployed by its first transaction. An imported one is
         // already on-chain, so there is nothing to deploy.
         if deploy {
-            let mut faucet = Self::load(config).await?;
-
-            let empty_tx_request = TransactionRequestBuilder::new().build()?;
-            Box::pin(faucet.submit_new_transaction(faucet_account_id, empty_tx_request)).await?;
+            Self::deploy_faucet_account(faucet_account_id, config).await?;
         }
+
+        info!(
+            target: COMPONENT,
+            {
+                faucet.account.id = %faucet_account_id,
+                operator.account.id = %operator_account.id(),
+                faucet_account.status = if deploy { "created" } else { "imported" },
+                store.path = %config.store_path.display(),
+                node.endpoint = %config.node_endpoint
+            },
+            "Faucet initialized",
+        );
 
         Ok(())
     }
@@ -279,7 +304,13 @@ impl Faucet {
     /// Loads the faucet with the given config.
     ///
     /// The account used is the default account set in the store, that is set on `Faucet::init`.
-    #[instrument(target = COMPONENT, name = "faucet.load", fields(account_id), skip_all, err)]
+    #[instrument(
+        target = COMPONENT,
+        name = "faucet.load",
+        fields(account_id, operator_account_id),
+        skip_all,
+        err
+    )]
     pub async fn load(config: &FaucetConfig) -> anyhow::Result<Self> {
         let span = tracing::Span::current();
         let sqlite_store = Arc::new(SqliteStore::new(config.store_path.clone()).await?);
@@ -344,11 +375,18 @@ impl Faucet {
         client: &mut Client<FilesystemKeyStore>,
         state_sync: &StateSync,
     ) -> anyhow::Result<SyncSummary> {
-        // Accounts that aren't tracked yet are skipped: `init` syncs before adding them.
         let mut accounts = Vec::with_capacity(account_ids.len());
         for account_id in account_ids {
-            if let Ok((header, _)) = client.account_reader(*account_id).header().await {
-                accounts.push(header);
+            match client.account_reader(*account_id).header().await {
+                Ok((header, _)) => accounts.push(header),
+                Err(error) => warn!(
+                    target: COMPONENT,
+                    {
+                        account.id=%account_id,
+                        %error
+                    },
+                    "Account is not tracked locally, excluding it from the sync",
+                ),
             }
         }
         let output_notes = client.get_output_notes(NoteFilter::Expected).await?;
@@ -467,6 +505,22 @@ impl Faucet {
             self.operator_account_id,
         )?;
 
+        // Log the P2id note ids along with their corresponding MINT note ids.
+        for ((request, mint_note), p2id_note) in
+            valid_requests.iter().zip(&mint_notes).zip(&p2id_notes)
+        {
+            info!(
+                target: COMPONENT,
+                {
+                    mint_note.id = %mint_note.id().to_hex(),
+                    p2id_note.id = %p2id_note.id().to_hex(),
+                    target_account.id = %request.account_id,
+                    note.type = ?request.note_type
+                },
+                "Built mint request",
+            );
+        }
+
         // Build and submit transaction
         let tx_request = Faucet::create_transaction(&mint_notes)
             .context("faucet failed to create transaction")?;
@@ -475,6 +529,15 @@ impl Faucet {
             .await
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
+        info!(
+            target: COMPONENT,
+            {
+                request_tx.id = %tx_id.to_hex(),
+                mint_notes.num = mint_notes.len(),
+                after_block_num = %after_block_num
+            },
+            "Submitted MINT notes; the network mints the P2ID notes in a later transaction",
+        );
 
         // The faucet's transaction only creates the MINT notes; the P2ID notes are minted later by
         // the network, so they never land in the client store.
@@ -699,6 +762,11 @@ impl Faucet {
             .cloned()
     }
 
+    /// Returns the id of the operator account that submits the MINT notes.
+    pub fn operator_id(&self) -> AccountId {
+        self.operator_account_id
+    }
+
     /// Reads the current issuance from the client's store and updates the watch channel.
     async fn refresh_issuance(&self) {
         let new_issuance = Self::read_issuance_from_store(&self.client, self.id.account_id)
@@ -719,6 +787,25 @@ impl Faucet {
         // The token config layout is `[token_supply, max_supply, decimals, token_symbol]`
         let token_supply = token_config_word[0].as_canonical_u64();
         Ok(AssetAmount::new(token_supply)?)
+    }
+
+    /// Deploys the faucet account by submitting its first transaction.
+    async fn deploy_faucet_account(
+        faucet_id: AccountId,
+        config: &FaucetConfig,
+    ) -> anyhow::Result<()> {
+        let mut faucet = Self::load(config).await?;
+        let empty_tx_request = TransactionRequestBuilder::new().build()?;
+        let tx_id = Box::pin(faucet.submit_new_transaction(faucet_id, empty_tx_request)).await?;
+        info!(
+            target: COMPONENT,
+            {
+                account.id = %faucet_id,
+                tx.id = %tx_id.to_hex()
+            },
+            "Deployed the faucet account",
+        );
+        Ok(())
     }
 }
 
