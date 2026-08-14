@@ -52,6 +52,7 @@ pub async fn send_note(
         },
         "Relayed private note through the note transport layer",
     );
+
     Ok(())
 }
 

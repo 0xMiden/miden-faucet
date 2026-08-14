@@ -46,10 +46,14 @@ miden-faucet start \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
+
 ## Docker
 
+Every release is published as an image tagged with that release's version. Replace `<version>` below with a tag
+from the [releases](https://github.com/0xMiden/faucet/releases) page, for example `v0.16.0-alpha.1`.
+
 ```bash
-docker pull ghcr.io/0xmiden/miden-faucet:latest
+docker pull ghcr.io/0xmiden/miden-faucet:<version>
 ```
 
 **Data dir:** Store defaults to `/faucet/store.sqlite`. Mount a volume at `/faucet` for persistence.
@@ -65,7 +69,7 @@ docker run --rm -v miden-faucet-data:/faucet \
   -e MIDEN_FAUCET_TOKEN_SYMBOL=MIDEN \
   -e MIDEN_FAUCET_DECIMALS=6 \
   -e MIDEN_FAUCET_MAX_SUPPLY=100000000000000000 \
-  ghcr.io/0xmiden/miden-faucet:latest init
+  ghcr.io/0xmiden/miden-faucet:<version> init
 ```
 
 **2. Init — import existing account:**
@@ -74,9 +78,10 @@ docker run --rm -v miden-faucet-data:/faucet \
 docker run --rm -v miden-faucet-data:/faucet \
   -e MIDEN_FAUCET_NETWORK=testnet \
   -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
-  -e MIDEN_FAUCET_IMPORT_ACCOUNT_PATH=/faucet/accounts/faucet_miden.mac \
+  -e MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH=/faucet/accounts/faucet_operator_miden.mac \
+  -e MIDEN_FAUCET_FAUCET_ACCOUNT_ID=<FAUCET_ACCOUNT_ID> \
   -v /path/to/your/accounts:/faucet/accounts:ro \
-  ghcr.io/0xmiden/miden-faucet:latest init
+  ghcr.io/0xmiden/miden-faucet:<version> init
 ```
 
 Put `faucet_miden.mac` in your local `./accounts` dir before running.
@@ -86,7 +91,7 @@ Put `faucet_miden.mac` in your local `./accounts` dir before running.
 ```bash
 docker run --rm -p 8000:8000 -p 8080:8080 \
   -v miden-faucet-data:/faucet \
-  ghcr.io/0xmiden/miden-faucet:latest
+  ghcr.io/0xmiden/miden-faucet:<version>
 ```
 
 See `bin/faucet/.env` for all options.

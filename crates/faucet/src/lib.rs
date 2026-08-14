@@ -6,8 +6,10 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::{
     AccessControl,
+    BasicConstantFeePolicy,
     BasicWallet,
     BurnPolicy,
+    FeePolicyManager,
     FungibleFaucet,
     MintPolicy,
     Ownable2Step,
@@ -25,13 +27,14 @@ use miden_client::account::{
     Address,
     NetworkId,
 };
-use miden_client::asset::{FungibleAsset, TokenSymbol};
+use miden_client::asset::{AssetAmount as ProtocolAssetAmount, FungibleAsset, TokenSymbol};
 use miden_client::auth::{Approver, AuthScheme, AuthSecretKey, AuthSingleSig};
 use miden_client::block::BlockNumber;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::RandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
+use miden_client::note::standards::BurnNote;
 use miden_client::note::{
     MintNote,
     MintNoteStorage,
@@ -43,7 +46,8 @@ use miden_client::note::{
     NoteType as ProtocolNoteType,
     P2idNote,
 };
-use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
+use miden_client::rpc::domain::account::GetAccountRequest;
+use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, NodeRpcClient, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
@@ -75,6 +79,10 @@ const COMPONENT: &str = "miden-faucet-client";
 const KEYSTORE_PATH: &str = "keystore";
 /// How long a P2ID note is kept in the cache, in blocks, before it is pruned.
 const NOTE_RETENTION_BLOCKS: u32 = 100;
+
+/// How many blocks the transaction that sends the MINT note stays valid after its reference block.
+const MINT_TX_EXPIRATION_DELTA: u16 = 10;
+
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
 
@@ -201,7 +209,23 @@ impl Faucet {
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component =
             StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
-        Self::sync_state(&[faucet_account_id], &mut client, &state_sync_component).await?;
+
+        // An imported faucet account is expected to be a deployed public account. Checking it here
+        // reports a wrong account ID before anything is written to the store.
+        if let FaucetAccount::Existing(account_id) = &faucet_account {
+            let (_, account_proof) = grpc_client
+                .get_account(*account_id, GetAccountRequest::new())
+                .await
+                .with_context(|| {
+                    format!("failed to fetch faucet account {account_id} from the node")
+                })?;
+            anyhow::ensure!(
+                account_proof.account_header().is_some(),
+                "faucet account {account_id} has no public state on the node"
+            );
+        }
+
+        Self::sync_state(&[operator_account.id()], &mut client, &state_sync_component).await?;
 
         let deploy = matches!(faucet_account, FaucetAccount::New(_));
         let add_result = match &faucet_account {
@@ -221,20 +245,18 @@ impl Faucet {
                     "Faucet account already tracked, skipping import",
                 );
             },
-            Err(error) => anyhow::bail!("failed to add account: {error}"),
+            Err(error) => {
+                anyhow::bail!("failed to add account: {error}");
+            },
         }
-        // An imported faucet account is an external input, so check that the given operator really
-        // is its owner. A newly created one is built with the operator as owner, so there is
-        // nothing to verify.
-        if matches!(faucet_account, FaucetAccount::Existing(_)) {
-            let faucet_account = client
-                .get_account(faucet_account_id)
-                .await
-                .context("failed to read the faucet account from the store")?
-                .with_context(|| format!("faucet account {faucet_account_id} is not tracked"))?;
+        // Check that the given operator is the actual owner of the faucet
+        let faucet_account = client
+            .get_account(faucet_account_id)
+            .await
+            .context("failed to read the faucet account from the store")?
+            .with_context(|| format!("faucet account {faucet_account_id} is not tracked"))?;
+        check_faucet_owner_matches_operator(&faucet_account, operator_account.id())?;
 
-            check_faucet_owner_matches_operator(&faucet_account, operator_account.id())?;
-        }
         client
             .set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), faucet_account_id)
             .await?;
@@ -451,7 +473,7 @@ impl Faucet {
     ///
     /// The requests size is guaranteed to be smaller or equal to the batch size set in
     /// `Faucet::run`.
-    #[instrument(parent = None, target = COMPONENT, name = "faucet.mint", skip_all, fields(num_requests, tx_id), err)]
+    #[instrument(parent = None, target = COMPONENT, name = "faucet.mint", skip_all, fields(num_requests, tx_id), err(Debug))]
     async fn mint(
         &mut self,
         requests: impl IntoIterator<Item = (MintRequest, MintResponseSender)>,
@@ -512,21 +534,6 @@ impl Faucet {
             );
         }
 
-        // The faucet's transaction only creates the MINT notes; the P2ID notes are minted later by
-        // the network, so they never land in the client store.
-        // They are cached here for `get_note` to serve.
-        {
-            let mut cache = self.p2id_notes.write().expect("p2id note cache is poisoned");
-            prune_stale_p2id_notes(&mut cache, after_block_num);
-            // Only private notes are cached
-            let private_notes = p2id_notes
-                .into_iter()
-                .filter(|note| matches!(note.metadata().note_type(), ProtocolNoteType::Private));
-            for note in private_notes {
-                cache.insert(note.id().to_hex(), CachedP2idNote { note, after_block_num });
-            }
-        }
-
         // Build and submit transaction
         let tx_request = Faucet::create_transaction(&mint_notes)
             .context("faucet failed to create transaction")?;
@@ -545,6 +552,20 @@ impl Faucet {
             "Submitted MINT notes; the network mints the P2ID notes in a later transaction",
         );
 
+        // The faucet's transaction only creates the MINT notes; the P2ID notes are minted later by
+        // the network, so they never land in the client store.
+        // They are cached here for `get_note` to serve.
+        {
+            let mut cache = self.p2id_notes.write().expect("p2id note cache is poisoned");
+            prune_stale_p2id_notes(&mut cache, after_block_num);
+            // Only private notes are cached
+            let private_notes = p2id_notes
+                .into_iter()
+                .filter(|note| matches!(note.metadata().note_type(), ProtocolNoteType::Private));
+            for note in private_notes {
+                cache.insert(note.id().to_hex(), CachedP2idNote { note, after_block_num });
+            }
+        }
         // Refresh the issuance cache from the store after submitting the transaction
         self.refresh_issuance().await;
 
@@ -608,7 +629,10 @@ impl Faucet {
     fn create_transaction(notes: &[Note]) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
         let notes: Vec<Note> = notes.to_vec();
-        TransactionRequestBuilder::new().own_output_notes(notes).build()
+        TransactionRequestBuilder::new()
+            .own_output_notes(notes)
+            .expiration_delta(MINT_TX_EXPIRATION_DELTA)
+            .build()
     }
 
     /// Executes, proves, and then submits a transaction using the local miden-client.
@@ -943,12 +967,26 @@ fn build_mint_notes(
     Ok(mint_notes)
 }
 
+/// Reads the ID of the faucet whose asset the chain charges fees in from the genesis block header.
+pub async fn fetch_fee_faucet_id(
+    node_endpoint: &Endpoint,
+    timeout: Duration,
+) -> anyhow::Result<AccountId> {
+    let (genesis, _) = GrpcClient::new(node_endpoint, timeout.as_millis() as u64)
+        .get_block_header_by_number(Some(BlockNumber::GENESIS), false)
+        .await
+        .context("failed to fetch the genesis block header")?;
+
+    Ok(genesis.fee_parameters().fee_faucet_id())
+}
+
 /// Creates a new network faucet account from the given parameters.
 pub fn create_network_faucet_account(
     token_symbol: &str,
     max_supply: u64,
     decimals: u8,
     owner: AccountId,
+    fee_faucet_id: AccountId,
 ) -> anyhow::Result<Account> {
     let symbol = TokenSymbol::try_from(token_symbol).context("failed to parse token symbol")?;
     let name = TokenName::new(&symbol.to_string()).context("failed to derive token name")?;
@@ -958,7 +996,7 @@ pub fn create_network_faucet_account(
         .symbol(symbol)
         .decimals(decimals)
         .max_supply(
-            miden_client::asset::AssetAmount::new(max_supply)
+            ProtocolAssetAmount::new(max_supply)
                 .context("max supply exceeds the maximum asset amount")?,
         )
         .build()
@@ -974,9 +1012,24 @@ pub fn create_network_faucet_account(
         .build();
 
     let mut rng = rand::rng();
-    let account =
-        create_network_fungible_faucet(rng.random(), faucet, access_control, token_policy_manager)
-            .context("failed to create basic fungible faucet account")?;
+    let fee_policy = BasicConstantFeePolicy::new()
+        .with_fees([
+            (MintNote::script_root(), ProtocolAssetAmount::ZERO),
+            (BurnNote::script_root(), ProtocolAssetAmount::ZERO),
+        ])
+        .into();
+    let fee_policy_manager = FeePolicyManager::builder()
+        .fee_faucet_id(fee_faucet_id)
+        .active_fee_policy(fee_policy)
+        .build();
+    let account = create_network_fungible_faucet(
+        rng.random(),
+        faucet,
+        access_control,
+        token_policy_manager,
+        fee_policy_manager,
+    )
+    .context("failed to create basic fungible faucet account")?;
 
     Ok(account)
 }
@@ -1000,7 +1053,7 @@ pub fn create_faucet_operator_account() -> anyhow::Result<(Account, AuthSecretKe
     let init_seed = rng.random();
     let account = AccountBuilder::new(init_seed)
         .account_type(AccountType::Public)
-        .with_auth_component(auth_component)
+        .with_component(auth_component)
         .with_component(BasicWallet)
         .build()?;
 
@@ -1015,9 +1068,12 @@ mod tests {
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
-    use miden_client::testing::MockChain;
-    use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
+    use miden_client::testing::account_id::{
+        ACCOUNT_ID_FEE_FAUCET,
+        ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE,
+    };
     use miden_client::testing::mock::MockRpcApi;
+    use miden_client::testing::MockChainBuilder;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
@@ -1124,15 +1180,29 @@ mod tests {
         let symbol = "TEST";
         let decimals = 6;
         let max_supply = 1_000_000_000_000;
-        let faucet_account =
-            create_network_faucet_account(symbol, max_supply, decimals, operator_account.id())
-                .unwrap();
+        let fee_faucet_id = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
+        let faucet_account = create_network_faucet_account(
+            symbol,
+            max_supply,
+            decimals,
+            operator_account.id(),
+            fee_faucet_id,
+        )
+        .unwrap();
 
         let keystore_path = temp_dir().join(format!("keystore-{}", Uuid::new_v4()));
         let keystore = FilesystemKeyStore::new(keystore_path.clone()).unwrap();
         keystore.add_key(&operator_secret, operator_account.id()).await.unwrap();
 
-        let mock_rpc = Arc::new(MockRpcApi::new(MockChain::new()));
+        // The operator's mint transaction reads the faucet account via FPI, and foreign account
+        // inputs are always fetched over RPC, so the chain must have it committed. The chain
+        // builder only takes deployed accounts, so commit it at nonce 1, which is the state
+        // `Faucet::init` leaves it in after the deployment transaction.
+        let mut deployed_faucet = faucet_account.clone();
+        deployed_faucet.set_nonce(Felt::new_unchecked(1)).unwrap();
+        let mock_chain =
+            MockChainBuilder::with_accounts([deployed_faucet]).unwrap().build().unwrap();
+        let mock_rpc = Arc::new(MockRpcApi::new(mock_chain));
         let mut client = ClientBuilder::new()
             .rpc(mock_rpc.clone())
             .store(store.clone())

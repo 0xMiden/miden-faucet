@@ -110,8 +110,8 @@ All configuration options can be set using environment variables:
 
 ```bash
 # Faucet Account Configuration
-export MIDEN_FAUCET_IMPORT_ACCOUNT_PATH=faucet.mac
-export MIDEN_FAUCET_DEPLOY=
+export MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH=operator.mac
+export MIDEN_FAUCET_FAUCET_ACCOUNT_ID=
 export MIDEN_FAUCET_TOKEN_SYMBOL=
 export MIDEN_FAUCET_DECIMALS=
 export MIDEN_FAUCET_MAX_SUPPLY=
@@ -130,7 +130,6 @@ export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io
 export MIDEN_FAUCET_NETWORK=testnet
 export MIDEN_FAUCET_TIMEOUT=10s
 export MIDEN_FAUCET_EXPLORER_URL=https://testnet.midenscan.com
-export MIDEN_FAUCET_ACCOUNT_PATH=./faucet.mac
 
 # Faucet Client Configuration
 export MIDEN_FAUCET_STORE=faucet_client_store.sqlite3

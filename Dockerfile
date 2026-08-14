@@ -34,6 +34,18 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+LABEL org.opencontainers.image.source=https://github.com/0xMiden/faucet \
+    org.opencontainers.image.documentation=https://github.com/0xMiden/faucet \
+    org.opencontainers.image.vendor=Miden \
+    org.opencontainers.image.licenses=MIT
+
+ARG CREATED
+ARG VERSION
+ARG COMMIT
+LABEL org.opencontainers.image.created=$CREATED \
+    org.opencontainers.image.version=$VERSION \
+    org.opencontainers.image.revision=$COMMIT
+
 EXPOSE 8000 8080
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

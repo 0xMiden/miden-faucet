@@ -26,6 +26,7 @@ use miden_faucet_lib::{
     FaucetConfig,
     create_faucet_operator_account,
     create_network_faucet_account,
+    fetch_fee_faucet_id,
 };
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::SeedableRng;
@@ -331,6 +332,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             import_operator_account_path,
             faucet_account_id,
         } => {
+            let node_endpoint = parse_node_endpoint(node_url, &network)?;
+
             // `--import` and `--faucet-account-id` require each other, so clap guarantees they are
             // either both set or both unset.
             let (faucet_account, operator_account, operator_secret) =
@@ -366,11 +369,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     let decimals = decimals.expect("decimals should be present when not importing");
                     let max_supply =
                         max_supply.expect("max_supply should be present when not importing");
+                    let fee_faucet_id = fetch_fee_faucet_id(&node_endpoint, timeout).await?;
                     let faucet_account = create_network_faucet_account(
                         token_symbol.as_str(),
                         max_supply,
                         decimals,
                         operator_account.id(),
+                        fee_faucet_id,
                     )?;
                     (
                         FaucetAccount::New(Box::new(faucet_account)),
@@ -378,7 +383,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                         operator_secret,
                     )
                 };
-            let node_endpoint = parse_node_endpoint(node_url, &network)?;
             let faucet_config = FaucetConfig {
                 store_path,
                 node_endpoint,
@@ -732,7 +736,7 @@ mod tests {
             store_path.to_str().unwrap(),
         ])))
         .await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{:?}", result.err());
     }
 
     /// `--import` and `--faucet-account-id` together take the `FaucetAccount::Existing` path: the
@@ -771,7 +775,7 @@ mod tests {
 
         let error = format!("{:#}", result.expect_err("stub node serves no faucet account"));
         assert!(
-            error.contains("failed to add account"),
+            error.contains("failed to fetch faucet account"),
             "expected the faucet account fetch to fail, got: {error}"
         );
     }
@@ -978,10 +982,7 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let listener_addr = listener.local_addr().unwrap();
         let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
-        tokio::spawn({
-            let stub_node_url = stub_node_url.clone();
-            async move { serve_stub(&stub_node_url).await.unwrap() }
-        });
+        tokio::spawn(async move { serve_stub(listener).await.unwrap() });
         stub_node_url
     }
 

@@ -1,27 +1,17 @@
 # Installation
 
-We provide Debian packages for official releases for the Faucet software. Alternatively, it also can be installed from source on most systems using the Rust package manager `cargo`.
+We provide Docker images for official releases for the Faucet software. Alternatively, it also can be installed from source on most systems using the Rust package manager `cargo`.
 
-## Debian package
+## Docker image
 
-Official Debian packages are available under our [releases](https://github.com/0xMiden/faucet/releases) page.
-Both `amd64` and `arm64` packages are available.
-
-Note that the packages include a `systemd` service which is disabled by default.
-
-To install, download the desired releases `.deb` package and checksum files. Install using
+Official Docker images are published to `ghcr.io/0xmiden/miden-faucet` for every release.
 
 ```sh
-sudo dpkg -i $package_name.deb
+docker pull ghcr.io/0xmiden/miden-faucet:<version>
 ```
 
-You can (and should) verify the checksum prior to installation using a SHA256 utility. This differs from platform to platform, but on most linux distros:
-
-```sh
-sha256sum --check $checksum_file.deb.checksum
-```
-
-can be used so long as the checksum file and the package file are in the same folder.
+See the [README](https://github.com/0xMiden/faucet#readme) for the available configuration options and an example
+invocation.
 
 ## Install using `cargo`
 
