@@ -283,20 +283,7 @@ impl Faucet {
         // A newly created faucet account is deployed by its first transaction. An imported one is
         // already on-chain, so there is nothing to deploy.
         if deploy {
-            let mut faucet = Self::load(config).await?;
-
-            let empty_tx_request = TransactionRequestBuilder::new().build()?;
-            let tx_id =
-                Box::pin(faucet.submit_new_transaction(faucet_account_id, empty_tx_request))
-                    .await?;
-            info!(
-                target: COMPONENT,
-                {
-                    account.id = %faucet_account_id,
-                    tx.id = %tx_id.to_hex()
-                },
-                "Deployed the faucet account",
-            );
+            Self::deploy_faucet_account(faucet_account_id, config).await?;
         }
 
         info!(
@@ -801,6 +788,25 @@ impl Faucet {
         let token_supply = token_config_word[0].as_canonical_u64();
         Ok(AssetAmount::new(token_supply)?)
     }
+
+    /// Deploys the faucet account by submitting its first transaction.
+    async fn deploy_faucet_account(
+        faucet_id: AccountId,
+        config: &FaucetConfig,
+    ) -> anyhow::Result<()> {
+        let mut faucet = Self::load(config).await?;
+        let empty_tx_request = TransactionRequestBuilder::new().build()?;
+        let tx_id = Box::pin(faucet.submit_new_transaction(faucet_id, empty_tx_request)).await?;
+        info!(
+            target: COMPONENT,
+            {
+                account.id = %faucet_id,
+                tx.id = %tx_id.to_hex()
+            },
+            "Deployed the faucet account",
+        );
+        Ok(())
+    }
 }
 
 // HELPER FUNCTIONS
@@ -1068,12 +1074,12 @@ mod tests {
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
+    use miden_client::testing::MockChainBuilder;
     use miden_client::testing::account_id::{
         ACCOUNT_ID_FEE_FAUCET,
         ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE,
     };
     use miden_client::testing::mock::MockRpcApi;
-    use miden_client::testing::MockChainBuilder;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
