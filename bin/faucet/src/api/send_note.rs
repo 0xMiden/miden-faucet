@@ -1,11 +1,11 @@
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
-use miden_client::note::{Note, NoteDetails};
+use miden_client::note::NoteDetails;
 use miden_client::note_transport::NoteTransportError;
-use miden_client::store::NoteFilter;
 use miden_client::utils::Serializable;
-use tracing::{Instrument, info_span, instrument};
+use miden_faucet_lib::CachedP2idNote;
+use tracing::instrument;
 
 use crate::COMPONENT;
 use crate::api::ApiServer;
@@ -29,23 +29,21 @@ pub async fn send_note(
         .ok_or(SendNoteError::NoteTransportError(NoteTransportError::Disabled))?;
 
     let request = request.validate().map_err(|_| SendNoteError::InvalidNoteId)?;
-    let note_record = server
-        .store
-        .get_output_notes(NoteFilter::Unique(request.note_id))
-        .instrument(info_span!(target: COMPONENT, "store.get_output_notes"))
-        .await
-        .map_err(|e| {
-            tracing::error!(?e, "failed to read note from store");
-            SendNoteError::NoteNotFound
-        })?
-        .pop()
-        .ok_or(SendNoteError::NoteNotFound)?;
 
-    let note = Note::try_from(note_record).unwrap();
+    // The P2ID note is minted by the network from the faucet's MINT note, so it never reaches the
+    // client store. It is served from the cache the faucet populates at mint time instead.
+    let CachedP2idNote { note, after_block_num } = {
+        let cache = server.p2id_notes.read().expect("p2id note cache is poisoned");
+        cache.get(&request.note_id.to_hex()).cloned()
+    }
+    .ok_or(SendNoteError::NoteNotFound)?;
+
     let header = *note.header();
     let details: NoteDetails = note.into();
 
-    note_transport_client.send_note(header, details.to_bytes()).await?;
+    note_transport_client
+        .send_note_with_block_hint(header, details.to_bytes(), after_block_num)
+        .await?;
     Ok(())
 }
 

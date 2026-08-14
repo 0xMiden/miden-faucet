@@ -4,11 +4,11 @@ use axum::response::IntoResponse;
 use base64::Engine;
 use base64::engine::general_purpose;
 use http::StatusCode;
-use miden_client::note::NoteId;
-use miden_client::store::{NoteExportType, NoteFilter};
+use miden_client::note::{NoteDetails, NoteFile, NoteId, NoteSyncHint};
 use miden_client::utils::Serializable;
+use miden_faucet_lib::CachedP2idNote;
 use serde::Deserialize;
-use tracing::{Instrument, info_span, instrument};
+use tracing::instrument;
 
 use crate::COMPONENT;
 use crate::api::ApiServer;
@@ -27,25 +27,22 @@ pub async fn get_note(
     Query(request): Query<RawNoteRequest>,
 ) -> Result<impl IntoResponse, NoteRequestError> {
     let request = request.validate()?;
-    let note = server
-        .store
-        .get_output_notes(NoteFilter::Unique(request.note_id))
-        .instrument(info_span!(target: COMPONENT, "store.get_output_notes"))
-        .await
-        .map_err(|e| {
-            tracing::error!(?e, "failed to read note from store");
-            NoteRequestError::NoteNotFound
-        })?
-        .pop()
-        .ok_or(NoteRequestError::NoteNotFound)?;
-    let note_file = note
-        .clone()
-        .into_note_file(&NoteExportType::NoteWithProof)
-        .or_else(|_| note.into_note_file(&NoteExportType::NoteDetails))
-        .map_err(|e| {
-            tracing::error!(?e, "failed to convert note to note file");
-            NoteRequestError::NoteNotFound
-        })?;
+
+    // The P2ID note is minted by the network from the faucet's MINT note, so it never reaches the
+    // client store. It is served from the cache the faucet populates at mint time instead.
+    let CachedP2idNote { note, after_block_num } = {
+        let cache = server.p2id_notes.read().expect("p2id note cache is poisoned");
+        cache.get(&request.note_id.to_hex()).cloned()
+    }
+    .ok_or(NoteRequestError::NoteNotFound)?;
+
+    let tag = note.metadata().tag();
+    let (assets, _metadata, recipient, _attachments) = note.into_parts();
+    let note_file = NoteFile::ExpectedNote {
+        details: NoteDetails::new(assets, recipient),
+        sync_hint: NoteSyncHint::new(after_block_num, tag),
+    };
+
     let encoded_note = general_purpose::STANDARD.encode(note_file.to_bytes());
     let note_json = serde_json::json!({
         "note_id": request.note_id.to_string(),
