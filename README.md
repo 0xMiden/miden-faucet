@@ -50,7 +50,7 @@ miden-faucet start \
 ## Docker
 
 Every release is published as an image tagged with that release's version. Replace `<version>` below with a tag
-from the [releases](https://github.com/0xMiden/faucet/releases) page, for example `v0.16.0-alpha.1`.
+from the [releases](https://github.com/0xMiden/faucet/releases) page, for example `v0.16.0-rc.1`.
 
 ```bash
 docker pull ghcr.io/0xmiden/miden-faucet:<version>

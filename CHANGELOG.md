@@ -2,6 +2,7 @@
 
 ## 0.16.0 (TBD)
 
+- Updated miden-client dependency to v0.16.0-rc.1 ([#285](https://github.com/0xMiden/faucet/pull/285)). 
 - Migrate faucet to using a network account ([#262](https://github.com/0xMiden/faucet/pull/262)).
 - [BREAKING] `init --import` now takes an operator account file instead of a faucet account file, and requires the new `--faucet-account-id` param ([#262](https://github.com/0xMiden/faucet/pull/262)).
 - [BREAKING] Renamed the `MIDEN_FAUCET_IMPORT_ACCOUNT_PATH` env var to `MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH` ([#262](https://github.com/0xMiden/faucet/pull/262)).
