@@ -10,6 +10,7 @@
 - Improved the faucet logging ([#267](https://github.com/0xMiden/faucet/pull/267)).
 - Improved mint failure observability: emit the full error chain in the `faucet.mint` span by recording errors with their `Debug` implementation ([#267](https://github.com/0xMiden/faucet/pull/267)).
 - Updated `rand` to v0.10 and removed the direct `rand_chacha` dependency ([#284](https://github.com/0xMiden/faucet/pull/284)).
+- Raised the declared `rust-version` to 1.96.1 to match the locked Miden dependencies ([#284](https://github.com/0xMiden/faucet/pull/284)).
 
 ## 0.16.0-alpha.1 (2026-07-20)
 
