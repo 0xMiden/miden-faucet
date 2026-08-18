@@ -60,7 +60,7 @@ use miden_client::transaction::{
 };
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::watch;
 use tracing::{Instrument, error, info, info_span, instrument, warn};

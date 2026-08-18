@@ -30,7 +30,7 @@ use miden_faucet_lib::{
 };
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::SeedableRng;
-use rand_chacha::ChaCha20Rng;
+use rand::rngs::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -865,7 +865,7 @@ mod tests {
 
         // Create an API key.
         let store = SqliteStore::new(store_path.clone()).await.unwrap();
-        let mut rng = rand_chacha::ChaCha20Rng::from_seed(rand::random());
+        let mut rng = rand::rngs::ChaCha20Rng::from_seed(rand::random());
         let key = crate::api_key::ApiKey::generate(&mut rng);
         crate::add_api_key_to_store(&store, &key).await.unwrap();
 

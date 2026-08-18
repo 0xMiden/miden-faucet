@@ -34,7 +34,7 @@ humantime             = { version = "2.2" }
 opentelemetry         = { version = "0.31" }
 opentelemetry-otlp    = { default-features = false, features = ["grpc-tonic", "tls-roots", "trace"], version = "0.31" }
 opentelemetry_sdk     = { features = ["rt-tokio", "testing"], version = "0.31" }
-rand                  = { version = "0.9" }
+rand                  = { version = "0.10" }
 reqwest               = { default-features = false, version = "0.13" }
 serde                 = { features = ["derive"], version = "1.0" }
 serde_json            = { version = "1.0" }
