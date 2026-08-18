@@ -18,7 +18,7 @@ use miden_faucet_lib::requests::{
     PowQueryParams,
 };
 use miden_pow_rate_limiter::{Challenge, ChallengeError};
-use rand::Rng;
+use rand::RngExt;
 use reqwest::{Client as HttpClient, Url};
 use tokio::task;
 
