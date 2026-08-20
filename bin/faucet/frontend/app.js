@@ -1,5 +1,5 @@
-import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
-import { PrivateDataPermission, WalletAdapterNetwork, WalletReadyState } from "@demox-labs/miden-wallet-adapter-base";
+import { MidenWalletAdapter } from "@miden-sdk/miden-wallet-adapter-miden";
+import { PrivateDataPermission, WalletAdapterNetwork, WalletReadyState } from "@miden-sdk/miden-wallet-adapter-base";
 import { Endpoint, NoteId, RpcClient, getWasmOrThrow } from "@miden-sdk/miden-sdk/lazy";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
