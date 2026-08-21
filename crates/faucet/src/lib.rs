@@ -527,6 +527,7 @@ impl Faucet {
         // The MINT notes are sent by the operator, so the operator must be the executing account.
         let tx_id = Box::pin(self.submit_new_transaction(self.operator_account_id, tx_request))
             .await
+            .map_err(|error| *error)
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
         info!(
@@ -643,7 +644,7 @@ impl Faucet {
         &mut self,
         account_id: AccountId,
         tx_request: TransactionRequest,
-    ) -> Result<TransactionId, ClientError> {
+    ) -> Result<TransactionId, Box<ClientError>> {
         // Execute the transaction
         let execute_span = info_span!(target: COMPONENT, "faucet.mint.execute", exception.message = tracing::field::Empty);
         let tx_result = self
@@ -725,11 +726,11 @@ impl Faucet {
     }
 
     /// Returns the faucet account.
-    pub async fn faucet_account(&self) -> Result<Account, ClientError> {
+    pub async fn faucet_account(&self) -> Result<Account, Box<ClientError>> {
         self.client
             .get_account(self.id.account_id)
             .await?
-            .ok_or(ClientError::AccountDataNotFound(self.id.account_id))
+            .ok_or_else(|| Box::new(ClientError::AccountDataNotFound(self.id.account_id)))
     }
 
     /// Returns the id of the faucet account.

@@ -23,13 +23,49 @@ jobs:
         run: |
           echo "Publishing release ${{ github.event.release.tag_name }}"
           echo "Commit: $(git rev-parse HEAD)"
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Update Rust toolchain
         run: |
           rustup update --no-self-update
-      - name: Publish to crates.io
-        run: cargo publish --workspace
+
+      - name: Publish unpublished crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          version="${RELEASE_TAG#v}"
+          metadata="$(cargo metadata --no-deps --format-version 1)"
+
+          mapfile -t publishable_crates < <(
+            jq -r '[.packages[] | select(.publish != []) | .name] | sort | .[]' <<< "${metadata}"
+          )
+
+          exclude_args=()
+          remaining_crates=()
+
+          for crate in "${publishable_crates[@]}"; do
+            if cargo info --quiet --registry crates-io "${crate}@${version}" >/dev/null 2>&1; then
+              echo "${crate} ${version} already exists on crates.io; excluding it."
+              exclude_args+=(--exclude "${crate}")
+            else
+              remaining_crates+=("${crate}")
+            fi
+          done
+
+          if [[ "${#remaining_crates[@]}" -eq 0 ]]; then
+            echo "All publishable crates already exist on crates.io for ${version}."
+            exit 0
+          fi
+
+          echo "Publishing crates that are not yet on crates.io:"
+          printf '  %s\n' "${remaining_crates[@]}"
+
+          cargo publish --workspace "${exclude_args[@]}"
 
   # Upload the miden-faucet-client CLI as an artifact on the Github release.
   # This is used by midenup to speed installs up.
