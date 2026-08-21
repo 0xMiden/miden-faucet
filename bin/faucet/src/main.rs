@@ -447,7 +447,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
             };
-            let faucet_account = faucet.faucet_account().await?;
+            let faucet_account = faucet.faucet_account().await.map_err(|error| *error)?;
             let token_metadata = FungibleFaucet::try_from(faucet_account.storage())?;
             let max_supply = AssetAmount::new(token_metadata.max_supply().as_u64())?;
             let decimals = token_metadata.decimals();

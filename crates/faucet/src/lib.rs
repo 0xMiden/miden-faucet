@@ -143,7 +143,9 @@ impl Faucet {
             let mut faucet = Self::load(config).await?;
 
             let empty_tx_request = TransactionRequestBuilder::new().build()?;
-            Box::pin(faucet.submit_new_transaction(empty_tx_request)).await?;
+            Box::pin(faucet.submit_new_transaction(empty_tx_request))
+                .await
+                .map_err(|error| *error)?;
         }
 
         Ok(())
@@ -323,6 +325,7 @@ impl Faucet {
             self.create_transaction(&notes).context("faucet failed to create transaction")?;
         let tx_id = Box::pin(self.submit_new_transaction(tx_request))
             .await
+            .map_err(|error| *error)
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
 
@@ -438,7 +441,7 @@ impl Faucet {
     async fn submit_new_transaction(
         &mut self,
         tx_request: TransactionRequest,
-    ) -> Result<TransactionId, ClientError> {
+    ) -> Result<TransactionId, Box<ClientError>> {
         // Execute the transaction
         let execute_span = info_span!(target: COMPONENT, "faucet.mint.execute", exception.message = tracing::field::Empty);
         let tx_result = self
@@ -520,11 +523,11 @@ impl Faucet {
     }
 
     /// Returns the faucet account.
-    pub async fn faucet_account(&self) -> Result<Account, ClientError> {
+    pub async fn faucet_account(&self) -> Result<Account, Box<ClientError>> {
         self.client
             .get_account(self.id.account_id)
             .await?
-            .ok_or(ClientError::AccountDataNotFound(self.id.account_id))
+            .ok_or_else(|| Box::new(ClientError::AccountDataNotFound(self.id.account_id)))
     }
 
     /// Returns the id of the faucet account.
