@@ -17,7 +17,7 @@ The faucet comes with two CLI tools:
 make install-faucet
 ```
 
-2. Initialize the faucet server. This will generate a new account with the specified token configuration and save the account data to a local SQLite store:
+2. Initialize the faucet server. This will generate an new operator account and a network faucet account with the specified token configuration, and save the account data to a local SQLite store:
 
 ```bash
 miden-faucet init \
@@ -26,8 +26,19 @@ miden-faucet init \
   --max-supply 100000000000000000 \
   --network testnet
 ```
+
 > [!TIP]
-> This account will not be created on chain yet, creation on chain will happen on the first minting transaction.
+> `miden-faucet init` can also be run with existing operator and faucet accounts:
+>
+> ```bash
+> miden-faucet init \
+>   --import /path/to/operator_account.mac \
+>   --faucet-account-id 0x<faucet_account_id> \
+>   --network testnet
+> ```
+>
+> - `--import` — path to an exported operator account file
+> - `--faucet-account-id` — ID of a faucet account that already exists on the target network
 
 3. Start the faucet:
 ```bash
@@ -35,10 +46,11 @@ miden-faucet start \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
+
 ## Docker
 
 Every release is published as an image tagged with that release's version. Replace `<version>` below with a tag
-from the [releases](https://github.com/0xMiden/faucet/releases) page, for example `v0.16.0-alpha.1`.
+from the [releases](https://github.com/0xMiden/faucet/releases) page, for example `v0.16.0-rc.1`.
 
 ```bash
 docker pull ghcr.io/0xmiden/miden-faucet:<version>
@@ -66,7 +78,8 @@ docker run --rm -v miden-faucet-data:/faucet \
 docker run --rm -v miden-faucet-data:/faucet \
   -e MIDEN_FAUCET_NETWORK=testnet \
   -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
-  -e MIDEN_FAUCET_IMPORT_ACCOUNT_PATH=/faucet/accounts/faucet_miden.mac \
+  -e MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH=/faucet/accounts/faucet_operator_miden.mac \
+  -e MIDEN_FAUCET_FAUCET_ACCOUNT_ID=<FAUCET_ACCOUNT_ID> \
   -v /path/to/your/accounts:/faucet/accounts:ro \
   ghcr.io/0xmiden/miden-faucet:<version> init
 ```

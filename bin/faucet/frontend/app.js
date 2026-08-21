@@ -1,6 +1,6 @@
-import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
-import { PrivateDataPermission, WalletAdapterNetwork, WalletReadyState } from "@demox-labs/miden-wallet-adapter-base";
-import { Endpoint, NoteId, RpcClient, getWasmOrThrow } from "@miden-sdk/miden-sdk";
+import { MidenWalletAdapter } from "@miden-sdk/miden-wallet-adapter-miden";
+import { PrivateDataPermission, WalletAdapterNetwork, WalletReadyState } from "@miden-sdk/miden-wallet-adapter-base";
+import { Endpoint, NoteId, RpcClient, getWasmOrThrow } from "@miden-sdk/miden-sdk/lazy";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
 import { getConfig, getMetadata, getPowChallenge, getTokens, get_note, send_note } from "./api.js";
@@ -15,6 +15,7 @@ export class MidenFaucetApp {
         this.metadataInitialized = false;
         this.apiUrl = null;
         this.rpcClient = null;
+        this.wasmReady = null;
         this.baseAmount = null;
         this.powLoadDifficulty = null;
 
@@ -32,12 +33,19 @@ export class MidenFaucetApp {
 
     async init() {
         try {
-            const [config] = await Promise.all([getConfig(), getWasmOrThrow()]);
+            const config = await getConfig();
             this.apiUrl = config.api_url;
-            this.rpcClient = new RpcClient(new Endpoint(config.node_url));
             this.setupEventListeners();
             this.setupWalletDetection();
             this.startMetadataPolling();
+
+            // The WASM SDK is only needed to poll for notes after a mint, so
+            // it loads in the background without blocking the UI or the
+            // issuance stream.
+            this.wasmReady = getWasmOrThrow().then(() => {
+                this.rpcClient = new RpcClient(new Endpoint(config.node_url));
+            });
+            await this.wasmReady;
         } catch (error) {
             console.error('Failed to initialize app:', error);
             this.handleApiError(error, 'Connection failed', 'Some data couldn\'t be loaded right now.');
@@ -279,6 +287,7 @@ export class MidenFaucetApp {
                 }
 
                 try {
+                    await this.wasmReady;
                     const note = await this.rpcClient.getNotesById([NoteId.fromHex(noteId)]);
                     if (note && note.length > 0) {
                         return resolve();

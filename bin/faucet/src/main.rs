@@ -13,37 +13,24 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::component::{
-    AuthScheme,
-    BurnPolicy,
-    FungibleFaucet,
-    MintPolicy,
-    TokenName,
-    TokenPolicyManager,
-    TransferPolicy,
-    create_singlesig_user_fungible_faucet,
-};
-use miden_client::account::{Account, AccountFile, AccountType};
-use miden_client::asset::TokenSymbol;
-use miden_client::auth::{
-    Approver,
-    AuthSecretKey,
-    AuthSingleSigAcl,
-    AuthSingleSigAclConfig,
-    PublicKeyCommitment,
-};
-use miden_client::crypto::RandomCoin;
-use miden_client::crypto::rpo_falcon512::SecretKey;
+use miden_client::account::component::FungibleFaucet;
+use miden_client::account::{AccountFile, AccountId};
 use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::rpc::Endpoint;
 use miden_client::store::Store;
-use miden_client::{Felt, Word};
 use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
-use miden_faucet_lib::{Faucet, FaucetConfig};
+use miden_faucet_lib::{
+    Faucet,
+    FaucetAccount,
+    FaucetConfig,
+    create_faucet_operator_account,
+    create_network_faucet_account,
+    fetch_fee_faucet_id,
+};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha20Rng;
+use rand::SeedableRng;
+use rand::rngs::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -81,8 +68,8 @@ const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
-const ENV_IMPORT_ACCOUNT_PATH: &str = "MIDEN_FAUCET_IMPORT_ACCOUNT_PATH";
-const ENV_DEPLOY: &str = "MIDEN_FAUCET_DEPLOY";
+const ENV_IMPORT_OPERATOR_ACCOUNT_PATH: &str = "MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH";
+const ENV_FAUCET_ACCOUNT_ID: &str = "MIDEN_FAUCET_FAUCET_ACCOUNT_ID";
 const ENV_TOKEN_SYMBOL: &str = "MIDEN_FAUCET_TOKEN_SYMBOL";
 const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
 const ENV_MAX_SUPPLY: &str = "MIDEN_FAUCET_MAX_SUPPLY";
@@ -111,26 +98,44 @@ pub enum Command {
             short,
             long,
             value_name = "STRING",
-            required_unless_present = "import_account_path",
+            required_unless_present_any = ["import_operator_account_path", "faucet_account_id"],
             env = ENV_TOKEN_SYMBOL
         )]
         token_symbol: Option<String>,
 
         /// Decimals of the new token.
-        #[arg(short, long, value_name = "U8", required_unless_present = "import_account_path", env = ENV_DECIMALS)]
+        #[arg(short, long, value_name = "U8", required_unless_present_any = ["import_operator_account_path", "faucet_account_id"], env = ENV_DECIMALS)]
         decimals: Option<u8>,
 
         /// Max supply of the new token (in base units).
-        #[arg(short, long, value_name = "U64", required_unless_present = "import_account_path", env = ENV_MAX_SUPPLY)]
+        #[arg(short, long, value_name = "U64", required_unless_present_any = ["import_operator_account_path", "faucet_account_id"], env = ENV_MAX_SUPPLY)]
         max_supply: Option<u64>,
 
-        /// Set an existing faucet account file to use, instead of creating a new account.
-        #[arg(long = "import", value_name = "FILE", conflicts_with_all = ["token_symbol", "decimals", "max_supply"], env = ENV_IMPORT_ACCOUNT_PATH)]
-        import_account_path: Option<PathBuf>,
+        /// Set an existing operator account file to use, instead of creating a new operator
+        /// account.
+        ///
+        /// Must be paired with `--faucet-account-id`, which identifies the faucet account this
+        /// operator owns.
+        #[arg(
+            long = "import",
+            value_name = "FILE",
+            requires = "faucet_account_id",
+            conflicts_with_all = ["token_symbol", "decimals", "max_supply"],
+            env = ENV_IMPORT_OPERATOR_ACCOUNT_PATH
+        )]
+        import_operator_account_path: Option<PathBuf>,
 
-        /// Whether to deploy the faucet account to the node.
-        #[arg(long, value_name = "BOOL", default_value_t = false, env = ENV_DEPLOY)]
-        deploy: bool,
+        /// Account ID of the existing faucet account to use, instead of creating a new one.
+        /// It must be a network account and it must be already deployed.
+        /// Must be paired with `--import`, which supplies the operator account that owns it.
+        #[arg(
+            long = "faucet-account-id",
+            value_name = "ACCOUNT_ID",
+            requires = "import_operator_account_path",
+            conflicts_with_all = ["token_symbol", "decimals", "max_supply"],
+            env = ENV_FAUCET_ACCOUNT_ID
+        )]
+        faucet_account_id: Option<String>,
     },
 
     /// Manage API keys.
@@ -324,29 +329,60 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             token_symbol,
             decimals,
             max_supply,
-            import_account_path,
-            deploy,
+            import_operator_account_path,
+            faucet_account_id,
         } => {
-            let (account, secret) = if let Some(account_path) = import_account_path {
-                // Import existing faucet account
-                let account_data = AccountFile::read(account_path)
-                    .context("failed to read account data from file")?;
-                let secret = account_data
-                    .auth_secret_keys
-                    .first()
-                    .context("auth secret key is required")?
-                    .clone();
-                (account_data.account, secret)
-            } else {
-                println!("Generating new faucet account. This may take a few seconds...");
-                let token_symbol =
-                    token_symbol.expect("token_symbol should be present when not importing");
-                let decimals = decimals.expect("decimals should be present when not importing");
-                let max_supply =
-                    max_supply.expect("max_supply should be present when not importing");
-                create_faucet_account(token_symbol.as_str(), max_supply, decimals)?
-            };
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
+
+            // `--import` and `--faucet-account-id` require each other, so clap guarantees they are
+            // either both set or both unset.
+            let (faucet_account, operator_account, operator_secret) =
+                if let (Some(operator_account_path), Some(faucet_account_id)) =
+                    (import_operator_account_path, faucet_account_id)
+                {
+                    let operator_account_data = AccountFile::read(operator_account_path)
+                        .context("failed to read operator account data from file")?;
+                    let operator_secret = operator_account_data
+                        .auth_secret_keys
+                        .first()
+                        .context("auth secret key is required")?
+                        .clone();
+                    let (faucet_account_id, _) = AccountId::parse(&faucet_account_id)
+                        .context("failed to parse faucet account id")?;
+                    println!(
+                        "Using existing faucet account {} owned by operator account {}",
+                        faucet_account_id.to_hex(),
+                        operator_account_data.account.id(),
+                    );
+                    (
+                        FaucetAccount::Existing(faucet_account_id),
+                        operator_account_data.account,
+                        operator_secret,
+                    )
+                } else {
+                    println!("Generating new operator account.");
+                    let (operator_account, operator_secret) = create_faucet_operator_account()?;
+
+                    println!("Generating new faucet account. This may take a few seconds...");
+                    let token_symbol =
+                        token_symbol.expect("token_symbol should be present when not importing");
+                    let decimals = decimals.expect("decimals should be present when not importing");
+                    let max_supply =
+                        max_supply.expect("max_supply should be present when not importing");
+                    let fee_faucet_id = fetch_fee_faucet_id(&node_endpoint, timeout).await?;
+                    let faucet_account = create_network_faucet_account(
+                        token_symbol.as_str(),
+                        max_supply,
+                        decimals,
+                        operator_account.id(),
+                        fee_faucet_id,
+                    )?;
+                    (
+                        FaucetAccount::New(Box::new(faucet_account)),
+                        operator_account,
+                        operator_secret,
+                    )
+                };
             let faucet_config = FaucetConfig {
                 store_path,
                 node_endpoint,
@@ -354,9 +390,14 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 timeout,
                 remote_tx_prover_url,
             };
-            Box::pin(Faucet::init(&faucet_config, account, &secret, deploy))
-                .await
-                .context("failed to initialize faucet")?;
+            Box::pin(Faucet::init(
+                &faucet_config,
+                faucet_account,
+                &operator_secret,
+                operator_account,
+            ))
+            .await
+            .context("failed to initialize faucet")?;
 
             println!("Faucet account successfully initialized");
         },
@@ -427,8 +468,20 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 timeout,
                 remote_tx_prover_url,
             };
-            let faucet = Faucet::load(&config).await.context("failed to load faucet")?;
+            let mut faucet = Faucet::load(&config).await.context("failed to load faucet")?;
             let issuance_receiver = faucet.subscribe_issuance();
+
+            tracing::info!(
+                target: COMPONENT,
+                {
+                    faucet.account.id = %faucet.faucet_id().account_id,
+                    operator.account.id = %faucet.operator_id(),
+                    node.endpoint = %node_endpoint,
+                    note_transport.url = ?note_transport_url.as_ref().map(Url::as_str),
+                    batch_size
+                },
+                "Faucet loaded",
+            );
 
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
@@ -484,9 +537,9 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 pow_secret,
                 rate_limiter_config,
                 &api_keys,
-                store,
                 note_transport_client,
                 issuance_receiver,
+                faucet.p2id_notes(),
             );
 
             // Use select to concurrently:
@@ -580,61 +633,6 @@ fn parse_node_endpoint(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow
         .with_context(|| format!("failed to parse node url: {url}"))
 }
 
-/// Creates a new faucet account from the given parameters.
-fn create_faucet_account(
-    token_symbol: &str,
-    max_supply: u64,
-    decimals: u8,
-) -> anyhow::Result<(Account, AuthSecretKey)> {
-    let mut rng = ChaCha20Rng::from_seed(rand::random());
-    let secret = {
-        let auth_seed: [u64; 4] = rng.random();
-        let rng_seed = Word::from(auth_seed.map(Felt::new_unchecked));
-        SecretKey::with_rng(&mut RandomCoin::new(rng_seed))
-    };
-
-    let symbol = TokenSymbol::try_from(token_symbol).context("failed to parse token symbol")?;
-    let name = TokenName::new(&symbol.to_string()).context("failed to derive token name")?;
-
-    let faucet = FungibleFaucet::builder()
-        .name(name)
-        .symbol(symbol)
-        .decimals(decimals)
-        .max_supply(
-            miden_client::asset::AssetAmount::new(max_supply)
-                .context("max supply exceeds the maximum asset amount")?,
-        )
-        .build()
-        .context("failed to build fungible faucet component")?;
-
-    let auth_component = AuthSingleSigAcl::new(
-        Approver::new(
-            PublicKeyCommitment::from(secret.public_key()),
-            AuthScheme::Falcon512Poseidon2,
-        ),
-        AuthSingleSigAclConfig::default(),
-    );
-
-    // Permissionless mint/burn/send/receive policies.
-    let token_policy_manager = TokenPolicyManager::builder()
-        .active_mint_policy(MintPolicy::allow_all())
-        .active_burn_policy(BurnPolicy::allow_all())
-        .active_send_policy(TransferPolicy::allow_all())
-        .active_receive_policy(TransferPolicy::allow_all())
-        .build();
-
-    let account = create_singlesig_user_fungible_faucet(
-        rng.random(),
-        faucet,
-        auth_component,
-        token_policy_manager,
-        AccountType::Public,
-    )
-    .context("failed to create basic fungible faucet account")?;
-
-    Ok((account, AuthSecretKey::Falcon512Poseidon2(secret)))
-}
-
 // TESTS
 // =================================================================================================
 
@@ -646,6 +644,7 @@ mod tests {
     use std::time::Duration;
 
     use clap::Parser;
+    use clap::error::ErrorKind;
     use fantoccini::ClientBuilder;
     use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
     use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
@@ -659,10 +658,64 @@ mod tests {
 
     use crate::network::FaucetNetwork;
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, ClientConfig, create_faucet_account, run_faucet_command};
+    use crate::{Cli, ClientConfig, run_faucet_command};
 
     // CLI TESTS
     // ---------------------------------------------------------------------------------------------
+
+    const TEST_FAUCET_ACCOUNT_ID: &str = "0xf640ba4c3fe40e710eb82764ff48e9";
+
+    /// Parses an `init` invocation, with `args` appended to the fixed prefix.
+    fn parse_init(args: &[&str]) -> Result<Cli, clap::Error> {
+        let mut command_args = vec!["miden-faucet", "init"];
+        command_args.extend_from_slice(args);
+        Cli::try_parse_from(command_args)
+    }
+
+    /// `--import` and `--faucet-account-id` are all-or-nothing: each requires the other.
+    #[test]
+    fn init_import_requires_faucet_account_id() {
+        let Err(error) = parse_init(&["--import", "operator.mac"]) else {
+            panic!("--faucet-account-id should be required")
+        };
+        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+        assert!(error.to_string().contains("--faucet-account-id"));
+    }
+
+    #[test]
+    fn init_faucet_account_id_requires_import() {
+        let Err(error) = parse_init(&["--faucet-account-id", TEST_FAUCET_ACCOUNT_ID]) else {
+            panic!("--import should be required")
+        };
+        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+
+        // Only `--import` is missing. The token metadata must NOT be demanded here: it conflicts
+        // with `--faucet-account-id`, so asking for it would make the request unsatisfiable.
+        let message = error.to_string();
+        assert!(message.contains("--import"), "expected --import in: {message}");
+        for arg in ["--token-symbol", "--decimals", "--max-supply"] {
+            assert!(!message.contains(arg), "did not expect {arg} in: {message}");
+        }
+    }
+
+    /// Importing an account and creating one are mutually exclusive.
+    #[test]
+    fn init_import_conflicts_with_token_metadata() {
+        for conflicting in [
+            vec!["--token-symbol", "TEST"],
+            vec!["--decimals", "6"],
+            vec!["--max-supply", "100"],
+        ] {
+            let mut args =
+                vec!["--import", "operator.mac", "--faucet-account-id", TEST_FAUCET_ACCOUNT_ID];
+            args.extend_from_slice(&conflicting);
+
+            let Err(error) = parse_init(&args) else {
+                panic!("{conflicting:?} should conflict with --import")
+            };
+            assert_eq!(error.kind(), ErrorKind::ArgumentConflict);
+        }
+    }
 
     #[tokio::test]
     async fn init_with_new_token() {
@@ -683,53 +736,48 @@ mod tests {
             store_path.to_str().unwrap(),
         ])))
         .await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{:?}", result.err());
     }
 
+    /// `--import` and `--faucet-account-id` together take the `FaucetAccount::Existing` path: the
+    /// operator account is read from the file and the faucet account is fetched from the node
+    /// instead of being created.
+    ///
+    /// The stub node serves no accounts, so the run ends at that fetch. Failing there rather than
+    /// earlier is what shows both flags were honoured: the operator file was read, the faucet id
+    /// parsed, and `Existing` chosen over `New`.
     #[tokio::test]
-    async fn init_importing_account_file() {
+    async fn init_with_imported_operator_account() {
         let stub_node_url = run_stub_node().await;
         let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-        let account_path = temp_dir().join("test_account.mac");
-        let (account, secret) = create_faucet_account("TEST", 100_000_000, 3).unwrap();
-        let account_data = AccountFile::new(account, vec![secret]);
-        account_data.write(&account_path).unwrap();
+
+        // Write out an operator account file for `--import` to read.
+        let operator_account_path = temp_dir().join(format!("{}.mac", Uuid::new_v4()));
+        let (operator_account, operator_secret) =
+            crate::create_faucet_operator_account().expect("failed to create operator account");
+        AccountFile::new(operator_account, vec![operator_secret])
+            .write(&operator_account_path)
+            .expect("failed to write operator account file");
 
         let result = Box::pin(run_faucet_command(Cli::parse_from([
             "miden-faucet",
             "init",
             "--import",
-            account_path.to_str().unwrap(),
+            operator_account_path.to_str().unwrap(),
+            "--faucet-account-id",
+            TEST_FAUCET_ACCOUNT_ID,
             "--node-url",
             stub_node_url.to_string().as_str(),
             "--store",
             store_path.to_str().unwrap(),
         ])))
         .await;
-        assert!(result.is_ok());
-    }
 
-    #[tokio::test]
-    async fn init_with_deploy() {
-        let stub_node_url = run_stub_node().await;
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "init",
-            "--token-symbol",
-            "TEST",
-            "--decimals",
-            "6",
-            "--max-supply",
-            "100000000000000000",
-            "--node-url",
-            stub_node_url.to_string().as_str(),
-            "--store",
-            store_path.to_str().unwrap(),
-            "--deploy",
-        ])))
-        .await;
-        assert!(result.is_ok());
+        let error = format!("{:#}", result.expect_err("stub node serves no faucet account"));
+        assert!(
+            error.contains("failed to fetch faucet account"),
+            "expected the faucet account fetch to fail, got: {error}"
+        );
     }
 
     #[tokio::test]
@@ -817,7 +865,7 @@ mod tests {
 
         // Create an API key.
         let store = SqliteStore::new(store_path.clone()).await.unwrap();
-        let mut rng = rand_chacha::ChaCha20Rng::from_seed(rand::random());
+        let mut rng = rand::rngs::ChaCha20Rng::from_seed(rand::random());
         let key = crate::api_key::ApiKey::generate(&mut rng);
         crate::add_api_key_to_store(&store, &key).await.unwrap();
 
@@ -934,10 +982,7 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let listener_addr = listener.local_addr().unwrap();
         let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
-        tokio::spawn({
-            let stub_node_url = stub_node_url.clone();
-            async move { serve_stub(&stub_node_url).await.unwrap() }
-        });
+        tokio::spawn(async move { serve_stub(listener).await.unwrap() });
         stub_node_url
     }
 
@@ -956,8 +1001,8 @@ mod tests {
                 token_symbol: Some("TEST".to_owned()),
                 decimals: Some(6),
                 max_supply: Some(1_000_000_000_000),
-                import_account_path: None,
-                deploy: false,
+                import_operator_account_path: None,
+                faucet_account_id: None,
             },
         }))
         .await
