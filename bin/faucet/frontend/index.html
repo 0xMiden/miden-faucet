@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Miden Faucet</title>
     <link rel="stylesheet" href="index.css">
+    <link rel="preload" href="header.webp" as="image" fetchpriority="high">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -17,7 +18,8 @@
 <body>
     <div class="container">
         <header class="header">
-            <img src="header.png" alt="Miden Faucet" class="header-image">
+            <img src="header.webp" alt="Miden Faucet" class="header-image" width="1800" height="396"
+                fetchpriority="high">
         </header>
 
         <main class="main-content">
@@ -33,7 +35,9 @@
 
             <div class="form-group">
                 <label for="token-amount" class="form-label">Token amount</label>
-                <select id="token-amount" class="form-select"></select>
+                <select id="token-amount" class="form-select" disabled>
+                    <option value="">Loading…</option>
+                </select>
                 <div class="token-amount-hint" id="token-amount-hint"></div>
             </div>
 
@@ -278,13 +282,16 @@
             <div class="footer-section">
                 <div class="footer-label">Faucet address</div>
                 <div class="footer-value">
-                    <span id="faucet-address"> -</span>
+                    <span class="inline-loader" id="faucet-address-loader"></span>
+                    <span id="faucet-address" hidden> -</span>
                 </div>
             </div>
             <div class="footer-section tokens-section">
                 <div class="footer-label">Tokens claimed</div>
                 <div class="footer-value">
-                    <span id="issuance">-</span> / <span id="tokens-supply">-</span>
+                    <span class="inline-loader" id="issuance-loader"></span>
+                    <span id="issuance-values" hidden><span id="issuance">-</span> / <span
+                            id="tokens-supply">-</span></span>
                 </div>
                 <div class="issuance-bar">
                     <div class="issuance-fill" id="issuance-fill"></div>
@@ -330,8 +337,6 @@
             </div>
         </div>
     </footer>
-
-    <script type="module" src="bundle.js"></script>
 </body>
 
 </html>
