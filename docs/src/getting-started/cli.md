@@ -65,6 +65,37 @@ miden-faucet start \
 A newly created faucet account is always deployed by submitting an empty transaction. An imported
 faucet account is already on-chain, so nothing is submitted.
 
+### Fee-charging chains
+
+On a chain whose genesis sets a non-zero `verification_base_fee`, every transaction pays a fee in the
+chain's native asset from the executing account's vault. The kernel charges
+`verification_base_fee * (ilog2(execution cycles) + 1)`, so a transaction costs a small multiple of
+the base fee and never more than `30 * verification_base_fee` (the maximum number of execution
+cycles is `2^29`).
+
+- `init` refuses to create a new faucet account: the account would have to pay for its own
+  deployment out of an empty vault, and nothing sponsors a deployment transaction. Import an existing
+  faucet account with `--import` and `--faucet-account-id`.
+- The operator account pays for every MINT transaction. The faucet commits the fee conversion info
+  (native asset, rate 1/1) through the transaction's auth args on its own, so the operator must use
+  the `AuthSingleSig` authentication component (the default) and hold the native asset. `start` fails
+  if the operator holds none of it, and `/get_tokens` answers `503 Service Unavailable` while the
+  balance is below one worst case transaction fee. A MINT transaction carrying a single note costs
+  `17 * verification_base_fee` (0.17 MIDEN on devnet), a full batch a little more.
+- The operator also prepays the network transaction that consumes each MINT note. Sending a note to
+  a network account attaches a FEE_SPONSORSHIP note funded from the sender's vault, priced by the
+  target's fee policy, which the faucet collects to pay for that transaction. The faucet account
+  needs no balance of its own; it keeps whatever the sponsorship covered beyond the fee charged.
+  Size the operator's balance for both costs: at a sponsorship priced at the worst case transaction
+  fee, one mint costs the operator roughly `47 * verification_base_fee`, so 1,000 MIDEN on devnet is
+  on the order of two thousand requests rather than many thousands.
+- Sponsorship only happens if the chain's genesis built its network faucet for it: the faucet must
+  price its MINT notes above zero, charge in the native asset, and allowlist the FEE_SPONSORSHIP note
+  script. On a chain where it does not, MINT transactions still succeed but the network never mints
+  the P2ID notes, and the operator pays for every failed attempt. `start` logs a warning when the
+  faucet account holds none of the fee asset, which is one symptom of that misconfiguration; an empty
+  faucet vault is otherwise normal and expected.
+
 ### Advanced Configuration
 | `--remote-tx-prover-url` | Remote transaction prover. Only relevant when creating a faucet account. | - | No |
 

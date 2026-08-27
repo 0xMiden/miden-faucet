@@ -478,6 +478,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     operator.account.id = %faucet.operator_id(),
                     node.endpoint = %node_endpoint,
                     note_transport.url = ?note_transport_url.as_ref().map(Url::as_str),
+                    fee.faucet.id = %faucet.fee_parameters().fee_faucet_id(),
+                    fee.verification_base_fee = faucet.fee_parameters().verification_base_fee(),
                     batch_size
                 },
                 "Faucet loaded",
@@ -612,9 +614,13 @@ async fn add_api_key_to_store(store: &SqliteStore, key: &ApiKey) -> anyhow::Resu
 }
 
 /// Removes a single API key from the settings table.
+///
+/// Fails if the key is not present in the store, so a typo does not report a successful removal.
 async fn remove_api_key_from_store(store: &SqliteStore, key: &ApiKey) -> anyhow::Result<()> {
     let setting_key = format!("{}{}", api_key::API_KEY_SETTING_PREFIX, key.encode());
-    store.remove_setting(setting_key).await.context("failed to remove API key")
+    let removed = store.remove_setting(setting_key).await.context("failed to remove API key")?;
+    anyhow::ensure!(removed, "API key not found in the store");
+    Ok(())
 }
 
 /// Parses the node endpoint from the cli arguments. If an explicit url is provided, it is used.
@@ -657,7 +663,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::network::FaucetNetwork;
-    use crate::testing::stub_rpc_api::serve_stub;
+    use crate::testing::stub_rpc_api::{serve_stub, serve_stub_with_fee};
     use crate::{Cli, ClientConfig, run_faucet_command};
 
     // CLI TESTS
@@ -737,6 +743,35 @@ mod tests {
         ])))
         .await;
         assert!(result.is_ok(), "{:?}", result.err());
+    }
+
+    /// A new faucet account has to pay for its own deployment transaction, which it cannot do on
+    /// a chain that charges fees, so `init` refuses to create one there and points at importing.
+    #[tokio::test]
+    async fn init_with_new_token_fails_on_fee_charging_chain() {
+        let stub_node_url = run_fee_charging_stub_node(500).await;
+        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "init",
+            "--token-symbol",
+            "TEST",
+            "--decimals",
+            "6",
+            "--max-supply",
+            "100000000000000000",
+            "--node-url",
+            stub_node_url.to_string().as_str(),
+            "--store",
+            store_path.to_str().unwrap(),
+        ])))
+        .await;
+
+        let error = format!("{:#}", result.expect_err("a new faucet cannot be deployed with fees"));
+        assert!(
+            error.contains("charges transaction fees") && error.contains("--import"),
+            "expected the fee-charging refusal, got: {error}"
+        );
     }
 
     /// `--import` and `--faucet-account-id` together take the `FaucetAccount::Existing` path: the
@@ -983,6 +1018,17 @@ mod tests {
         let listener_addr = listener.local_addr().unwrap();
         let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
         tokio::spawn(async move { serve_stub(listener).await.unwrap() });
+        stub_node_url
+    }
+
+    /// Runs a stub node whose chain charges `verification_base_fee` per verification cycle.
+    async fn run_fee_charging_stub_node(verification_base_fee: u32) -> Url {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener_addr = listener.local_addr().unwrap();
+        let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
+        tokio::spawn(
+            async move { serve_stub_with_fee(listener, verification_base_fee).await.unwrap() },
+        );
         stub_node_url
     }
 

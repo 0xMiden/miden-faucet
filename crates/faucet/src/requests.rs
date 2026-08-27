@@ -65,13 +65,26 @@ pub struct MintRequest {
     pub asset_amount: AssetAmount,
 }
 
+#[derive(Debug, Clone)]
 pub struct MintResponse {
     pub tx_id: TransactionId,
     pub note_id: NoteId,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum MintError {
     #[error("faucet supply exceeded")]
     AvailableSupplyExceeded,
+    /// The operator account does not hold enough of the chain's fee asset to pay for a
+    /// transaction. Amounts are in base units of the fee asset.
+    #[error(
+        "operator account {operator_account_id} holds {balance} base units of fee asset \
+         {fee_faucet_id}, but a transaction can cost up to {required}"
+    )]
+    OperatorFeeBalanceTooLow {
+        operator_account_id: AccountId,
+        fee_faucet_id: AccountId,
+        balance: u64,
+        required: u64,
+    },
 }
