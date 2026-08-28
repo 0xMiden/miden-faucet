@@ -23,20 +23,14 @@ use miden_client::account::{
     Account,
     AccountBuilder,
     AccountComponent,
-    AccountComponentInterface,
-    AccountComponentInterfaceExt,
     AccountId,
+    AccountReader,
     AccountType,
     Address,
     NetworkId,
     StorageSlotContent,
 };
-use miden_client::asset::{
-    AssetAmount as ProtocolAssetAmount,
-    AssetId,
-    FungibleAsset,
-    TokenSymbol,
-};
+use miden_client::asset::{AssetAmount as ProtocolAssetAmount, FungibleAsset, TokenSymbol};
 use miden_client::auth::{Approver, AuthScheme, AuthSecretKey, AuthSingleSig};
 use miden_client::block::{BlockNumber, FeeParameters};
 use miden_client::builder::ClientBuilder;
@@ -54,11 +48,10 @@ use miden_client::note::{
     NoteId,
     NoteType as ProtocolNoteType,
     P2idNote,
-    TxFeeNote,
 };
 use miden_client::rpc::domain::account::{AccountStorageRequirements, GetAccountRequest};
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, NodeRpcClient, RpcError};
-use miden_client::store::{NoteFilter, Store, TransactionFilter};
+use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
     ForeignAccount,
@@ -69,14 +62,7 @@ use miden_client::transaction::{
     TransactionRequestBuilder,
     TransactionRequestError,
 };
-use miden_client::{
-    Client,
-    ClientError,
-    Felt,
-    MAX_TX_EXECUTION_CYCLES,
-    RemoteTransactionProver,
-    Word,
-};
+use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
 use rand::{RngExt, rng};
 use tokio::sync::mpsc::Receiver;
@@ -157,15 +143,12 @@ pub struct CachedP2idNote {
 pub struct Faucet {
     id: FaucetId,
     client: Client<FilesystemKeyStore>,
-    store: Arc<dyn Store>,
     state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: watch::Sender<AssetAmount>,
     max_supply: AssetAmount,
     p2id_notes: P2idNoteCache,
     operator_account_id: AccountId,
-    /// The chain's fee parameters, read from the genesis block header.
-    fee_parameters: FeeParameters,
 }
 
 /// Configuration for initializing and loading a faucet.
@@ -321,8 +304,6 @@ impl Faucet {
             Self::deploy_faucet_account(faucet_account_id, config).await?;
         }
 
-        log_operator_fee_requirement(&operator_account, &fee_parameters);
-
         info!(
             target: COMPONENT,
             {
@@ -393,7 +374,6 @@ impl Faucet {
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component = StateSync::new(grpc_client, Arc::new(note_screener), None);
 
-        // Fee parameters are chain constants committed in the genesis header.
         let fee_parameters = read_fee_parameters(&client).await?;
         if fee_parameters.verification_base_fee() != 0 {
             // Both accounts are public, so a sync picks up funding that happened on chain after
@@ -405,21 +385,8 @@ impl Faucet {
             )
             .await
             .context("failed to sync before checking the fee asset balances")?;
-            let operator_account = client
-                .get_account(operator_account_id)
-                .await?
-                .context("operator account is not tracked")?;
-            check_operator_fee_balance(&operator_account, &fee_parameters).map_err(|error| {
-                anyhow::anyhow!(error).context(
-                    "the operator account cannot pay transaction fees, fund it with the chain's \
-                     fee asset before starting the faucet",
-                )
-            })?;
-            let faucet_account = client
-                .get_account(account.id())
-                .await?
-                .context("faucet account is not tracked")?;
-            if fee_asset_balance(&faucet_account, &fee_parameters) == 0 {
+            let faucet_reader = client.account_reader(account.id());
+            if fee_asset_balance(&faucet_reader, &fee_parameters).await? == 0 {
                 warn!(
                     target: COMPONENT,
                     {
@@ -436,14 +403,12 @@ impl Faucet {
         Ok(Self {
             id,
             client,
-            store: sqlite_store,
             state_sync_component,
             tx_prover,
             issuance,
             max_supply,
             p2id_notes: P2idNoteCache::default(),
             operator_account_id,
-            fee_parameters,
         })
     }
 
@@ -566,20 +531,6 @@ impl Faucet {
             return Ok(());
         }
 
-        // The operator pays the transaction fee out of its own vault. Reject the batch with a
-        // clear error when it cannot, instead of failing deep inside the auth procedure.
-        let operator_account = self
-            .client
-            .get_account(self.operator_account_id)
-            .await?
-            .context("operator account is not tracked")?;
-        if let Err(error) = check_operator_fee_balance(&operator_account, &self.fee_parameters) {
-            error!(%error, "Operator cannot pay the transaction fee, rejecting the batch");
-            for sender in response_senders {
-                let _ = sender.send(Err(error.clone()));
-            }
-            return Ok(());
-        }
         let faucet_account = self.faucet_account().await.map_err(|error| *error)?;
 
         // Build notes
@@ -617,10 +568,11 @@ impl Faucet {
         }
 
         // Build and submit transaction
+        let fee_parameters = read_fee_parameters(&self.client).await?;
         let tx_request = Faucet::create_transaction(
             &mint_notes,
             faucet_foreign_account(&faucet_account)?,
-            native_fee_conversion_info(&operator_account, &self.fee_parameters),
+            FeeConversionInfo::one_to_one(fee_parameters.fee_faucet_id()),
         )
         .context("faucet failed to create transaction")?;
         // The MINT notes are sent by the operator, so the operator must be the executing account.
@@ -715,23 +667,22 @@ impl Faucet {
     ///
     /// The MINT notes target the faucet, a network account, so creating them prices each note
     /// through an FPI into the faucet's fee policy. `faucet_account` supplies the faucet as a
-    /// foreign account for that call. `fee_conversion_info`, when given, is committed through the
-    /// auth args so the operator's auth procedure can pay the transaction fee.
+    /// foreign account for that call. `fee_conversion_info` is committed through the auth args so
+    /// the operator's auth procedure can pay the transaction fee. It is always committed: on a
+    /// chain that charges no fees the auth procedure ignores it.
     #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err)]
     fn create_transaction(
         notes: &[Note],
         faucet_account: ForeignAccount,
-        fee_conversion_info: Option<FeeConversionInfo>,
+        fee_conversion_info: FeeConversionInfo,
     ) -> Result<TransactionRequest, TransactionRequestError> {
         let notes: Vec<Note> = notes.to_vec();
-        let mut builder = TransactionRequestBuilder::new()
+        TransactionRequestBuilder::new()
             .own_output_notes(notes)
             .expiration_delta(MINT_TX_EXPIRATION_DELTA)
-            .foreign_accounts([faucet_account]);
-        if let Some(conversion_info) = fee_conversion_info {
-            builder = builder.fee_conversion_info(conversion_info, FEE_CONVERSION_SALT);
-        }
-        builder.build()
+            .foreign_accounts([faucet_account])
+            .fee_conversion_info(fee_conversion_info, FEE_CONVERSION_SALT)
+            .build()
     }
 
     /// Executes, proves, and then submits a transaction using the local miden-client.
@@ -833,8 +784,6 @@ impl Faucet {
                 record_grpc_error_fields(e);
             })?;
 
-        remove_tx_fee_note_tags(self.store.as_ref()).await?;
-
         Ok(tx_id)
     }
 
@@ -881,9 +830,10 @@ impl Faucet {
         self.operator_account_id
     }
 
-    /// Returns the chain's fee parameters, as committed in the genesis block header.
-    pub fn fee_parameters(&self) -> &FeeParameters {
-        &self.fee_parameters
+    /// Returns the chain's fee parameters, read from the latest block header the client has
+    /// stored.
+    pub async fn fee_parameters(&self) -> anyhow::Result<FeeParameters> {
+        read_fee_parameters(&self.client).await
     }
 
     /// Reads the current issuance from the client's store and updates the watch channel.
@@ -931,120 +881,43 @@ impl Faucet {
 // FEE HELPERS
 // ================================================================================================
 
-/// Reads the chain's fee parameters from the genesis block header stored by the client.
+/// Reads the chain's fee parameters from the latest block header the client has stored.
 async fn read_fee_parameters(client: &Client<FilesystemKeyStore>) -> anyhow::Result<FeeParameters> {
-    let (genesis, _) = client
-        .get_block_header_by_num(BlockNumber::GENESIS)
+    let latest_block = client
+        .get_latest_block_header()
         .await
-        .context("failed to read the genesis block header from the store")?
-        .context("the genesis block header is not in the store")?;
-    Ok(genesis.fee_parameters().clone())
+        .context("failed to read the latest block header from the store")?;
+    Ok(latest_block.fee_parameters().clone())
 }
 
-/// Fails when a newly created faucet account could not be deployed on a chain charging
+/// Fails when the faucet cannot deploy a newly created faucet account on a chain charging
 /// `fee_parameters`.
 ///
-/// A new faucet account is deployed by an empty transaction that its own auth procedure has to pay
-/// for. Its vault is empty and, being a network account without a wallet component, it cannot
-/// receive the fee asset, so on a fee-charging chain such a deployment can never succeed.
+/// The faucet deploys a new account with an empty transaction, which the account's own auth
+/// procedure has to pay for out of a vault that is still empty. A deployment could fund itself by
+/// consuming a note carrying enough of the fee asset, but the faucet does not build one, so this
+/// deployment fails on a fee-charging chain.
 fn ensure_new_faucet_can_be_deployed(fee_parameters: &FeeParameters) -> anyhow::Result<()> {
     anyhow::ensure!(
         fee_parameters.verification_base_fee() == 0,
         "cannot create a new faucet account on a chain that charges transaction fees \
-         (verification base fee {}): the account would have to pay for its own deployment out of \
-         an empty vault. Import an existing faucet with `--import` and `--faucet-account-id` \
-         instead",
+         (verification base fee {}): the faucet deploys it with an empty transaction, which has \
+         to pay for itself out of the new account's empty vault. Import an existing faucet with \
+         `--import` and `--faucet-account-id` instead",
         fee_parameters.verification_base_fee(),
     );
     Ok(())
 }
 
-/// Logs what the operator has to hold to pay for MINT transactions on a fee-charging chain.
-///
-/// The operator's state is taken from the account file at `init`, so this is informational:
-/// `start` checks the on-chain balance.
-fn log_operator_fee_requirement(operator_account: &Account, fee_parameters: &FeeParameters) {
-    if fee_parameters.verification_base_fee() == 0 {
-        return;
-    }
-    info!(
-        target: COMPONENT,
-        {
-            operator.account.id = %operator_account.id(),
-            fee.faucet.id = %fee_parameters.fee_faucet_id(),
-            fee.verification_base_fee = fee_parameters.verification_base_fee(),
-            fee.max_per_transaction = max_transaction_fee(fee_parameters),
-            operator.fee_asset_balance = fee_asset_balance(operator_account, fee_parameters),
-        },
-        "The chain charges transaction fees: the operator account must hold the fee asset before \
-         the faucet can mint",
-    );
-}
-
-/// Returns the most a single transaction can be charged under `fee_parameters`.
-///
-/// The kernel charges `verification_base_fee * (ilog2(cycles) + 1)`, where `cycles` is the number
-/// of cycles the transaction took to execute (see `compute_fee` in the transaction kernel), and a
-/// transaction can never exceed [`MAX_TX_EXECUTION_CYCLES`]. Output notes are not charged for.
-/// This is the balance the operator needs to be sure it can pay for one MINT transaction.
-pub fn max_transaction_fee(fee_parameters: &FeeParameters) -> u64 {
-    let max_verification_cycles = u64::from(MAX_TX_EXECUTION_CYCLES.ilog2() + 1);
-    u64::from(fee_parameters.verification_base_fee()) * max_verification_cycles
-}
-
 /// Returns the amount of the chain's fee asset held in `account`'s vault, in base units.
-pub fn fee_asset_balance(account: &Account, fee_parameters: &FeeParameters) -> u64 {
-    let fee_asset_id = AssetId::new_fungible(fee_parameters.fee_faucet_id());
-    account
-        .vault()
-        .get_balance(fee_asset_id)
-        .map(|amount| amount.as_u64())
-        .expect("a fungible asset id should have a fungible composition")
-}
-
-/// Checks that `operator` can pay the fee of one transaction.
 ///
-/// Returns `Ok(())` on a chain that charges no fees.
-fn check_operator_fee_balance(
-    operator: &Account,
+/// The balance is read straight from the store, without loading the whole account.
+pub async fn fee_asset_balance(
+    account: &AccountReader,
     fee_parameters: &FeeParameters,
-) -> Result<(), MintError> {
-    if fee_parameters.verification_base_fee() == 0 {
-        return Ok(());
-    }
-    let required = max_transaction_fee(fee_parameters);
-    let balance = fee_asset_balance(operator, fee_parameters);
-    if balance < required {
-        return Err(MintError::OperatorFeeBalanceTooLow {
-            operator_account_id: operator.id(),
-            fee_faucet_id: fee_parameters.fee_faucet_id(),
-            balance,
-            required,
-        });
-    }
-    Ok(())
-}
-
-/// Returns the conversion info `account` commits to pay transaction fees in the chain's native fee
-/// asset at rate 1/1, or `None` when no conversion info must be committed.
-///
-/// Conversion info is only read by signature based auth components: `AuthSingleSig` reads it from
-/// the auth args and pays the fee in the auth procedure. Other components either pay without it
-/// (network accounts pay in the native asset from their own vault) or ignore the auth args, and
-/// the client rejects requests declaring conversion info for them. On a chain that charges no fee
-/// the auth procedure accepts the empty word, so nothing is committed there either.
-pub fn native_fee_conversion_info(
-    account: &Account,
-    fee_parameters: &FeeParameters,
-) -> Option<FeeConversionInfo> {
-    if fee_parameters.verification_base_fee() == 0 {
-        return None;
-    }
-    let reads_conversion_info =
-        AccountComponentInterface::from_procedures(account.code().procedures())
-            .iter()
-            .any(|component| matches!(component, AccountComponentInterface::AuthSingleSig));
-    reads_conversion_info.then(|| FeeConversionInfo::one_to_one(fee_parameters.fee_faucet_id()))
+) -> Result<u64, ClientError> {
+    let balance = account.get_balance(fee_parameters.fee_faucet_id()).await?;
+    Ok(balance.as_u64())
 }
 
 /// Declares the faucet as a foreign account of the operator's MINT transaction.
@@ -1065,22 +938,6 @@ pub fn faucet_foreign_account(
         .map(|slot| slot.name().clone())
         .collect();
     ForeignAccount::public(faucet_account.id(), AccountStorageRequirements::all_entries(&map_slots))
-}
-
-/// Removes the `TX_FEE` note tags the client registers after a fee paying transaction.
-///
-/// The operator's own `TX_FEE` note is a bearer note, so the client tracks it as a consumable input
-/// note and registers its tag. All `TX_FEE` notes on a chain share that tag, so leaving it in the
-/// store would make any sync driven by the store's tags pull in every fee note the chain produces.
-/// The faucet's own sync never uses the store's tags, this keeps the store clean for anything else
-/// that reads it.
-async fn remove_tx_fee_note_tags(store: &dyn Store) -> Result<(), ClientError> {
-    for record in store.get_note_tags().await? {
-        if record.tag == TxFeeNote::TAG {
-            store.remove_note_tag(record).await?;
-        }
-    }
-    Ok(())
 }
 
 // HELPER FUNCTIONS
@@ -1344,6 +1201,7 @@ pub fn create_faucet_operator_account() -> anyhow::Result<(Account, AuthSecretKe
 mod tests {
     use std::env::temp_dir;
 
+    use miden_client::asset::AssetId;
     use miden_client::block::BlockNumber;
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
@@ -1458,72 +1316,6 @@ mod tests {
     /// (`ilog2(execution cycles) + 1`), so a transaction pays a small multiple of it.
     const TEST_VERIFICATION_BASE_FEE: u32 = 500;
 
-    /// A transaction can never take more than [`MAX_TX_EXECUTION_CYCLES`] (2^29) cycles, so the
-    /// fee is bounded by `30 * verification_base_fee`.
-    #[test]
-    fn max_transaction_fee_is_the_kernel_upper_bound() {
-        let fee_faucet_id = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
-        assert_eq!(max_transaction_fee(&FeeParameters::new(fee_faucet_id, 0)), 0);
-        assert_eq!(max_transaction_fee(&FeeParameters::new(fee_faucet_id, 500)), 15_000);
-        assert_eq!(max_transaction_fee(&FeeParameters::new(fee_faucet_id, 10_000)), 300_000);
-    }
-
-    /// The operator only has to hold the fee asset on a chain that charges fees, and then at least
-    /// one worst case transaction fee.
-    #[test]
-    fn operator_fee_balance_check() {
-        let fee_faucet_id = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
-        let (mut operator, _) = create_faucet_operator_account().unwrap();
-
-        // No fee, no requirement, even with an empty vault.
-        check_operator_fee_balance(&operator, &FeeParameters::new(fee_faucet_id, 0)).unwrap();
-
-        let fee_parameters = FeeParameters::new(fee_faucet_id, TEST_VERIFICATION_BASE_FEE);
-        let required = max_transaction_fee(&fee_parameters);
-        let error = check_operator_fee_balance(&operator, &fee_parameters).unwrap_err();
-        assert!(
-            matches!(
-                error,
-                MintError::OperatorFeeBalanceTooLow { balance: 0, required: r, .. } if r == required
-            ),
-            "unexpected error: {error}"
-        );
-
-        // One base unit short of the requirement is still rejected.
-        let short = FungibleAsset::new(fee_faucet_id, required - 1).unwrap();
-        operator.vault_mut().add_asset(short.into()).unwrap();
-        assert!(check_operator_fee_balance(&operator, &fee_parameters).is_err());
-
-        // The exact requirement passes.
-        let top_up = FungibleAsset::new(fee_faucet_id, 1).unwrap();
-        operator.vault_mut().add_asset(top_up.into()).unwrap();
-        check_operator_fee_balance(&operator, &fee_parameters).unwrap();
-        assert_eq!(fee_asset_balance(&operator, &fee_parameters), required);
-    }
-
-    /// Conversion info is only committed when the chain charges fees and the paying account's auth
-    /// component reads it from the auth args.
-    #[test]
-    fn native_fee_conversion_info_depends_on_chain_and_auth() {
-        let fee_faucet_id = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
-        let (operator, _) = create_faucet_operator_account().unwrap();
-        let faucet =
-            create_network_faucet_account("TEST", 1_000, 6, operator.id(), fee_faucet_id).unwrap();
-
-        let no_fees = FeeParameters::new(fee_faucet_id, 0);
-        assert!(native_fee_conversion_info(&operator, &no_fees).is_none());
-
-        let fees = FeeParameters::new(fee_faucet_id, TEST_VERIFICATION_BASE_FEE);
-        let info = native_fee_conversion_info(&operator, &fees)
-            .expect("an AuthSingleSig operator commits conversion info");
-        assert_eq!(info.faucet_id(), fee_faucet_id);
-        assert_eq!(info.rate_num(), Felt::new_unchecked(1));
-        assert_eq!(info.rate_den(), Felt::new_unchecked(1));
-
-        // A network account pays in the native asset on its own and rejects auth args.
-        assert!(native_fee_conversion_info(&faucet, &fees).is_none());
-    }
-
     /// The MINT transaction declares the faucet as a foreign account, requesting every entry of
     /// each of its map slots, and commits the conversion info through the auth args.
     #[test]
@@ -1554,33 +1346,20 @@ mod tests {
             );
         }
 
-        // With conversion info.
         let info = FeeConversionInfo::one_to_one(fee_faucet_id);
-        let request = Faucet::create_transaction(
-            std::slice::from_ref(&mint_note),
-            foreign_account.clone(),
-            Some(info),
-        )
-        .unwrap();
+        let request =
+            Faucet::create_transaction(std::slice::from_ref(&mint_note), foreign_account, info)
+                .unwrap();
         assert!(request.declares_fee_conversion_info());
         let (auth_arg, preimage) = commit_fee_conversion_info(info, FEE_CONVERSION_SALT);
         assert_eq!(*request.auth_arg(), Some(auth_arg));
         assert_eq!(request.advice_map().get(&auth_arg).map(|value| value.to_vec()), Some(preimage));
         assert!(request.foreign_accounts().contains_key(&faucet.id()));
         assert_eq!(request.expected_output_own_notes(), vec![mint_note.clone()]);
-
-        // Without conversion info nothing is committed.
-        let request =
-            Faucet::create_transaction(std::slice::from_ref(&mint_note), foreign_account, None)
-                .unwrap();
-        assert!(!request.declares_fee_conversion_info());
-        assert!(request.auth_arg().is_none());
-        assert!(request.foreign_accounts().contains_key(&faucet.id()));
     }
 
     /// On a fee-charging chain, a funded operator pays the MINT transaction fee: the transaction
-    /// emits a `TX_FEE` note funded from the operator's vault, and the chain-wide `TX_FEE` tag the
-    /// client registers is removed again from the store.
+    /// emits a `TX_FEE` note funded from the operator's vault.
     #[tokio::test]
     async fn mint_pays_fee_on_fee_charging_chain() {
         let operator_fee_balance = 1_000_000;
@@ -1592,7 +1371,7 @@ mod tests {
         let mut faucet =
             build_faucet_on_chain(store.clone(), TEST_VERIFICATION_BASE_FEE, operator_fee_balance)
                 .await;
-        let fee_parameters = faucet.fee_parameters().clone();
+        let fee_parameters = faucet.fee_parameters().await.unwrap();
         let fee_asset_id = AssetId::new_fungible(fee_parameters.fee_faucet_id());
 
         let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1);
@@ -1604,14 +1383,10 @@ mod tests {
         let response = receiver.await.unwrap().expect("a funded operator can mint");
 
         // The operator paid the fee out of its vault.
-        let operator = faucet.client.get_account(faucet.operator_id()).await.unwrap().unwrap();
-        let balance = fee_asset_balance(&operator, &fee_parameters);
+        let operator_reader = faucet.client.account_reader(faucet.operator_id());
+        let balance = fee_asset_balance(&operator_reader, &fee_parameters).await.unwrap();
         let fee_paid = operator_fee_balance - balance;
         assert!(fee_paid > 0, "the operator should have paid a fee");
-        assert!(
-            fee_paid <= max_transaction_fee(&fee_parameters),
-            "fee {fee_paid} exceeds the kernel's upper bound"
-        );
         // The base fee is charged once per verification cycle.
         assert_eq!(fee_paid % u64::from(TEST_VERIFICATION_BASE_FEE), 0);
 
@@ -1632,57 +1407,6 @@ mod tests {
             .map(|asset| asset.unwrap_fungible().amount().as_u64())
             .collect();
         assert_eq!(fee_note_amounts, vec![fee_paid]);
-
-        // The TX_FEE tag is not left behind in the store.
-        let tags = store.get_note_tags().await.unwrap();
-        assert!(
-            tags.iter().all(|record| record.tag != TxFeeNote::TAG),
-            "TX_FEE tag should have been removed, got {tags:?}"
-        );
-    }
-
-    /// On a fee-charging chain, an operator without the fee asset gets every request in the batch
-    /// rejected with a clear error, and no transaction is attempted.
-    #[tokio::test]
-    async fn mint_rejects_batch_when_operator_cannot_pay() {
-        let store = Arc::new(
-            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
-                .await
-                .unwrap(),
-        );
-        let mut faucet = build_faucet_on_chain(store, TEST_VERIFICATION_BASE_FEE, 0).await;
-        let required = max_transaction_fee(faucet.fee_parameters());
-
-        let (tx_mint_requests, rx_mint_requests) = mpsc::channel(2);
-        let mut receivers = vec![];
-        for _ in 0..2 {
-            let (sender, receiver) = oneshot::channel();
-            tx_mint_requests.send((mint_request(), sender)).await.unwrap();
-            receivers.push(receiver);
-        }
-        drop(tx_mint_requests);
-        // The faucet keeps running: an unfunded operator is an operational condition, not a crash.
-        faucet.run(rx_mint_requests, 2).await.unwrap();
-
-        for receiver in receivers {
-            let error = receiver.await.unwrap().expect_err("an unfunded operator cannot mint");
-            match error {
-                MintError::OperatorFeeBalanceTooLow {
-                    operator_account_id,
-                    fee_faucet_id,
-                    balance,
-                    required: reported,
-                } => {
-                    assert_eq!(operator_account_id, faucet.operator_id());
-                    assert_eq!(fee_faucet_id, faucet.fee_parameters().fee_faucet_id());
-                    assert_eq!(balance, 0);
-                    assert_eq!(reported, required);
-                },
-                other @ MintError::AvailableSupplyExceeded => panic!("unexpected error: {other}"),
-            }
-        }
-        let transactions = faucet.client.get_transactions(TransactionFilter::All).await.unwrap();
-        assert!(transactions.is_empty(), "no transaction should have been submitted");
     }
 
     // TESTING HELPERS
@@ -1795,7 +1519,6 @@ mod tests {
         Faucet {
             id: FaucetId::new(faucet_account.id(), NetworkId::Testnet),
             client,
-            store: store.clone(),
             state_sync_component: StateSync::new(
                 mock_rpc,
                 Arc::new(NoteScreener::new(store)),
@@ -1806,7 +1529,6 @@ mod tests {
             max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
             operator_account_id: operator_account.id(),
             p2id_notes: P2idNoteCache::default(),
-            fee_parameters,
         }
     }
 

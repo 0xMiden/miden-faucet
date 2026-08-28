@@ -121,9 +121,7 @@ impl GetTokenError {
             Self::InvalidRequest(_) | Self::MintError(MintError::AvailableSupplyExceeded) => {
                 StatusCode::BAD_REQUEST
             },
-            Self::MintError(MintError::OperatorFeeBalanceTooLow { .. })
-            | Self::FaucetOverloaded
-            | Self::FaucetClosed => StatusCode::SERVICE_UNAVAILABLE,
+            Self::FaucetOverloaded | Self::FaucetClosed => StatusCode::SERVICE_UNAVAILABLE,
             Self::FaucetReturnChannelClosed => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -138,10 +136,6 @@ impl GetTokenError {
                 "Please enter a valid recipient address.".to_owned()
             },
             Self::InvalidRequest(error) => error.to_string(),
-            Self::MintError(MintError::OperatorFeeBalanceTooLow { .. }) => {
-                "The faucet cannot pay transaction fees right now, please try again later."
-                    .to_owned()
-            },
             Self::MintError(error) => error.to_string(),
             Self::FaucetOverloaded => {
                 "The faucet is currently overloaded, please try again later.".to_owned()
@@ -156,9 +150,6 @@ impl GetTokenError {
     /// Write a trace log for the error, if applicable.
     fn trace(&self) {
         match self {
-            Self::MintError(error @ MintError::OperatorFeeBalanceTooLow { .. }) => {
-                tracing::error!(%error, "operator account cannot pay the transaction fee");
-            },
             Self::InvalidRequest(_) | Self::MintError(_) => {},
             Self::FaucetOverloaded => tracing::warn!("faucet client is overloaded"),
             Self::FaucetClosed => {

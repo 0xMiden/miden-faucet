@@ -470,6 +470,10 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             };
             let mut faucet = Faucet::load(&config).await.context("failed to load faucet")?;
             let issuance_receiver = faucet.subscribe_issuance();
+            let fee_parameters = faucet
+                .fee_parameters()
+                .await
+                .context("failed to read the chain's fee parameters")?;
 
             tracing::info!(
                 target: COMPONENT,
@@ -478,8 +482,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     operator.account.id = %faucet.operator_id(),
                     node.endpoint = %node_endpoint,
                     note_transport.url = ?note_transport_url.as_ref().map(Url::as_str),
-                    fee.faucet.id = %faucet.fee_parameters().fee_faucet_id(),
-                    fee.verification_base_fee = faucet.fee_parameters().verification_base_fee(),
+                    fee.faucet.id = %fee_parameters.fee_faucet_id(),
+                    fee.verification_base_fee = fee_parameters.verification_base_fee(),
                     batch_size
                 },
                 "Faucet loaded",

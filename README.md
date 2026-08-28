@@ -55,17 +55,15 @@ the chain's native asset out of the executing account's vault. For the faucet th
 - The **operator** pays for each MINT transaction. The faucet commits the fee conversion info (native
   asset, rate 1/1) automatically, but the operator's vault must hold the native asset. `start` refuses
   to run while the operator holds none of it, and requests are answered with HTTP 503 while its
-  balance is below one worst case transaction fee. A transaction costs
-  `verification_base_fee * (ilog2(execution cycles) + 1)`: on devnet (`verification_base_fee = 10000`,
-  6 decimals) a MINT transaction costs about 0.17 MIDEN and can never cost more than 0.30 MIDEN.
+  balance is below one worst case transaction fee.
 - The **operator** also prepays the network transaction that turns each MINT note into the P2ID
   note. Sending a note to a network account attaches a FEE_SPONSORSHIP note funded from the sender's
   vault, priced by the target's fee policy, and the faucet collects it to pay for that transaction.
   The faucet account therefore never needs a balance of its own: it holds whatever the sponsorship
   covered beyond the fee actually charged. Budget for both costs when funding the operator.
-- `init` refuses to create a new faucet account on such a chain. A new faucet is deployed by an empty
-  transaction it has to pay for itself, and nothing sponsors a deployment, so the account must
-  already exist. Import it with `--import` and `--faucet-account-id`.
+- `init` refuses to create a new faucet account on such a chain. The faucet deploys a new account
+  with an empty transaction, which has to pay for itself out of the new account's empty vault, so the
+  account must already exist. Import it with `--import` and `--faucet-account-id`.
 
 The chain's genesis must build its network faucet so that sponsorship is possible: it has to price
 its MINT notes above zero, charge in the native asset, and allowlist the FEE_SPONSORSHIP note script.
@@ -86,13 +84,6 @@ miden-faucet init \
 miden-faucet start --network devnet --remote-tx-prover-url https://tx-prover.devnet.miden.io
 ```
 
-Top the operator up once its balance runs low, for example from a wallet holding the native asset
-with the miden-client CLI, then consume the note with the operator:
-
-```bash
-miden-client transfer -s <funder> -t <operator> -a <amount>::<fee_faucet_id> -n public
-```
-
 ## Docker
 
 Every release is published as an image tagged with that release's version. Replace `<version>` below with a tag
@@ -104,7 +95,7 @@ docker pull ghcr.io/0xmiden/miden-faucet:<version>
 
 **Data dir:** Store defaults to `/faucet/store.sqlite`. Mount a volume at `/faucet` for persistence.
 
-Run `init` first, then `start`. 
+Run `init` first, then `start`.
 
 **1. Init — new account (testnet):**
 
