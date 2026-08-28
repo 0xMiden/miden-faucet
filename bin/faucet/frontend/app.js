@@ -13,7 +13,9 @@ export class MidenFaucetApp {
         this.ui = new UIController();
         this.tokenAmountOptions = [100, 500, 1000];
         this.metadataInitialized = false;
+        this.issuance = null;
         this.apiUrl = null;
+        this.nodeUrl = null;
         this.rpcClient = null;
         this.wasmReady = null;
         this.baseAmount = null;
@@ -35,21 +37,41 @@ export class MidenFaucetApp {
         try {
             const config = await getConfig();
             this.apiUrl = config.api_url;
+            this.nodeUrl = config.node_url;
             this.setupEventListeners();
             this.setupWalletDetection();
             this.startMetadataPolling();
 
-            // The WASM SDK is only needed to poll for notes after a mint, so
-            // it loads in the background without blocking the UI or the
-            // issuance stream.
-            this.wasmReady = getWasmOrThrow().then(() => {
-                this.rpcClient = new RpcClient(new Endpoint(config.node_url));
+            // The WASM SDK is only needed to poll for notes after a mint.
+            // Defer the download until the page has fully loaded so it
+            // doesn't compete with the page assets for bandwidth. A mint
+            // request triggers it on demand if it hasn't started yet.
+            const warmUpWasm = () => this.ensureWasmLoaded().catch((error) => {
+                console.warn('Background WASM load failed, will retry on demand:', error);
             });
-            await this.wasmReady;
+            if (document.readyState === 'complete') {
+                warmUpWasm();
+            } else {
+                window.addEventListener('load', warmUpWasm, { once: true });
+            }
         } catch (error) {
             console.error('Failed to initialize app:', error);
+            this.ui.showFooterPlaceholders();
             this.handleApiError(error, 'Connection failed', 'Some data couldn\'t be loaded right now.');
         }
+    }
+
+    ensureWasmLoaded() {
+        if (!this.wasmReady) {
+            this.wasmReady = getWasmOrThrow().then(() => {
+                this.rpcClient = new RpcClient(new Endpoint(this.nodeUrl));
+            }).catch((error) => {
+                // Clear the cached promise so a later call retries the load.
+                this.wasmReady = null;
+                throw error;
+            });
+        }
+        return this.wasmReady;
     }
 
     setupWalletDetection() {
@@ -164,12 +186,11 @@ export class MidenFaucetApp {
     }
 
     startMetadataPolling() {
-        try {
-            this.fetchMetadata();
-        } catch (error) {
+        this.fetchMetadata().catch((error) => {
+            this.ui.showFooterPlaceholders();
             this.ui.showConnectionError('Connection failed', 'Some data couldn\'t be loaded right now.');
             console.error('Error fetching metadata:', error);
-        }
+        });
 
         this.connectSSE();
     }
@@ -177,16 +198,23 @@ export class MidenFaucetApp {
     connectSSE() {
         const source = new EventSource(this.apiUrl + '/issuance');
 
+        // The server pushes the current issuance immediately on connection,
+        // usually before the metadata fetch resolves. Cache the value so it
+        // can be rendered as soon as the metadata is available too.
         source.addEventListener('issuance', (event) => {
-            const issuance = Number(event.data);
-            if (this.maxSupply != null && this.decimals != null) {
-                this.ui.setIssuanceAndSupply(issuance, this.maxSupply, this.decimals);
-            }
+            this.issuance = Number(event.data);
+            this.renderIssuance();
         });
 
         source.onerror = () => {
             console.warn('SSE connection lost, reconnecting...');
         };
+    }
+
+    renderIssuance() {
+        if (this.issuance != null && this.maxSupply != null && this.decimals != null) {
+            this.ui.setIssuanceAndSupply(this.issuance, this.maxSupply, this.decimals);
+        }
     }
 
     async fetchMetadata() {
@@ -196,6 +224,7 @@ export class MidenFaucetApp {
         this.decimals = data.decimals;
         this.powLoadDifficulty = data.pow_load_difficulty;
         this.baseAmount = data.base_amount;
+        this.renderIssuance();
 
         if (!this.metadataInitialized) {
             this.metadataInitialized = true;
@@ -287,7 +316,7 @@ export class MidenFaucetApp {
                 }
 
                 try {
-                    await this.wasmReady;
+                    await this.ensureWasmLoaded();
                     const note = await this.rpcClient.getNotesById([NoteId.fromHex(noteId)]);
                     if (note && note.length > 0) {
                         return resolve();
