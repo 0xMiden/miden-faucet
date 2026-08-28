@@ -14,6 +14,10 @@
 - Improved the faucet logging ([#267](https://github.com/0xMiden/faucet/pull/267)).
 - Improved mint failure observability: emit the full error chain in the `faucet.mint` span by recording errors with their `Debug` implementation ([#267](https://github.com/0xMiden/faucet/pull/267)).
 - Updated `rand` to v0.10 and removed the direct `rand_chacha` dependency and updated the declared `rust-version` to `1.96.1` ([#284](https://github.com/0xMiden/faucet/pull/284)).
+- Improved frontend loading: the SDK WASM download is deferred until the page finishes loading and served brotli pre-compressed, the JS bundle is minified, the header image was converted to lossless WebP, and all static assets are served with cache headers ([#288](https://github.com/0xMiden/faucet/pull/288)).
+- Fixed the issuance counter staying empty until the next mint, the value is now cached and rendered once the metadata arrives.
+- Added loading spinners for the footer values (faucet address, tokens claimed) and disabled the token amount selector until its options load ([#288](https://github.com/0xMiden/faucet/pull/288)).
+- The frontend `/config.json` endpoint now returns a JSON object instead of a double-encoded JSON string ([#288](https://github.com/0xMiden/faucet/pull/288)).
 
 ## 0.16.0-alpha.1 (2026-07-20)
 

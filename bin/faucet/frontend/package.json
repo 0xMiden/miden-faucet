@@ -4,7 +4,7 @@
   "description": "Miden Faucet Frontend",
   "main": "index.js",
   "scripts": {
-    "build": "esbuild index.js --bundle --outfile=bundle.js --format=esm"
+    "build": "esbuild index.js --bundle --minify --outfile=bundle.js --format=esm"
   },
   "keywords": [
     "faucet",
