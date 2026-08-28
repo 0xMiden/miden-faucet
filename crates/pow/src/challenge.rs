@@ -112,13 +112,8 @@ impl Challenge {
     /// Checks if the challenge timestamp is expired.
     ///
     /// A challenge is valid for `challenge_lifetime` starting at its timestamp, and expires once
-    /// that full lifetime has elapsed. The last second at which it is still accepted is therefore
-    /// `timestamp + challenge_lifetime - 1`.
-    ///
-    /// This boundary must match the one used by the challenge cache to drop expired entries: the
-    /// cache stops rate limiting a solver exactly `challenge_lifetime` seconds after their last
-    /// submission, so a challenge that is still considered valid at that point could be submitted
-    /// a second time without solving a new proof of work.
+    /// that full lifetime has elapsed. This boundary must match the one used by the challenge
+    /// cache to drop expired entries.
     ///
     /// # Arguments
     /// * `current_time` - The current timestamp in seconds since the UNIX epoch.

@@ -134,10 +134,7 @@ async fn requestor_is_rate_limited_after_challenge_expires() {
     secret[..12].copy_from_slice(b"miden-faucet");
     let challenge_lifetime = Duration::from_secs(3);
 
-    // Drive the test with explicit timestamps rather than sleeping, so that it does not depend on
-    // where the wall clock happens to fall between two whole seconds. `PoWRateLimiter::new` leaves
-    // the cleanup task unstarted for the same reason: it would compare these timestamps against
-    // the wall clock.
+    // Drive the test with explicit timestamps.
     let pow = PoWRateLimiter::new(
         secret,
         PoWRateLimiterConfig {
@@ -169,8 +166,7 @@ async fn requestor_is_rate_limited_after_challenge_expires() {
         pow.submit_challenge(requestor, domain, &challenge_1, nonce_1, time_1, request_complexity);
     assert!(result.is_ok());
 
-    // One second later challenge 1 has expired, but submitting challenge 2 still fails: the
-    // solver stays rate limited for a full challenge lifetime after their last submission.
+    // One second later challenge 1 has expired, but submitting challenge 2 still fails.
     let time_2 = time_1 + 1;
     assert!(challenge_1.is_expired(time_2, challenge_lifetime));
     let result =
@@ -216,8 +212,7 @@ async fn solved_challenge_cannot_be_submitted_twice() {
     assert!(result.is_ok());
 
     // The rate limit on this solver lifts exactly `challenge_lifetime` seconds after that
-    // submission. The same challenge must not still be valid at that point, otherwise the already
-    // solved challenge could be redeemed a second time without doing any new proof of work.
+    // submission.
     let rate_limit_lifted_at = issued_at + challenge_lifetime.as_secs();
     let result = pow.submit_challenge(
         requestor,
