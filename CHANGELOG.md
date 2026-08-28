@@ -2,8 +2,19 @@
 
 ## 0.16.0 (TBD)
 
+- Updated miden-client dependency to v0.16.0-rc.1 ([#285](https://github.com/0xMiden/faucet/pull/285)). 
+- Migrate faucet to using a network account ([#262](https://github.com/0xMiden/faucet/pull/262)).
+- [BREAKING] `init --import` now takes an operator account file instead of a faucet account file, and requires the new `--faucet-account-id` param ([#262](https://github.com/0xMiden/faucet/pull/262)).
+- [BREAKING] Renamed the `MIDEN_FAUCET_IMPORT_ACCOUNT_PATH` env var to `MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH` ([#262](https://github.com/0xMiden/faucet/pull/262)).
+- [BREAKING] Removed the `--deploy` param and `MIDEN_FAUCET_DEPLOY` env var; a newly created faucet account is always deployed ([#262](https://github.com/0xMiden/faucet/pull/262)).
+- Improved the faucet logging ([#267](https://github.com/0xMiden/faucet/pull/267)).
 - Improved mint failure observability: emit the full error chain in the `faucet.mint` span by recording errors with their `Debug` implementation ([#267](https://github.com/0xMiden/faucet/pull/267)).
 - Fixed a one second window in which an already solved `PoW` challenge could be redeemed a second time, because a challenge was still considered valid at the exact moment its solver stopped being rate limited ([#275](https://github.com/0xMiden/faucet/pull/275)).
+- Updated `rand` to v0.10 and removed the direct `rand_chacha` dependency and updated the declared `rust-version` to `1.96.1` ([#284](https://github.com/0xMiden/faucet/pull/284)).
+- Improved frontend loading: the SDK WASM download is deferred until the page finishes loading and served brotli pre-compressed, the JS bundle is minified, the header image was converted to lossless WebP, and all static assets are served with cache headers ([#288](https://github.com/0xMiden/faucet/pull/288)).
+- Fixed the issuance counter staying empty until the next mint, the value is now cached and rendered once the metadata arrives.
+- Added loading spinners for the footer values (faucet address, tokens claimed) and disabled the token amount selector until its options load ([#288](https://github.com/0xMiden/faucet/pull/288)).
+- The frontend `/config.json` endpoint now returns a JSON object instead of a double-encoded JSON string ([#288](https://github.com/0xMiden/faucet/pull/288)).
 
 ## 0.16.0-alpha.1 (2026-07-20)
 

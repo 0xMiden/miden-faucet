@@ -52,18 +52,21 @@ miden-faucet start \
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--token-symbol` | Symbol of the new token (e.g. "MIDEN", "ETH") | - | Yes (unless `import` is set) |
-| `--decimals` | Number of decimals of the new token | - | Yes (unless `import` is set) |
-| `--max-supply` | Max supply of the new token (in base units) | - | Yes (unless `import` is set) |
-| `--import` | Path to the account file | - | No |
-| `--deploy` | Whether to make an empty transaction to deploy the account | `false` | No |
+| `--token-symbol` | Symbol of the new token (e.g. "MIDEN", "ETH") | - | Yes (unless importing) |
+| `--decimals` | Number of decimals of the new token | - | Yes (unless importing) |
+| `--max-supply` | Max supply of the new token (in base units) | - | Yes (unless importing) |
+| `--import` | Path to the operator account file. Must be paired with `--faucet-account-id` | - | No |
+| `--faucet-account-id` | Account ID of an existing, deployed faucet account. Must be paired with `--import` | - | No |
 | `--node-url` | Miden node RPC endpoint. If not set, it will be derived from the network | - | No |
 | `--timeout` | RPC request timeout | `5s` | No |
 | `--network` | Network configuration | `localhost` | No |
 | `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
 
+A newly created faucet account is always deployed by submitting an empty transaction. An imported
+faucet account is already on-chain, so nothing is submitted.
+
 ### Advanced Configuration
-| `--remote-tx-prover-url` | Remote transaction prover. Only relevant if `deploy` is set. | - | No |
+| `--remote-tx-prover-url` | Remote transaction prover. Only relevant when creating a faucet account. | - | No |
 
 ## `serve` Configuration
 
@@ -107,8 +110,8 @@ All configuration options can be set using environment variables:
 
 ```bash
 # Faucet Account Configuration
-export MIDEN_FAUCET_IMPORT_ACCOUNT_PATH=faucet.mac
-export MIDEN_FAUCET_DEPLOY=
+export MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH=operator.mac
+export MIDEN_FAUCET_FAUCET_ACCOUNT_ID=
 export MIDEN_FAUCET_TOKEN_SYMBOL=
 export MIDEN_FAUCET_DECIMALS=
 export MIDEN_FAUCET_MAX_SUPPLY=
@@ -127,7 +130,6 @@ export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io
 export MIDEN_FAUCET_NETWORK=testnet
 export MIDEN_FAUCET_TIMEOUT=10s
 export MIDEN_FAUCET_EXPLORER_URL=https://testnet.midenscan.com
-export MIDEN_FAUCET_ACCOUNT_PATH=./faucet.mac
 
 # Faucet Client Configuration
 export MIDEN_FAUCET_STORE=faucet_client_store.sqlite3

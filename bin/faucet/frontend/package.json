@@ -4,7 +4,7 @@
   "description": "Miden Faucet Frontend",
   "main": "index.js",
   "scripts": {
-    "build": "esbuild index.js --bundle --outfile=bundle.js --format=esm"
+    "build": "esbuild index.js --bundle --minify --outfile=bundle.js --format=esm"
   },
   "keywords": [
     "faucet",
@@ -13,9 +13,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@demox-labs/miden-wallet-adapter-base": "^0.10.0",
-    "@demox-labs/miden-wallet-adapter-miden": "^0.10.0",
-    "@miden-sdk/miden-sdk": "file:./miden-sdk-miden-sdk-0.16.0-alpha.1.tgz"
+    "@miden-sdk/miden-wallet-adapter-base": "^0.15.3",
+    "@miden-sdk/miden-wallet-adapter-miden": "^0.15.3",
+    "@miden-sdk/miden-sdk": "0.16.0-rc.2"
   },
   "devDependencies": {
     "esbuild": "^0.27.0"

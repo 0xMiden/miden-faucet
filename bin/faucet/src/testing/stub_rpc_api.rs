@@ -11,7 +11,6 @@ use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{Request, Response, Status};
 use tonic_web::GrpcWebLayer;
-use url::Url;
 
 use super::proto;
 use super::proto::rpc::api_server;
@@ -270,15 +269,11 @@ impl api_server::Api for StubRpcApi {
     }
 }
 
-pub async fn serve_stub(endpoint: &Url) -> anyhow::Result<()> {
-    let addr = endpoint
-        .socket_addrs(|| None)
-        .context("failed to convert endpoint to socket address")?
-        .into_iter()
-        .next()
-        .unwrap();
-
-    let listener = TcpListener::bind(addr).await?;
+/// Serves the stub on an already-bound listener.
+///
+/// The listener is bound by the caller so the port is accepting connections before the caller
+/// hands out its URL; binding it here instead would leave a window where clients are refused.
+pub async fn serve_stub(listener: TcpListener) -> anyhow::Result<()> {
     let api_service = api_server::ApiServer::new(StubRpcApi);
 
     tonic::transport::Server::builder()
