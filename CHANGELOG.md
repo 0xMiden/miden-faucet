@@ -3,6 +3,7 @@
 ## 0.16.0 (TBD)
 
 - Improved mint failure observability: emit the full error chain in the `faucet.mint` span by recording errors with their `Debug` implementation ([#267](https://github.com/0xMiden/faucet/pull/267)).
+- Fixed a one second window in which an already solved `PoW` challenge could be redeemed a second time, because a challenge was still considered valid at the exact moment its solver stopped being rate limited ([#275](https://github.com/0xMiden/faucet/pull/275)).
 
 ## 0.16.0-alpha.1 (2026-07-20)
 

@@ -130,40 +130,123 @@ async fn requestor_is_rate_limited() {
 
 #[tokio::test]
 async fn requestor_is_rate_limited_after_challenge_expires() {
-    let pow = create_test_pow();
+    let mut secret = [0u8; 32];
+    secret[..12].copy_from_slice(b"miden-faucet");
+    let challenge_lifetime = Duration::from_secs(3);
+
+    // Drive the test with explicit timestamps rather than sleeping, so that it does not depend on
+    // where the wall clock happens to fall between two whole seconds. `PoWRateLimiter::new` leaves
+    // the cleanup task unstarted for the same reason: it would compare these timestamps against
+    // the wall clock.
+    let pow = PoWRateLimiter::new(
+        secret,
+        PoWRateLimiterConfig {
+            challenge_lifetime,
+            growth_rate: 1.0,
+            cleanup_interval: Duration::from_secs(3),
+            baseline: 0,
+        },
+    );
+
     let domain = [1u8; 32];
     let requestor = [0u8; 32];
     let request_complexity = 1;
+    let lifetime_secs = challenge_lifetime.as_secs();
+    let issued_at = 1_000_000;
 
-    // Request and solve challenge 1
-    let challenge_1 = pow.build_challenge(requestor, domain, request_complexity);
+    // Solve challenge 1, and challenge 2 issued one second later.
+    let target = pow.get_challenge_target(&domain, request_complexity);
+    let challenge_1 =
+        Challenge::new(target, issued_at, request_complexity, requestor, domain, secret);
     let nonce_1 = find_pow_solution(&challenge_1, 10000).expect("Should find solution");
-
-    // Wait 1 second and request and solve challenge 2
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    let challenge_2 = pow.build_challenge(requestor, domain, request_complexity);
+    let challenge_2 =
+        Challenge::new(target, issued_at + 1, request_complexity, requestor, domain, secret);
     let nonce_2 = find_pow_solution(&challenge_2, 10000).expect("Should find solution");
 
-    // Wait until challenge 1 is almost expired and submit it
-    tokio::time::sleep(
-        pow.config.challenge_lifetime.checked_sub(Duration::from_millis(1100)).unwrap(),
-    )
-    .await;
-    let time_1 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    // Submit challenge 1 on the last second on which it is still valid.
+    let time_1 = issued_at + lifetime_secs - 1;
     let result =
         pow.submit_challenge(requestor, domain, &challenge_1, nonce_1, time_1, request_complexity);
     assert!(result.is_ok());
 
-    // Wait 1 second until challenge 1 is expired and then submit challenge 2 should fail
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    let time_2 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    // One second later challenge 1 has expired, but submitting challenge 2 still fails: the
+    // solver stays rate limited for a full challenge lifetime after their last submission.
+    let time_2 = time_1 + 1;
+    assert!(challenge_1.is_expired(time_2, challenge_lifetime));
     let result =
         pow.submit_challenge(requestor, domain, &challenge_2, nonce_2, time_2, request_complexity);
-    assert!(result.is_err());
-    let Err(ChallengeError::RateLimited(timestamp)) = result else {
+    let Err(ChallengeError::RateLimited(remaining_time)) = result else {
         panic!("Expected RateLimited error");
     };
-    assert_eq!(timestamp, pow.config.challenge_lifetime.as_secs() - 1);
+    assert_eq!(remaining_time, lifetime_secs - 1);
+}
+
+#[tokio::test]
+async fn solved_challenge_cannot_be_submitted_twice() {
+    let mut secret = [0u8; 32];
+    secret[..12].copy_from_slice(b"miden-faucet");
+    let challenge_lifetime = Duration::from_secs(30);
+
+    // `PoWRateLimiter::new` does not start the cleanup task, so the cache is never cleaned up
+    // during the test and `cleanup_interval` is unused: the reuse below has to be rejected by
+    // challenge validation alone.
+    let pow = PoWRateLimiter::new(
+        secret,
+        PoWRateLimiterConfig {
+            challenge_lifetime,
+            growth_rate: 1.0,
+            cleanup_interval: Duration::from_secs(3),
+            baseline: 0,
+        },
+    );
+
+    let domain = [1u8; 32];
+    let requestor = [0u8; 32];
+    let request_complexity = 1;
+    let issued_at = 1_000_000;
+
+    let target = pow.get_challenge_target(&domain, request_complexity);
+    let challenge =
+        Challenge::new(target, issued_at, request_complexity, requestor, domain, secret);
+    let nonce = find_pow_solution(&challenge, 10000).expect("Should find solution");
+
+    // The solver redeems the challenge as soon as it is solved.
+    let result =
+        pow.submit_challenge(requestor, domain, &challenge, nonce, issued_at, request_complexity);
+    assert!(result.is_ok());
+
+    // The rate limit on this solver lifts exactly `challenge_lifetime` seconds after that
+    // submission. The same challenge must not still be valid at that point, otherwise the already
+    // solved challenge could be redeemed a second time without doing any new proof of work.
+    let rate_limit_lifted_at = issued_at + challenge_lifetime.as_secs();
+    let result = pow.submit_challenge(
+        requestor,
+        domain,
+        &challenge,
+        nonce,
+        rate_limit_lifted_at,
+        request_complexity,
+    );
+    assert!(matches!(result, Err(ChallengeError::ExpiredServerTimestamp(_, _))));
+}
+
+#[tokio::test]
+async fn challenge_expires_once_its_full_lifetime_elapsed() {
+    let secret = [1u8; 32];
+    let domain = [1u8; 32];
+    let requestor = [0u8; 32];
+    let challenge_lifetime = Duration::from_secs(30);
+    let issued_at = 1_000_000;
+
+    let challenge = Challenge::new(u64::MAX, issued_at, 1, requestor, domain, secret);
+
+    assert!(!challenge.is_expired(issued_at, challenge_lifetime));
+    // Still valid on the last second of its lifetime.
+    assert!(
+        !challenge.is_expired(issued_at + challenge_lifetime.as_secs() - 1, challenge_lifetime)
+    );
+    // Expired once the full lifetime has elapsed.
+    assert!(challenge.is_expired(issued_at + challenge_lifetime.as_secs(), challenge_lifetime));
 }
 
 #[tokio::test]
