@@ -111,12 +111,16 @@ impl Challenge {
 
     /// Checks if the challenge timestamp is expired.
     ///
+    /// A challenge is valid for `challenge_lifetime` starting at its timestamp, and expires once
+    /// that full lifetime has elapsed. This boundary must match the one used by the challenge
+    /// cache to drop expired entries.
+    ///
     /// # Arguments
     /// * `current_time` - The current timestamp in seconds since the UNIX epoch.
     /// * `challenge_lifetime` - The duration during which a challenge is valid.
     pub fn is_expired(&self, current_time: u64, challenge_lifetime: Duration) -> bool {
         let diff = current_time.checked_sub(self.timestamp).unwrap_or(u64::MAX);
-        diff > challenge_lifetime.as_secs()
+        diff >= challenge_lifetime.as_secs()
     }
 
     /// Computes the signature for a challenge.
