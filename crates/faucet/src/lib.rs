@@ -915,8 +915,11 @@ fn ensure_new_faucet_can_be_deployed(fee_parameters: &FeeParameters) -> anyhow::
 pub async fn fee_asset_balance(
     account: &AccountReader,
     fee_parameters: &FeeParameters,
-) -> Result<u64, ClientError> {
-    let balance = account.get_balance(fee_parameters.fee_faucet_id()).await?;
+) -> anyhow::Result<u64> {
+    let balance = account
+        .get_balance(fee_parameters.fee_faucet_id())
+        .await
+        .context("failed to read the fee asset balance from the store")?;
     Ok(balance.as_u64())
 }
 
