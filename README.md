@@ -49,31 +49,19 @@ miden-faucet start \
 
 ## Running on a chain that charges fees (devnet)
 
-On a chain whose genesis sets a non-zero `verification_base_fee`, every transaction pays a fee in
-the chain's native asset out of the executing account's vault. For the faucet this means:
+On a chain that charges transaction fees, every transaction pays in the chain's native asset out of
+the executing account's vault. The operator account is the one that pays: it covers each MINT
+transaction and prepays the network transaction that turns the MINT note into the P2ID note, so it
+must be funded with the native asset and topped up as its balance drains. `start` refuses to run
+while the operator holds none of it, and requests are answered with HTTP 503 while its balance is
+too low to cover a transaction.
 
-- The **operator** pays for each MINT transaction. The faucet commits the fee conversion info (native
-  asset, rate 1/1) automatically, but the operator's vault must hold the native asset. `start` refuses
-  to run while the operator holds none of it, and requests are answered with HTTP 503 while its
-  balance is below one worst case transaction fee.
-- The **operator** also prepays the network transaction that turns each MINT note into the P2ID
-  note. Sending a note to a network account attaches a FEE_SPONSORSHIP note funded from the sender's
-  vault, priced by the target's fee policy, and the faucet collects it to pay for that transaction.
-  The faucet account therefore never needs a balance of its own: it holds whatever the sponsorship
-  covered beyond the fee actually charged. Budget for both costs when funding the operator.
-- `init` refuses to create a new faucet account on such a chain. The faucet deploys a new account
-  with an empty transaction, which has to pay for itself out of the new account's empty vault, so the
-  account must already exist. Import it with `--import` and `--faucet-account-id`.
+`init` cannot create a new faucet account on such a chain, since the account would have to pay for
+its own deployment out of an empty vault. Import an existing one with `--import` and
+`--faucet-account-id`.
 
-The chain's genesis must build its network faucet so that sponsorship is possible: it has to price
-its MINT notes above zero, charge in the native asset, and allowlist the FEE_SPONSORSHIP note script.
-A faucet that prices its notes at zero is never sponsored, and every mint stalls as a pending network
-note while the operator still pays for each attempt.
-
-Devnet dispenses the native `MIDEN` asset through the genesis network faucet, whose operator wallet is
-distributed to the faucet operators as an account file. The faucet account id is the one
-`miden-validator genesis` prints when the network is bootstrapped, and the operator is funded at
-genesis, so no manual funding is needed to get started:
+On devnet the operator is funded at genesis, so no manual funding is needed to get started. The
+faucet account id is the one `miden-validator genesis` prints when the network is bootstrapped:
 
 ```bash
 miden-faucet init \
