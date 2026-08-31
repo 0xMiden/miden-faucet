@@ -65,6 +65,12 @@ miden-faucet start \
 A newly created faucet account is always deployed by submitting an empty transaction. An imported
 faucet account is already on-chain, so nothing is submitted.
 
+### Fee-charging chains
+
+On a chain that charges transaction fees, every transaction pays in the chain's native asset out of
+the executing account's vault, so the faucet operator account needs to hold enough of that asset to
+cover the transactions the faucet submits and has to be topped up as its balance drains.
+
 ### Advanced Configuration
 | `--remote-tx-prover-url` | Remote transaction prover. Only relevant when creating a faucet account. | - | No |
 

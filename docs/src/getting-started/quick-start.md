@@ -80,16 +80,28 @@ miden-faucet start --network localhost
 
 ### Development
 
-Connect to the node deployed in Miden Devnet.
+Connect to the node deployed in Miden Devnet. Devnet charges transaction fees
+(`verification_base_fee = 10000`) in its native `MIDEN` asset, which is issued by the genesis network
+faucet. On such a chain a new faucet account cannot be created (it could not pay for its own
+deployment), so the faucet is initialized against the genesis faucet with the operator account file
+that owns it. Its account id is the one `miden-validator genesis` prints when the network is
+bootstrapped:
 
 ```bash
 miden-faucet init \
-  --token-symbol MIDEN \
-  --decimals 6 \
-  --max-supply 100000000000000000 \
+  --import faucet_operator.mac \
+  --faucet-account-id 0x<faucet_account_id> \
   --network devnet
+```
 
-miden-faucet start --network devnet
+The operator account must hold `MIDEN` to pay for its MINT transactions and to prepay the network
+transactions that mint the P2ID notes: on the order of 0.5 MIDEN per request (see
+[CLI configuration](./cli.md#fee-charging-chains)). It is funded at genesis, so no manual funding is
+needed to get started, but it has to be topped up as its balance drains. `start` fails while the
+operator holds none.
+
+```bash
+miden-faucet start --network devnet --remote-tx-prover-url https://tx-prover.devnet.miden.io
 ```
 
 ### Testnet
