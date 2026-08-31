@@ -30,7 +30,12 @@ use miden_client::account::{
     NetworkId,
     StorageSlotContent,
 };
-use miden_client::asset::{AssetAmount as ProtocolAssetAmount, FungibleAsset, TokenSymbol};
+use miden_client::asset::{
+    AssetAmount as ProtocolAssetAmount,
+    AssetId,
+    FungibleAsset,
+    TokenSymbol,
+};
 use miden_client::auth::{Approver, AuthScheme, AuthSecretKey, AuthSingleSig};
 use miden_client::block::{BlockNumber, FeeParameters};
 use miden_client::builder::ClientBuilder;
@@ -39,6 +44,7 @@ use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
 use miden_client::note::standards::BurnNote;
 use miden_client::note::{
+    FeeSponsorshipNote,
     MintNote,
     MintNoteStorage,
     NetworkAccountTarget,
@@ -64,6 +70,7 @@ use miden_client::transaction::{
 };
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
 use miden_client_sqlite_store::SqliteStore;
+use miden_tx::NetworkNotePricer;
 use rand::{RngExt, rng};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::watch;
@@ -86,6 +93,11 @@ const NOTE_RETENTION_BLOCKS: u32 = 100;
 
 /// How many blocks the transaction that sends the MINT note stays valid after its reference block.
 const MINT_TX_EXPIRATION_DELTA: u16 = 10;
+
+/// Blocks after which the operator may reclaim a sponsorship whose MINT note was never consumed.
+/// Generous compared to `MINT_TX_EXPIRATION_DELTA`, since reclaiming a sponsorship of a note that
+/// is still consumable would strand that note unpaid.
+const SPONSORSHIP_RECLAIM_DELTA: u32 = 1_000;
 
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
@@ -569,8 +581,17 @@ impl Faucet {
 
         // Build and submit transaction
         let fee_parameters = read_fee_parameters(&self.client).await?;
-        let tx_request = Faucet::create_transaction(
+        let mut notes = mint_notes.clone();
+        notes.extend(build_sponsorship_notes(
+            self.operator_account_id,
+            &faucet_account,
             &mint_notes,
+            &fee_parameters,
+            after_block_num + SPONSORSHIP_RECLAIM_DELTA,
+            &mut rng,
+        )?);
+        let tx_request = Faucet::create_transaction(
+            &notes,
             faucet_foreign_account(&faucet_account)?,
             FeeConversionInfo::one_to_one(fee_parameters.fee_faucet_id()),
         )
@@ -586,6 +607,7 @@ impl Faucet {
             {
                 request_tx.id = %tx_id.to_hex(),
                 mint_notes.num = mint_notes.len(),
+                sponsorship_notes.num = notes.len() - mint_notes.len(),
                 after_block_num = %after_block_num
             },
             "Submitted MINT notes; the network mints the P2ID notes in a later transaction",
@@ -921,6 +943,63 @@ pub async fn fee_asset_balance(
         .await
         .context("failed to read the fee asset balance from the store")?;
     Ok(balance.as_u64())
+}
+
+/// Builds a `FEE_SPONSORSHIP` note for each MINT note, prepaying the network transaction that
+/// consumes it so the faucet does not pay out of its own vault. The notes are public, so the node
+/// discovers them in the committed block and bundles each with the MINT note it is bound to, and
+/// their assets return to the operator through a reclaim if that MINT note is never consumed.
+///
+/// Returns no notes on a fee-free chain, or when the faucet does not collect fees in the chain's
+/// native fee asset - the node drops such sponsorships before selection, so they would only strand
+/// the operator's funds until their reclaim height. A faucet generated at genesis collects in its
+/// operator's asset, which no asset can be issued by, until a release containing
+/// <https://github.com/0xMiden/protocol/pull/3588> lets it collect in its own.
+fn build_sponsorship_notes(
+    operator_id: AccountId,
+    faucet_account: &Account,
+    mint_notes: &[Note],
+    fee_parameters: &FeeParameters,
+    reclaim_height: BlockNumber,
+    rng: &mut RandomCoin,
+) -> anyhow::Result<Vec<Note>> {
+    let fee_asset_id = AssetId::new_fungible(fee_parameters.fee_faucet_id());
+    let collected_asset_id = faucet_account
+        .storage()
+        .get_item(FeePolicyManager::fee_asset_id_slot())
+        .context("failed to read the faucet's fee asset id")?;
+    if fee_parameters.verification_base_fee() == 0 || collected_asset_id != fee_asset_id.to_word() {
+        return Ok(Vec::new());
+    }
+
+    // The sponsorship is priced by the note's benchmarked consumption cost rather than by the
+    // faucet's fee policy: the policy states what the faucet requires, while the epilogue
+    // withdraws what the transaction actually costs. Over-payment is allowed - fee collection only
+    // asserts that what a note owes is covered - and the excess stays in the faucet's vault.
+    let amount = NetworkNotePricer::builder()
+        .fee_parameters(fee_parameters.clone())
+        .build()
+        .price(MintNote::script_root())
+        .context("failed to price the MINT note's consumption")?;
+    let asset = FungibleAsset::new(fee_parameters.fee_faucet_id(), amount.as_u64())
+        .context("failed to build the sponsorship's fee asset")?;
+
+    mint_notes
+        .iter()
+        .map(|mint_note| {
+            let note = FeeSponsorshipNote::builder()
+                .sender(operator_id)
+                .target_account(faucet_account.id())
+                .feature_note_id(mint_note.id())
+                .asset(asset)
+                .reclaimer(operator_id)
+                .reclaim_height(reclaim_height)
+                .generate_serial_number(rng)
+                .build()
+                .context("failed to build a FEE_SPONSORSHIP note")?;
+            Ok(note.into())
+        })
+        .collect()
 }
 
 /// Declares the faucet as a foreign account of the operator's MINT transaction.
@@ -1401,7 +1480,9 @@ mod tests {
             .unwrap()
             .pop()
             .expect("the mint transaction is tracked");
-        let fee_note_amounts: Vec<u64> = transaction
+        // The fee asset left the transaction in two notes: the TX_FEE note paying for it, and the
+        // sponsorship prepaying the network transaction that consumes the MINT note.
+        let mut fee_asset_amounts: Vec<u64> = transaction
             .details
             .output_notes
             .iter()
@@ -1409,7 +1490,46 @@ mod tests {
             .filter(|asset| asset.id() == fee_asset_id)
             .map(|asset| asset.unwrap_fungible().amount().as_u64())
             .collect();
-        assert_eq!(fee_note_amounts, vec![fee_paid]);
+        fee_asset_amounts.sort_unstable();
+        let sponsored = sponsorship_amount(&fee_parameters);
+        let mut expected = vec![sponsored, fee_paid - sponsored];
+        expected.sort_unstable();
+        assert_eq!(fee_asset_amounts, expected);
+    }
+
+    /// A faucet collecting in the chain's native fee asset gets one sponsorship per MINT note; one
+    /// collecting in its operator's asset - what genesis produces today - gets none, since the node
+    /// would drop them.
+    #[test]
+    fn sponsorships_require_the_native_fee_asset() {
+        let fee_faucet_id = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
+        let fee_parameters = FeeParameters::new(fee_faucet_id, TEST_VERIFICATION_BASE_FEE);
+        let (operator, _) = create_faucet_operator_account().unwrap();
+        let mut rng = RandomCoin::new(Word::empty());
+
+        let mut sponsorships = |fee_collected_in| {
+            let faucet =
+                create_network_faucet_account("TEST", 1_000, 6, operator.id(), fee_collected_in)
+                    .unwrap();
+            let mint_notes = [mint_note(&faucet, operator.id())];
+            build_sponsorship_notes(
+                operator.id(),
+                &faucet,
+                &mint_notes,
+                &fee_parameters,
+                BlockNumber::from(SPONSORSHIP_RECLAIM_DELTA),
+                &mut rng,
+            )
+            .unwrap()
+        };
+
+        let native = sponsorships(fee_faucet_id);
+        assert_eq!(native.len(), 1);
+        assert_eq!(
+            native[0].assets().iter().next().unwrap().unwrap_fungible().amount().as_u64(),
+            sponsorship_amount(&fee_parameters),
+        );
+        assert!(sponsorships(operator.id()).is_empty());
     }
 
     // TESTING HELPERS
@@ -1426,6 +1546,16 @@ mod tests {
     }
 
     /// Builds a MINT note for `faucet`, sent by `operator_id`, the way the faucet does.
+    /// The amount a MINT note's sponsorship carries under `fee_parameters`.
+    fn sponsorship_amount(fee_parameters: &FeeParameters) -> u64 {
+        NetworkNotePricer::builder()
+            .fee_parameters(fee_parameters.clone())
+            .build()
+            .price(MintNote::script_root())
+            .unwrap()
+            .as_u64()
+    }
+
     fn mint_note(faucet: &Account, operator_id: AccountId) -> Note {
         let faucet_id = FaucetId::new(faucet.id(), NetworkId::Testnet);
         let mut rng = RandomCoin::new(Word::empty());
