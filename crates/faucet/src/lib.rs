@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -40,11 +40,13 @@ use miden_client::note::{
     MintNoteStorage,
     NetworkAccountTarget,
     Note,
+    NoteDetails,
     NoteError,
     NoteExecutionHint,
     NoteId,
     NoteType as ProtocolNoteType,
     P2idNote,
+    P2idNoteStorage,
 };
 use miden_client::rpc::domain::account::GetAccountRequest;
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, NodeRpcClient, RpcError};
@@ -52,6 +54,7 @@ use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
     LocalTransactionProver,
+    NoteArgs,
     TransactionId,
     TransactionProver,
     TransactionRequest,
@@ -204,7 +207,7 @@ impl Faucet {
 
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
-        let note_screener = NoteScreener::new(sqlite_store);
+        let note_screener = NoteScreener::new(sqlite_store, operator_account.id());
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component =
@@ -351,7 +354,7 @@ impl Faucet {
         let issuance_value = Self::read_issuance_from_store(&client, account.id()).await?;
         let (issuance, _) = watch::channel(issuance_value);
 
-        let note_screener = NoteScreener::new(sqlite_store.clone());
+        let note_screener = NoteScreener::new(sqlite_store.clone(), operator_account_id);
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component = StateSync::new(grpc_client, Arc::new(note_screener), None);
@@ -393,6 +396,15 @@ impl Faucet {
         let uncommitted_transactions =
             client.get_transactions(TransactionFilter::Uncommitted).await?;
 
+        // The node matches note inclusions by tag, and skips the query altogether when no tag is
+        // given. `add_account` registers a tag per tracked account, so passing them makes the sync
+        // return the P2ID notes payable to the operator.
+        let note_tags =
+            client.get_note_tags().await?.into_iter().map(|record| record.tag).collect();
+        // Tracked unspent notes must be followed too, so the funding notes the faucet consumes are
+        // moved out of the committed state once their nullifiers show up on chain.
+        let input_notes = client.get_input_notes(NoteFilter::Unspent).await?;
+
         // Build current partial MMR
         let mut current_partial_mmr = client.get_current_partial_mmr().await?;
 
@@ -402,8 +414,8 @@ impl Faucet {
                 &mut current_partial_mmr,
                 StateSyncInput {
                     accounts,
-                    note_tags: BTreeSet::new(),
-                    input_notes: vec![],
+                    note_tags,
+                    input_notes,
                     output_notes,
                     uncommitted_transactions,
                 },
@@ -454,6 +466,25 @@ impl Faucet {
         info!(target = COMPONENT, "Request stream closed, shutting down minter");
 
         Ok(())
+    }
+
+    /// Returns the P2ID notes that fund the operator: those payable to it that are committed on
+    /// chain and not already being consumed by an earlier transaction.
+    ///
+    /// [`NoteFilter::Unspent`] is not used here because it also returns notes in the processing
+    /// state, which a previous mint is already consuming.
+    async fn get_p2id_notes_targetted_to_operator(&self) -> anyhow::Result<Vec<Note>> {
+        let operator_id = self.operator_id();
+        self.client
+            .get_input_notes(NoteFilter::Committed)
+            .await
+            .context("failed to read the committed input notes from the store")?
+            .iter()
+            .filter(|record| is_p2id_payable_to(record.details(), operator_id))
+            .map(|record| {
+                record.try_into().context("failed to rebuild a P2ID note funding the operator")
+            })
+            .collect()
     }
 
     /// Mints a batch of requests.
@@ -521,8 +552,10 @@ impl Faucet {
             );
         }
 
+        let operator_funding_notes = self.get_p2id_notes_targetted_to_operator().await?;
+
         // Build and submit transaction
-        let tx_request = Faucet::create_transaction(&mint_notes)
+        let tx_request = Faucet::create_transaction(&mint_notes, &operator_funding_notes)
             .context("faucet failed to create transaction")?;
         // The MINT notes are sent by the operator, so the operator must be the executing account.
         let tx_id = Box::pin(self.submit_new_transaction(self.operator_account_id, tx_request))
@@ -614,10 +647,17 @@ impl Faucet {
 
     /// Creates a transaction that generates the given mint notes.
     #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err)]
-    fn create_transaction(notes: &[Note]) -> Result<TransactionRequest, TransactionRequestError> {
+    fn create_transaction(
+        notes: &[Note],
+        input_notes: &[Note],
+    ) -> Result<TransactionRequest, TransactionRequestError> {
         // Build the transaction
         let notes: Vec<Note> = notes.to_vec();
+        // TODO: check whether this can be improved
+        let input_notes: Vec<(Note, Option<NoteArgs>)> =
+            input_notes.iter().map(|note| (note.clone(), None)).collect();
         TransactionRequestBuilder::new()
+            .input_notes(input_notes)
             .own_output_notes(notes)
             .expiration_delta(MINT_TX_EXPIRATION_DELTA)
             .build()
@@ -1067,20 +1107,26 @@ pub fn create_faucet_operator_account() -> anyhow::Result<(Account, AuthSecretKe
     Ok((account, AuthSecretKey::Falcon512Poseidon2(secret_key)))
 }
 
+/// Whether `details` describes a P2ID note payable to `target`.
+pub(crate) fn is_p2id_payable_to(details: &NoteDetails, target: AccountId) -> bool {
+    *details.recipient() == P2idNoteStorage::new(target).into_recipient(details.serial_num())
+}
+
 #[cfg(test)]
 mod tests {
     use std::env::temp_dir;
 
+    use miden_client::asset::{Asset, AssetId};
     use miden_client::block::BlockNumber;
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
-    use miden_client::testing::MockChainBuilder;
     use miden_client::testing::account_id::{
         ACCOUNT_ID_FEE_FAUCET,
         ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE,
     };
     use miden_client::testing::mock::MockRpcApi;
+    use miden_client::testing::{Auth, MockChainBuilder};
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
@@ -1162,7 +1208,7 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        let mut faucet = build_faucet(store.clone()).await;
+        let (mut faucet, ..) = build_faucet(store.clone(), &[]).await;
         faucet.run(rx_mint_requests, batch_size).await.unwrap();
 
         // Requests alternate public/private, and `receivers` preserves that order. Only the private
@@ -1178,11 +1224,60 @@ mod tests {
         }
     }
 
+    /// A P2ID note payable to the operator is found by the faucet's sync and consumed by the next
+    /// mint transaction, so the operator's balance grows by the note's asset amount.
+    #[tokio::test]
+    async fn mint_consumes_p2id_notes_funding_the_operator() {
+        let funding_amount = 500;
+        let fee_faucet_id = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
+        let funding_asset = FungibleAsset::new(fee_faucet_id, funding_amount).unwrap();
+
+        let store = Arc::new(
+            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
+                .await
+                .unwrap(),
+        );
+        let (mut faucet, mock_rpc, sender) = build_faucet(store.clone(), &[funding_asset]).await;
+
+        let balance_before = operator_balance(&faucet, funding_asset.id()).await;
+        assert_eq!(balance_before, 0, "the operator starts with no funds");
+
+        send_p2id_note_to_operator(&mut faucet, &mock_rpc, &sender, funding_asset).await;
+
+        let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1);
+        let (response_sender, receiver) = oneshot::channel();
+        let mint_request = MintRequest {
+            account_id: AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE)
+                .unwrap(),
+            note_type: NoteType::Public,
+            asset_amount: AssetAmount::new(100_000_000).unwrap(),
+        };
+        tx_mint_requests.send((mint_request, response_sender)).await.unwrap();
+        drop(tx_mint_requests);
+
+        faucet.run(rx_mint_requests, 1).await.unwrap();
+        receiver.await.unwrap().unwrap();
+
+        let balance_after = operator_balance(&faucet, funding_asset.id()).await;
+        assert_eq!(
+            balance_after - balance_before,
+            funding_amount,
+            "the mint transaction should have consumed the P2ID note funding the operator"
+        );
+    }
+
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
 
     /// Builds a faucet using a mock client.
-    async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
+    ///
+    /// Alongside the faucet, a wallet holding `sender_assets` is committed on the mock chain and
+    /// tracked by the faucet's client, so tests can send notes from it. The mock RPC handle is
+    /// returned so tests can prove new blocks.
+    async fn build_faucet(
+        store: Arc<dyn Store>,
+        sender_assets: &[FungibleAsset],
+    ) -> (Faucet, Arc<MockRpcApi>, Account) {
         let (operator_account, operator_secret) = create_faucet_operator_account().unwrap();
         let symbol = "TEST";
         let decimals = 6;
@@ -1207,8 +1302,14 @@ mod tests {
         // `Faucet::init` leaves it in after the deployment transaction.
         let mut deployed_faucet = faucet_account.clone();
         deployed_faucet.set_nonce(Felt::new_unchecked(1)).unwrap();
-        let mock_chain =
-            MockChainBuilder::with_accounts([deployed_faucet]).unwrap().build().unwrap();
+        let mut chain_builder = MockChainBuilder::with_accounts([deployed_faucet]).unwrap();
+        let sender = chain_builder
+            .add_existing_wallet_with_assets(
+                Auth::IncrNonce,
+                sender_assets.iter().copied().map(Asset::from),
+            )
+            .unwrap();
+        let mock_chain = chain_builder.build().unwrap();
         let mock_rpc = Arc::new(MockRpcApi::new(mock_chain));
         let mut client = ClientBuilder::new()
             .rpc(mock_rpc.clone())
@@ -1221,6 +1322,7 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&faucet_account, false).await.unwrap();
         client.add_account(&operator_account, false).await.unwrap();
+        client.add_account(&sender, false).await.unwrap();
 
         // The mock RPC serves no transaction encryption key, so seed an unattested one:
         // submission seals against it and the mock node ignores the sealed payload.
@@ -1241,12 +1343,12 @@ mod tests {
             .unwrap();
 
         let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
-        Faucet {
+        let faucet = Faucet {
             id: FaucetId::new(faucet_account.id(), NetworkId::Testnet),
             client,
             state_sync_component: StateSync::new(
-                mock_rpc,
-                Arc::new(NoteScreener::new(store)),
+                mock_rpc.clone(),
+                Arc::new(NoteScreener::new(store, operator_account.id())),
                 None,
             ),
             tx_prover: Arc::new(LocalTransactionProver::default()),
@@ -1254,7 +1356,54 @@ mod tests {
             max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
             operator_account_id: operator_account.id(),
             p2id_notes: P2idNoteCache::default(),
-        }
+        };
+        (faucet, mock_rpc, sender)
+    }
+
+    /// Commits a P2ID note payable to the operator in a new block.
+    ///
+    /// The transaction is executed through the faucet's client, since it is the only client the
+    /// test has, but it is never applied to its store. The note therefore reaches the faucet only
+    /// through the sync, like any transfer made by someone else would.
+    async fn send_p2id_note_to_operator(
+        faucet: &mut Faucet,
+        mock_rpc: &MockRpcApi,
+        sender: &Account,
+        asset: FungibleAsset,
+    ) {
+        let note: Note = P2idNote::builder()
+            .sender(sender.id())
+            .target(faucet.operator_id())
+            .asset(asset)
+            .note_type(ProtocolNoteType::Public)
+            .serial_number(Word::from([7u32; 4]))
+            .build()
+            .unwrap()
+            .into();
+
+        let tx_request = TransactionRequestBuilder::new().own_output_notes([note]).build().unwrap();
+        let tx = faucet.client.execute_transaction(sender.id(), tx_request).await.unwrap();
+
+        mock_rpc
+            .mock_chain
+            .write()
+            .add_pending_executed_transaction(tx.executed_transaction())
+            .unwrap();
+        mock_rpc.prove_block();
+    }
+
+    /// Returns the operator's balance of the given asset, as tracked by the faucet's client.
+    async fn operator_balance(faucet: &Faucet, asset_id: AssetId) -> u64 {
+        faucet
+            .client
+            .get_account(faucet.operator_id())
+            .await
+            .unwrap()
+            .expect("operator account is tracked")
+            .vault()
+            .get_balance(asset_id)
+            .unwrap()
+            .as_u64()
     }
 
     /// Builds an arbitrary P2ID note; only its presence matters to the pruning tests.

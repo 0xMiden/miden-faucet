@@ -10,6 +10,7 @@
 - Improved the faucet logging ([#267](https://github.com/0xMiden/faucet/pull/267)).
 - Improved mint failure observability: emit the full error chain in the `faucet.mint` span by recording errors with their `Debug` implementation ([#267](https://github.com/0xMiden/faucet/pull/267)).
 - Updated `rand` to v0.10 and removed the direct `rand_chacha` dependency and updated the declared `rust-version` to `1.96.1` ([#284](https://github.com/0xMiden/faucet/pull/284)).
+- The faucet now consumes the P2ID notes payable to the operator in its mint transactions, so the operator can be funded by transferring assets to it.
 
 ## 0.16.0-alpha.1 (2026-07-20)
 
