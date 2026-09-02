@@ -88,7 +88,7 @@ pub mod types;
 
 use crate::note_screener::NoteScreener;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
-use crate::types::{AssetAmount, NoteType};
+use crate::types::AssetAmount;
 
 const COMPONENT: &str = "miden-faucet-client";
 
@@ -588,47 +588,41 @@ impl Faucet {
         Ok(balance < OPERATOR_FUNDING_THRESHOLD)
     }
 
-    /// Tracks the P2ID notes among `p2id_notes` that fund the operator, so the sync commits them
-    /// once the network has minted them. Tracking them is what makes the note screener recognize
-    /// them: nothing else in the store vouches for a note the network creates.
-    async fn track_operator_funding_notes(
-        &mut self,
-        p2id_notes: &[Note],
-        after_block_num: BlockNumber,
-    ) -> anyhow::Result<()> {
-        let operator_id = self.operator_id();
-        let fee_faucet_id = self.fee_parameters().await?.fee_faucet_id();
+    /// Builds the P2ID note that funds the operator with the faucet's own asset.
+    fn create_p2id_note_to_operator(&self, rng: &mut RandomCoin) -> anyhow::Result<Note> {
+        let faucet_id = self.id.account_id;
+        let asset = FungibleAsset::new(faucet_id, OPERATOR_FUNDING_AMOUNT)
+            .context("the operator funding amount is not a valid asset amount")?;
 
-        let note_files: Vec<NoteFile> = p2id_notes
-            .iter()
-            .map(|note| (NoteDetails::from(note.clone()), note.metadata().tag()))
-            .filter(|(details, _)| is_p2id_payable_to(details, operator_id, fee_faucet_id))
-            .map(|(details, tag)| NoteFile::ExpectedNote {
-                details,
-                sync_hint: NoteSyncHint::new(after_block_num, tag),
-            })
-            .collect();
-
-        if note_files.is_empty() {
-            return Ok(());
-        }
-
-        self.client
-            .import_notes(&note_files)
-            .await
-            .context("failed to track the P2ID notes funding the operator")?;
-
-        Ok(())
+        Ok(P2idNote::builder()
+            .sender(faucet_id)
+            .target(self.operator_account_id)
+            .asset(asset)
+            // The faucet finds the note by syncing, which only rebuilds public notes.
+            .note_type(ProtocolNoteType::Public)
+            .generate_serial_number(rng)
+            .build()
+            .context("failed to build the P2ID note funding the operator")?
+            .into())
     }
 
-    /// The request that funds the operator with the faucet's own asset.
-    fn get_mint_request_for_operator(&self) -> anyhow::Result<MintRequest> {
-        Ok(MintRequest {
-            account_id: self.operator_account_id,
-            // The operator's client finds the note by syncing, which only rebuilds public notes.
-            note_type: NoteType::Public,
-            asset_amount: AssetAmount::new(OPERATOR_FUNDING_AMOUNT)?,
-        })
+    /// Imports the P2ID note that funds the operator account, as an expected note.
+    async fn import_operator_funding_note(
+        &mut self,
+        funding_note: &Note,
+        after_block_num: BlockNumber,
+    ) -> anyhow::Result<()> {
+        let note_file = NoteFile::ExpectedNote {
+            details: NoteDetails::from(funding_note.clone()),
+            sync_hint: NoteSyncHint::new(after_block_num, funding_note.metadata().tag()),
+        };
+
+        self.client
+            .import_notes(&[note_file])
+            .await
+            .context("failed to track the P2ID note funding the operator")?;
+
+        Ok(())
     }
 
     /// Mints a batch of requests.
@@ -655,20 +649,11 @@ impl Faucet {
 
         let span = tracing::Span::current();
 
-        let (mut valid_requests, response_senders) = self.filter_requests_by_supply(requests);
+        let (valid_requests, response_senders) = self.filter_requests_by_supply(requests);
         span.record("num_requests", valid_requests.len());
 
         if valid_requests.is_empty() {
             return Ok(());
-        }
-
-        // The operator pays for the transactions it submits, so the faucet funds it with its own
-        // asset. The funding request rides along with this batch as one more request; it carries no
-        // response sender, so it must be appended after the user's requests, which
-        // `send_responses` pairs with their notes by position.
-        if self.operator_requires_funding().await? {
-            valid_requests.push(self.get_mint_request_for_operator()?);
-            self.funding_request_in_flight = true;
         }
 
         let faucet_account = self.faucet_account().await.map_err(|error| *error)?;
@@ -681,9 +666,17 @@ impl Faucet {
         };
         // Build the P2ID notes first, the MINT notes are
         // derived from them below.
-        let p2id_notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
+        let mut p2id_notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
         let p2id_note_ids: Vec<NoteId> = p2id_notes.iter().map(Note::id).collect();
-        self.track_operator_funding_notes(&p2id_notes, after_block_num).await?;
+
+        // The operator pays for the transactions it submits, so the faucet funds it with its own
+        // asset, minting one more P2ID note payable to it alongside the batch's.
+        if self.operator_requires_funding().await? {
+            let funding_note = self.create_p2id_note_to_operator(&mut rng)?;
+            self.import_operator_funding_note(&funding_note, after_block_num).await?;
+            p2id_notes.push(funding_note);
+            self.funding_request_in_flight = true;
+        }
 
         let mint_notes = build_mint_notes(
             self.faucet_id().account_id,
@@ -1590,10 +1583,18 @@ mod tests {
             "the operator sits one base unit below the threshold"
         );
 
-        // The request mints the faucet's asset, which is the chain's fee asset, to the operator.
-        let request = faucet.get_mint_request_for_operator().unwrap();
-        assert_eq!(request.account_id, faucet.operator_id());
-        assert_eq!(request.asset_amount.base_units(), OPERATOR_FUNDING_AMOUNT);
+        // The note it would mint pays the operator the faucet's asset, which is the fee asset.
+        let mut rng = RandomCoin::new(Word::empty());
+        let funding_note = faucet.create_p2id_note_to_operator(&mut rng).unwrap();
+        assert!(is_p2id_payable_to(
+            &NoteDetails::from(funding_note.clone()),
+            faucet.operator_id(),
+            fee_parameters.fee_faucet_id(),
+        ));
+        assert_eq!(
+            funding_note.assets().iter().next().unwrap().unwrap_fungible().amount().as_u64(),
+            OPERATOR_FUNDING_AMOUNT,
+        );
 
         let response = run_one_batch(&mut faucet).await;
         let funding_tx_id = response.tx_id;
