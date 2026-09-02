@@ -97,11 +97,11 @@ const NOTE_RETENTION_BLOCKS: u32 = 100;
 /// How many blocks the transaction that sends the MINT note stays valid after its reference block.
 const MINT_TX_EXPIRATION_DELTA: u16 = 10;
 
-/// The operator is topped up once its balance of the faucet's asset falls below this many base
+/// The operator is funded once its balance of the faucet's asset falls below this many base
 /// units.
 const OPERATOR_FUNDING_THRESHOLD: u64 = 1_000_000_000;
 
-/// How many base units of the faucet's asset a top-up mints to the operator.
+/// How many base units of the faucet's asset a funding request mints to the operator.
 const OPERATOR_FUNDING_AMOUNT: u64 = 10_000_000_000;
 
 /// Blocks after which the operator may reclaim a sponsorship whose MINT note was never consumed.
@@ -171,10 +171,10 @@ pub struct Faucet {
     max_supply: AssetAmount,
     p2id_notes: P2idNoteCache,
     operator_account_id: AccountId,
-    /// Whether a top-up for the operator has been requested and its P2ID note has not been seen
-    /// yet. It suppresses further top-ups while the operator is still below the threshold.
+    /// Whether the operator has been sent a funding request whose P2ID note has not been seen
+    /// yet. It suppresses further requests while the operator is still below the threshold.
     ///
-    /// Only held in memory: a restart forgets an in-flight top-up and may request a second one.
+    /// Only held in memory: a restart forgets an in-flight request and may make a second one.
     funding_request_in_flight: bool,
 }
 
@@ -557,9 +557,9 @@ impl Faucet {
     }
 
     /// Whether the operator's balance of the faucet's asset has fallen below
-    /// [`OPERATOR_FUNDING_THRESHOLD`] and no top-up is already on its way.
+    /// [`OPERATOR_FUNDING_THRESHOLD`] and no funding request is already in flight.
     ///
-    /// A top-up reaches the operator as a P2ID note that a later batch consumes, so the operator
+    /// The funding reaches the operator as a P2ID note that a later batch consumes, so the operator
     /// stays below the threshold until then. Without
     /// [`funding_request_in_flight`](Self::funding_request_in_flight) every batch in that window
     /// would mint to the operator again.
@@ -577,7 +577,7 @@ impl Faucet {
         Ok(balance.as_u64() < OPERATOR_FUNDING_THRESHOLD)
     }
 
-    /// The request that tops the operator up with the faucet's own asset.
+    /// The request that funds the operator with the faucet's own asset.
     fn get_mint_request_for_operator(&self) -> anyhow::Result<MintRequest> {
         Ok(MintRequest {
             account_id: self.operator_account_id,
@@ -618,10 +618,10 @@ impl Faucet {
             return Ok(());
         }
 
-        // The operator pays for the transactions it submits, so the faucet tops it up with its own
-        // asset. The top-up rides along with this batch as one more request; it carries no response
-        // sender, so it must be appended after the user's requests, which `send_responses` pairs
-        // with their notes by position.
+        // The operator pays for the transactions it submits, so the faucet funds it with its own
+        // asset. The funding request rides along with this batch as one more request; it carries no
+        // response sender, so it must be appended after the user's requests, which
+        // `send_responses` pairs with their notes by position.
         if self.operator_requires_funding().await? {
             valid_requests.push(self.get_mint_request_for_operator()?);
             self.funding_request_in_flight = true;
@@ -663,11 +663,11 @@ impl Faucet {
             );
         }
 
-        // The store is only read while a top-up is in flight. Finding its notes clears the marker,
-        // so once this batch has consumed them a later one can request the next top-up.
+        // The store is only read while a funding request is in flight. Finding its notes clears
+        // the marker, so once this batch has consumed them a later one can make the next request.
         let operator_funding_notes = if self.funding_request_in_flight {
             let funding_notes = self.get_p2id_notes_targeted_to_operator().await?;
-            // The marker only clears once the top-up has arrived, which this batch then consumes.
+            // The marker only clears once the funding note has arrived, which this batch consumes.
             self.funding_request_in_flight = funding_notes.is_empty();
             funding_notes
         } else {
@@ -1500,7 +1500,7 @@ mod tests {
 
     /// The faucet tops its own operator up: a batch minted while the operator sits below the
     /// funding threshold carries one MINT note per request plus one payable to the operator, and a
-    /// top-up already on its way suppresses a second one.
+    /// funding request already in flight suppresses a second one.
     #[tokio::test]
     async fn mint_funds_the_operator_when_its_balance_is_low() {
         let store = Arc::new(
@@ -1521,19 +1521,19 @@ mod tests {
             "the batch should carry the request's MINT note and one funding the operator"
         );
 
-        // The top-up only reaches the operator once the network mints its P2ID note, so the
+        // The funding only reaches the operator once the network mints its P2ID note, so the
         // operator is still below the threshold. The in-flight marker is what stops a second one.
         assert!(faucet.funding_request_in_flight);
         assert!(
             !faucet.operator_requires_funding().await.unwrap(),
-            "a top-up already on its way should not be requested again"
+            "a funding request already in flight should not be made again"
         );
 
         let response = run_one_batch(&mut faucet).await;
         assert_eq!(
             output_note_count(&faucet, response.tx_id).await,
             1,
-            "the next batch should not top the operator up a second time"
+            "the next batch should not fund the operator a second time"
         );
 
         // An operator above the threshold is left alone.
@@ -1550,7 +1550,7 @@ mod tests {
         assert_eq!(
             output_note_count(&faucet, response.tx_id).await,
             1,
-            "a funded operator should not be topped up"
+            "a funded operator should not be funded again"
         );
     }
 
