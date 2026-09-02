@@ -20,14 +20,7 @@ use miden_client::rpc::Endpoint;
 use miden_client::store::Store;
 use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
-use miden_faucet_lib::{
-    Faucet,
-    FaucetAccount,
-    FaucetConfig,
-    create_faucet_operator_account,
-    create_network_faucet_account,
-    fetch_fee_faucet_id,
-};
+use miden_faucet_lib::{Faucet, FaucetAccount, FaucetConfig, create_faucet_operator_account};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
@@ -333,56 +326,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             faucet_account_id,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
-
-            // `--import` and `--faucet-account-id` require each other, so clap guarantees they are
-            // either both set or both unset.
-            let (faucet_account, operator_account, operator_secret) =
-                if let (Some(operator_account_path), Some(faucet_account_id)) =
-                    (import_operator_account_path, faucet_account_id)
-                {
-                    let operator_account_data = AccountFile::read(operator_account_path)
-                        .context("failed to read operator account data from file")?;
-                    let operator_secret = operator_account_data
-                        .auth_secret_keys
-                        .first()
-                        .context("auth secret key is required")?
-                        .clone();
-                    let (faucet_account_id, _) = AccountId::parse(&faucet_account_id)
-                        .context("failed to parse faucet account id")?;
-                    println!(
-                        "Using existing faucet account {} owned by operator account {}",
-                        faucet_account_id.to_hex(),
-                        operator_account_data.account.id(),
-                    );
-                    (
-                        FaucetAccount::Existing(faucet_account_id),
-                        operator_account_data.account,
-                        operator_secret,
-                    )
-                } else {
-                    println!("Generating new operator account.");
-                    let (operator_account, operator_secret) = create_faucet_operator_account()?;
-
-                    println!("Generating new faucet account. This may take a few seconds...");
-                    let token_symbol =
-                        token_symbol.expect("token_symbol should be present when not importing");
-                    let decimals = decimals.expect("decimals should be present when not importing");
-                    let max_supply =
-                        max_supply.expect("max_supply should be present when not importing");
-                    let fee_faucet_id = fetch_fee_faucet_id(&node_endpoint, timeout).await?;
-                    let faucet_account = create_network_faucet_account(
-                        token_symbol.as_str(),
-                        max_supply,
-                        decimals,
-                        operator_account.id(),
-                        fee_faucet_id,
-                    )?;
-                    (
-                        FaucetAccount::New(Box::new(faucet_account)),
-                        operator_account,
-                        operator_secret,
-                    )
-                };
             let faucet_config = FaucetConfig {
                 store_path,
                 node_endpoint,
@@ -390,14 +333,55 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 timeout,
                 remote_tx_prover_url,
             };
-            Box::pin(Faucet::init(
-                &faucet_config,
-                faucet_account,
-                &operator_secret,
-                operator_account,
-            ))
-            .await
-            .context("failed to initialize faucet")?;
+
+            // `--import` and `--faucet-account-id` require each other, so clap guarantees they are
+            // either both set or both unset.
+            if let (Some(operator_account_path), Some(faucet_account_id)) =
+                (import_operator_account_path, faucet_account_id)
+            {
+                let operator_account_data = AccountFile::read(operator_account_path)
+                    .context("failed to read operator account data from file")?;
+                let operator_secret = operator_account_data
+                    .auth_secret_keys
+                    .first()
+                    .context("auth secret key is required")?
+                    .clone();
+                let (faucet_account_id, _) = AccountId::parse(&faucet_account_id)
+                    .context("failed to parse faucet account id")?;
+                println!(
+                    "Using existing faucet account {} owned by operator account {}",
+                    faucet_account_id.to_hex(),
+                    operator_account_data.account.id(),
+                );
+                Box::pin(Faucet::init(
+                    &faucet_config,
+                    FaucetAccount::Existing(faucet_account_id),
+                    &operator_secret,
+                    operator_account_data.account,
+                ))
+                .await
+                .context("failed to initialize faucet")?;
+            } else {
+                println!("Generating new operator account.");
+                let (operator_account, operator_secret) = create_faucet_operator_account()?;
+
+                println!("Generating new faucet account. This may take a few seconds...");
+                let token_symbol =
+                    token_symbol.expect("token_symbol should be present when not importing");
+                let decimals = decimals.expect("decimals should be present when not importing");
+                let max_supply =
+                    max_supply.expect("max_supply should be present when not importing");
+                Box::pin(Faucet::init_new(
+                    &faucet_config,
+                    &token_symbol,
+                    max_supply,
+                    decimals,
+                    &operator_secret,
+                    operator_account,
+                ))
+                .await
+                .context("failed to initialize faucet")?;
+            }
 
             println!("Faucet account successfully initialized");
         },

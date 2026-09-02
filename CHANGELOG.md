@@ -2,6 +2,7 @@
 
 ## 0.16.0 (TBD)
 
+- Fee faucet lookups now use the latest block header stored by the initialized client instead of assuming the genesis header still contains the active fee parameters ([#287](https://github.com/0xMiden/faucet/issues/287)).
 - Updated miden-client dependency to v0.16.0-rc.3 (miden-protocol / miden-standards / miden-testing v0.16.0-rc.6) and `miden-node-proto-build` to v0.16.0-rc.2, and bumped the workspace version to 0.16.0-rc.2 ([#286](https://github.com/0xMiden/faucet/pull/286)).
 - The operator now attaches a `FEE_SPONSORSHIP` note to every MINT note on a fee-charging chain, prepaying the network transaction that consumes it, so the faucet no longer needs a funded vault. Sponsorships are only attached for a faucet that collects fees in the chain's native fee asset ([#290](https://github.com/0xMiden/faucet/pull/290)).
 - Added fee support for chains with a non-zero `verification_base_fee`: the operator's MINT transaction commits native fee conversion info (rate 1/1) through its auth args, declares the faucet as a foreign account so the MINT note pricing FPI is served in one RPC call, and the faucet checks the operator's fee asset balance at startup and before each batch (requests are rejected with HTTP 503 while the operator cannot pay) ([#286](https://github.com/0xMiden/faucet/pull/286)).

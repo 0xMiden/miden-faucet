@@ -178,6 +178,13 @@ pub struct FaucetConfig {
     pub remote_tx_prover_url: Option<Url>,
 }
 
+/// Client-side components shared by the two faucet initialization paths.
+struct FaucetInitContext {
+    client: Client<FilesystemKeyStore>,
+    state_sync_component: StateSync,
+    grpc_client: Arc<GrpcClient>,
+}
+
 /// The faucet account to initialize against.
 pub enum FaucetAccount {
     /// A freshly created faucet account, to be added to the store as-is.
@@ -210,12 +217,61 @@ impl Faucet {
         operator_secret_key: &AuthSecretKey,
         operator_account: Account,
     ) -> anyhow::Result<()> {
-        let faucet_account_id = faucet_account.id();
-        let deploy = matches!(faucet_account, FaucetAccount::New(_));
+        let init_context =
+            Self::prepare_init_context(config, operator_secret_key, operator_account.id()).await?;
+        Self::finish_init(config, faucet_account, operator_account, init_context, false).await
+    }
 
+    /// Initializes a faucet with a newly generated network faucet account.
+    ///
+    /// Unlike [`Self::init`], this path creates the faucet account after the client has synced to
+    /// the chain tip. This ensures the account's fee policy uses the fee faucet ID from the latest
+    /// locally stored block header.
+    pub async fn init_new(
+        config: &FaucetConfig,
+        token_symbol: &str,
+        max_supply: u64,
+        decimals: u8,
+        operator_secret_key: &AuthSecretKey,
+        operator_account: Account,
+    ) -> anyhow::Result<()> {
+        let mut init_context =
+            Self::prepare_init_context(config, operator_secret_key, operator_account.id()).await?;
+
+        Self::sync_state(
+            &[operator_account.id()],
+            &mut init_context.client,
+            &init_context.state_sync_component,
+        )
+        .await?;
+
+        let fee_faucet_id = fetch_fee_faucet_id(&init_context.client).await?;
+        let faucet_account = create_network_faucet_account(
+            token_symbol,
+            max_supply,
+            decimals,
+            operator_account.id(),
+            fee_faucet_id,
+        )?;
+
+        Self::finish_init(
+            config,
+            FaucetAccount::New(Box::new(faucet_account)),
+            operator_account,
+            init_context,
+            true,
+        )
+        .await
+    }
+
+    async fn prepare_init_context(
+        config: &FaucetConfig,
+        operator_secret_key: &AuthSecretKey,
+        operator_account_id: AccountId,
+    ) -> anyhow::Result<FaucetInitContext> {
         let keystore =
             FilesystemKeyStore::new(KEYSTORE_PATH.into()).context("failed to create keystore")?;
-        keystore.add_key(operator_secret_key, operator_account.id()).await?;
+        keystore.add_key(operator_secret_key, operator_account_id).await?;
 
         let sqlite_store = Arc::new(SqliteStore::new(config.store_path.clone()).await?);
 
@@ -228,11 +284,6 @@ impl Faucet {
 
         client.ensure_genesis_in_place().await?;
 
-        let fee_parameters = read_fee_parameters(&client).await?;
-        if deploy {
-            ensure_new_faucet_can_be_deployed(&fee_parameters)?;
-        }
-
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
         let note_screener = NoteScreener::new(sqlite_store);
@@ -240,6 +291,33 @@ impl Faucet {
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component =
             StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
+
+        Ok(FaucetInitContext {
+            client,
+            state_sync_component,
+            grpc_client,
+        })
+    }
+
+    async fn finish_init(
+        config: &FaucetConfig,
+        faucet_account: FaucetAccount,
+        operator_account: Account,
+        init_context: FaucetInitContext,
+        operator_already_synced: bool,
+    ) -> anyhow::Result<()> {
+        let faucet_account_id = faucet_account.id();
+        let deploy = matches!(faucet_account, FaucetAccount::New(_));
+        let FaucetInitContext {
+            mut client,
+            state_sync_component,
+            grpc_client,
+        } = init_context;
+
+        let fee_parameters = read_fee_parameters(&client).await?;
+        if deploy {
+            ensure_new_faucet_can_be_deployed(&fee_parameters)?;
+        }
 
         // An imported faucet account is expected to be a deployed public account. Checking it here
         // reports a wrong account ID before anything is written to the store.
@@ -256,7 +334,9 @@ impl Faucet {
             );
         }
 
-        Self::sync_state(&[operator_account.id()], &mut client, &state_sync_component).await?;
+        if !operator_already_synced {
+            Self::sync_state(&[operator_account.id()], &mut client, &state_sync_component).await?;
+        }
 
         let add_result = match &faucet_account {
             FaucetAccount::New(account) => client.add_account(account, false).await,
@@ -904,7 +984,7 @@ impl Faucet {
 // ================================================================================================
 
 /// Reads the chain's fee parameters from the latest block header the client has stored.
-async fn read_fee_parameters(client: &Client<FilesystemKeyStore>) -> anyhow::Result<FeeParameters> {
+async fn read_fee_parameters<AUTH>(client: &Client<AUTH>) -> anyhow::Result<FeeParameters> {
     let latest_block = client
         .get_latest_block_header()
         .await
@@ -1186,17 +1266,10 @@ fn build_mint_notes(
     Ok(mint_notes)
 }
 
-/// Reads the ID of the faucet whose asset the chain charges fees in from the genesis block header.
-pub async fn fetch_fee_faucet_id(
-    node_endpoint: &Endpoint,
-    timeout: Duration,
-) -> anyhow::Result<AccountId> {
-    let (genesis, _) = GrpcClient::new(node_endpoint, timeout.as_millis() as u64)
-        .get_block_header_by_number(Some(BlockNumber::GENESIS), false)
-        .await
-        .context("failed to fetch the genesis block header")?;
-
-    Ok(genesis.fee_parameters().fee_faucet_id())
+/// Reads the ID of the faucet whose asset the chain charges fees in from the latest block header
+/// stored by `client`.
+pub async fn fetch_fee_faucet_id<AUTH>(client: &Client<AUTH>) -> anyhow::Result<AccountId> {
+    Ok(read_fee_parameters(client).await?.fee_faucet_id())
 }
 
 /// Creates a new network faucet account from the given parameters.
@@ -1284,13 +1357,21 @@ mod tests {
     use std::env::temp_dir;
 
     use miden_client::asset::AssetId;
-    use miden_client::block::BlockNumber;
+    use miden_client::block::{BlockHeader, BlockNumber};
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
+    use miden_client::note::NoteUpdateTracker;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
+    use miden_client::sync::{
+        AccountUpdates,
+        PartialBlockchainUpdates,
+        StateSyncUpdate,
+        TransactionUpdateTracker,
+    };
     use miden_client::testing::MockChainBuilder;
     use miden_client::testing::account_id::{
         ACCOUNT_ID_FEE_FAUCET,
+        ACCOUNT_ID_PUBLIC_FUNGIBLE_FAUCET,
         ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE,
     };
     use miden_client::testing::mock::MockRpcApi;
@@ -1397,6 +1478,62 @@ mod tests {
     /// The base fee the fee tests charge. The kernel charges it once per verification cycle
     /// (`ilog2(execution cycles) + 1`), so a transaction pays a small multiple of it.
     const TEST_VERIFICATION_BASE_FEE: u32 = 500;
+
+    /// A lookup follows the client's sync height instead of pinning the fee faucet to genesis.
+    #[tokio::test]
+    async fn fee_faucet_lookup_uses_latest_stored_header() {
+        let genesis_fee_faucet = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
+        let latest_fee_faucet = AccountId::try_from(ACCOUNT_ID_PUBLIC_FUNGIBLE_FAUCET).unwrap();
+        let mut client = fee_faucet_lookup_client(genesis_fee_faucet, true).await;
+
+        let genesis = client
+            .get_block_header_by_num(BlockNumber::GENESIS)
+            .await
+            .unwrap()
+            .expect("genesis should be stored")
+            .0;
+        assert_eq!(genesis.fee_parameters().fee_faucet_id(), genesis_fee_faucet);
+
+        let latest = block_after(&genesis, latest_fee_faucet);
+        let mut partial_blockchain_updates = PartialBlockchainUpdates::default();
+        partial_blockchain_updates.insert(latest.clone(), false);
+        client
+            .apply_state_sync(StateSyncUpdate::from_parts(
+                latest.block_num(),
+                partial_blockchain_updates,
+                NoteUpdateTracker::default(),
+                TransactionUpdateTracker::default(),
+                AccountUpdates::default(),
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(fetch_fee_faucet_id(&client).await.unwrap(), latest_fee_faucet);
+    }
+
+    /// A genesis-only store still returns the fee faucet configured at genesis.
+    #[tokio::test]
+    async fn fee_faucet_lookup_supports_genesis_only_store() {
+        let genesis_fee_faucet = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
+        let client = fee_faucet_lookup_client(genesis_fee_faucet, true).await;
+
+        assert_eq!(fetch_fee_faucet_id(&client).await.unwrap(), genesis_fee_faucet);
+    }
+
+    /// The lookup never falls back to the node when the local store has no block header.
+    #[tokio::test]
+    async fn fee_faucet_lookup_reports_empty_store() {
+        let rpc_fee_faucet = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
+        let client = fee_faucet_lookup_client(rpc_fee_faucet, false).await;
+
+        let error = fetch_fee_faucet_id(&client)
+            .await
+            .expect_err("an empty local store should not fall back to the RPC genesis header");
+        assert!(
+            format!("{error:#}").contains("failed to read the latest block header from the store"),
+            "expected a clear local-store error, got: {error:#}"
+        );
+    }
 
     /// The MINT transaction declares the faucet as a foreign account, requesting every entry of
     /// each of its map slots, and commits the conversion info through the auth args.
@@ -1534,6 +1671,52 @@ mod tests {
 
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
+
+    /// Builds a client whose RPC genesis uses `fee_faucet_id`. When requested, genesis is also
+    /// copied into the client's local store.
+    async fn fee_faucet_lookup_client(
+        fee_faucet_id: AccountId,
+        store_genesis: bool,
+    ) -> Client<FilesystemKeyStore> {
+        let mock_chain = MockChainBuilder::new().fee_faucet_id(fee_faucet_id).build().unwrap();
+        let mock_rpc = Arc::new(MockRpcApi::new(mock_chain));
+        let store = Arc::new(
+            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
+                .await
+                .unwrap(),
+        );
+        let keystore_path = temp_dir().join(format!("keystore-{}", Uuid::new_v4()));
+        let mut client = ClientBuilder::new()
+            .rpc(mock_rpc)
+            .store(store)
+            .filesystem_keystore(keystore_path.to_str().unwrap())
+            .expect("keystore should be created")
+            .build()
+            .await
+            .unwrap();
+        if store_genesis {
+            client.ensure_genesis_in_place().await.unwrap();
+        }
+        client
+    }
+
+    /// Creates the next local header with a different active fee faucet.
+    fn block_after(previous: &BlockHeader, fee_faucet_id: AccountId) -> BlockHeader {
+        BlockHeader::new(
+            previous.version(),
+            previous.commitment(),
+            BlockNumber::from(previous.block_num().as_u32() + 1),
+            previous.chain_commitment(),
+            previous.account_root(),
+            previous.nullifier_root(),
+            previous.note_root(),
+            previous.tx_commitment(),
+            previous.tx_kernel_commitment(),
+            previous.validator_keys().clone(),
+            FeeParameters::new(fee_faucet_id, previous.fee_parameters().verification_base_fee()),
+            previous.timestamp() + 1,
+        )
+    }
 
     /// A mint request for a public note to a fixed account.
     fn mint_request() -> MintRequest {
