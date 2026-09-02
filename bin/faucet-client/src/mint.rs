@@ -7,11 +7,11 @@ use miden_client::Word;
 use miden_client::account::component::FeeConversionInfo;
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
-use miden_client::block::BlockNumber;
 use miden_client::note::{NoteId, get_input_note_with_id_prefix};
 use miden_client::store::NoteRecordError;
 use miden_client::transaction::{TransactionId, TransactionRequestBuilder};
 use miden_client_cli::CliClient;
+use miden_faucet_lib::fetch_fee_faucet_id;
 use miden_faucet_lib::requests::{
     GetPowResponse,
     GetTokensQueryParams,
@@ -166,20 +166,12 @@ impl MintCmd {
     }
 }
 
-/// Returns the ID of the faucet issuing the chain's native fee asset, read from the genesis block
-/// header.
+/// Returns the ID of the faucet issuing the chain's native fee asset, read from the latest block
+/// header stored by the client.
 async fn fee_faucet_id(client: &CliClient) -> Result<AccountId, MintClientError> {
-    let (genesis, _) = client
-        .get_block_header_by_num(BlockNumber::GENESIS)
+    fetch_fee_faucet_id(client)
         .await
-        .map_err(|e| MintClientError::ConsumeTransaction(e.to_string()))?
-        .ok_or_else(|| {
-            MintClientError::ConsumeTransaction(
-                "the genesis block header is not in the store".to_owned(),
-            )
-        })?;
-
-    Ok(genesis.fee_parameters().fee_faucet_id())
+        .map_err(|error| MintClientError::ConsumeTransaction(error.to_string()))
 }
 
 // HTTP CLIENT
