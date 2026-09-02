@@ -18,6 +18,7 @@
 - Updated `rand` to v0.10 and removed the direct `rand_chacha` dependency and updated the declared `rust-version` to `1.96.1` ([#284](https://github.com/0xMiden/faucet/pull/284)).
 - The faucet now consumes the P2ID notes payable to the operator in its mint transactions, so the operator can be funded by transferring assets to it.
 - The faucet now funds its own operator: a mint batch adds a request payable to the operator whenever its balance of the chain's fee asset is below the funding threshold, and the resulting P2ID note is consumed by a later batch. Only on a chain that charges fees in the faucet's own asset, since that is the only asset the faucet can mint.
+- The faucet only tracks and consumes P2ID notes payable to the operator that carry the chain's fee asset, so notes carrying any other asset are ignored.
 - Improved frontend loading: the SDK WASM download is deferred until the page finishes loading and served brotli pre-compressed, the JS bundle is minified, the header image was converted to lossless WebP, and all static assets are served with cache headers ([#288](https://github.com/0xMiden/faucet/pull/288)).
 - Fixed the issuance counter staying empty until the next mint, the value is now cached and rendered once the metadata arrives.
 - Added loading spinners for the footer values (faucet address, tokens claimed) and disabled the token amount selector until its options load ([#288](https://github.com/0xMiden/faucet/pull/288)).

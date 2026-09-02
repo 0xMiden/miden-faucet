@@ -4,34 +4,62 @@ use std::sync::Arc;
 
 use miden_client::account::AccountId;
 use miden_client::rpc::domain::note::CommittedNote;
-use miden_client::store::{InputNoteRecord, NoteFilter, Store};
+use miden_client::store::{InputNoteRecord, NoteFilter, Store, StoreError};
 use miden_client::sync::{NoteUpdateAction, OnNoteReceived};
+use miden_client::utils::Deserializable;
 use miden_client::{ClientError, async_trait};
 
-use crate::is_p2id_payable_to;
+use crate::{DEFAULT_OPERATOR_ACCOUNT_ID_SETTING, is_p2id_payable_to};
 
 /// Provides functionality for testing whether a note is relevant to the faucet.
 ///
 /// A note is relevant if it is a tracked output note, or a public P2ID note payable to the
-/// operator. The latter fund the operator and are consumed by the next mint transaction.
+/// operator in the chain's fee asset. The latter fund the operator and are consumed by the next
+/// mint transaction.
 #[derive(Clone)]
 pub struct NoteScreener {
-    /// A reference to the faucet's store, used to fetch tracked output notes.
+    /// A reference to the faucet's store, used to fetch tracked output notes, the operator account
+    /// and the chain's fee parameters.
     store: Arc<dyn Store>,
-    /// The operator account that executes the mint transactions.
-    operator_account_id: AccountId,
 }
 
 impl NoteScreener {
-    pub fn new(store: Arc<dyn Store>, operator_account_id: AccountId) -> Self {
-        Self { store, operator_account_id }
+    pub fn new(store: Arc<dyn Store>) -> Self {
+        Self { store }
+    }
+
+    /// Reads the operator account the faucet recorded when it was initialized.
+    async fn operator_account_id(&self) -> Result<AccountId, StoreError> {
+        let value = self
+            .store
+            .get_setting(DEFAULT_OPERATOR_ACCOUNT_ID_SETTING.to_owned())
+            .await?
+            .ok_or_else(|| {
+            StoreError::QueryError(format!(
+                "setting {DEFAULT_OPERATOR_ACCOUNT_ID_SETTING} is not set"
+            ))
+        })?;
+
+        Ok(AccountId::read_from_bytes(&value)?)
+    }
+
+    /// Reads the chain's fee faucet from the latest block header the store holds.
+    async fn fee_faucet_id(&self) -> Result<AccountId, StoreError> {
+        let sync_height = self.store.get_sync_height().await?;
+        let (block_header, _) = self
+            .store
+            .get_block_header_by_num(sync_height)
+            .await?
+            .ok_or(StoreError::BlockHeaderNotFound(sync_height))?;
+
+        Ok(block_header.fee_parameters().fee_faucet_id())
     }
 }
 
 #[async_trait(?Send)]
 impl OnNoteReceived for NoteScreener {
     /// Queries the store for the committed note to check if it's a tracked output note, and
-    /// otherwise checks whether it is a P2ID note payable to the operator.
+    /// otherwise checks whether it is a P2ID note payable to the operator in the fee asset.
     async fn on_note_received(
         &self,
         committed_note: CommittedNote,
@@ -47,12 +75,15 @@ impl OnNoteReceived for NoteScreener {
             return Ok(NoteUpdateAction::Commit(committed_note));
         }
 
-        // A private note carries no details, so it cannot be recognized as a funding note.
-        match public_note {
-            Some(note) if is_p2id_payable_to(note.details(), self.operator_account_id) => {
-                Ok(NoteUpdateAction::Insert(note))
-            },
-            _ => Ok(NoteUpdateAction::Discard),
+        // Check if the note is a P2ID note targeted to the operator account
+        if let Some(note) = public_note {
+            let operator_account_id = self.operator_account_id().await?;
+            let fee_faucet_id = self.fee_faucet_id().await?;
+            if is_p2id_payable_to(note.details(), operator_account_id, fee_faucet_id) {
+                return Ok(NoteUpdateAction::Insert(note));
+            }
         }
+
+        return Ok(NoteUpdateAction::Discard);
     }
 }
