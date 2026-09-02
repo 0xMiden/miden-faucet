@@ -52,7 +52,9 @@ use miden_client::note::{
     NoteDetails,
     NoteError,
     NoteExecutionHint,
+    NoteFile,
     NoteId,
+    NoteSyncHint,
     NoteType as ProtocolNoteType,
     P2idNote,
     P2idNoteStorage,
@@ -110,7 +112,7 @@ const OPERATOR_FUNDING_AMOUNT: u64 = 10_000_000_000;
 const SPONSORSHIP_RECLAIM_DELTA: u32 = 1_000;
 
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
-pub(crate) const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
+const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
 
 /// Salt under which the operator commits its fee conversion info through the auth args.
 ///
@@ -586,6 +588,39 @@ impl Faucet {
         Ok(balance < OPERATOR_FUNDING_THRESHOLD)
     }
 
+    /// Tracks the P2ID notes among `p2id_notes` that fund the operator, so the sync commits them
+    /// once the network has minted them. Tracking them is what makes the note screener recognize
+    /// them: nothing else in the store vouches for a note the network creates.
+    async fn track_operator_funding_notes(
+        &mut self,
+        p2id_notes: &[Note],
+        after_block_num: BlockNumber,
+    ) -> anyhow::Result<()> {
+        let operator_id = self.operator_id();
+        let fee_faucet_id = self.fee_parameters().await?.fee_faucet_id();
+
+        let note_files: Vec<NoteFile> = p2id_notes
+            .iter()
+            .map(|note| (NoteDetails::from(note.clone()), note.metadata().tag()))
+            .filter(|(details, _)| is_p2id_payable_to(details, operator_id, fee_faucet_id))
+            .map(|(details, tag)| NoteFile::ExpectedNote {
+                details,
+                sync_hint: NoteSyncHint::new(after_block_num, tag),
+            })
+            .collect();
+
+        if note_files.is_empty() {
+            return Ok(());
+        }
+
+        self.client
+            .import_notes(&note_files)
+            .await
+            .context("failed to track the P2ID notes funding the operator")?;
+
+        Ok(())
+    }
+
     /// The request that funds the operator with the faucet's own asset.
     fn get_mint_request_for_operator(&self) -> anyhow::Result<MintRequest> {
         Ok(MintRequest {
@@ -648,6 +683,7 @@ impl Faucet {
         // derived from them below.
         let p2id_notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
         let p2id_note_ids: Vec<NoteId> = p2id_notes.iter().map(Note::id).collect();
+        self.track_operator_funding_notes(&p2id_notes, after_block_num).await?;
 
         let mint_notes = build_mint_notes(
             self.faucet_id().account_id,
@@ -656,21 +692,7 @@ impl Faucet {
             self.operator_account_id,
         )?;
 
-        // Log the P2id note ids along with their corresponding MINT note ids.
-        for ((request, mint_note), p2id_note) in
-            valid_requests.iter().zip(&mint_notes).zip(&p2id_notes)
-        {
-            info!(
-                target: COMPONENT,
-                {
-                    mint_note.id = %mint_note.id().to_hex(),
-                    p2id_note.id = %p2id_note.id().to_hex(),
-                    target_account.id = %request.account_id,
-                    note.type = ?request.note_type
-                },
-                "Built mint request",
-            );
-        }
+        log_built_requests(&valid_requests, &mint_notes, &p2id_notes);
 
         // The store is only read while a funding request is in flight. Finding its notes clears
         // the marker, so once this batch has consumed them a later one can make the next request.
@@ -1390,6 +1412,22 @@ pub fn create_faucet_operator_account() -> anyhow::Result<(Account, AuthSecretKe
     Ok((account, AuthSecretKey::Falcon512Poseidon2(secret_key)))
 }
 
+/// Logs each request's P2ID note id alongside the MINT note id it is derived from.
+fn log_built_requests(requests: &[MintRequest], mint_notes: &[Note], p2id_notes: &[Note]) {
+    for ((request, mint_note), p2id_note) in requests.iter().zip(mint_notes).zip(p2id_notes) {
+        info!(
+            target: COMPONENT,
+            {
+                mint_note.id = %mint_note.id().to_hex(),
+                p2id_note.id = %p2id_note.id().to_hex(),
+                target_account.id = %request.account_id,
+                note.type = ?request.note_type
+            },
+            "Built mint request",
+        );
+    }
+}
+
 /// Whether `details` describes a P2ID note payable to `target` that carries `fee_faucet_id`'s
 /// asset and nothing else.
 ///
@@ -1919,16 +1957,6 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&faucet_account, false).await.unwrap();
         client.add_account(&operator_account, false).await.unwrap();
-        // `Faucet::init` records both accounts as settings; the note screener reads the operator
-        // from there.
-        client
-            .set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), faucet_account.id())
-            .await
-            .unwrap();
-        client
-            .set_setting(DEFAULT_OPERATOR_ACCOUNT_ID_SETTING.to_owned(), operator_account.id())
-            .await
-            .unwrap();
 
         // The mock RPC serves no transaction encryption key, so seed an unattested one:
         // submission seals against it and the mock node ignores the sealed payload.
