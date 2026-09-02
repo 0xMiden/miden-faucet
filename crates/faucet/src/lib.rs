@@ -97,7 +97,7 @@ const NOTE_RETENTION_BLOCKS: u32 = 100;
 /// How many blocks the transaction that sends the MINT note stays valid after its reference block.
 const MINT_TX_EXPIRATION_DELTA: u16 = 10;
 
-/// The operator is funded once its balance of the faucet's asset falls below this many base
+/// The operator is funded once its balance of the chain's fee asset falls below this many base
 /// units.
 const OPERATOR_FUNDING_THRESHOLD: u64 = 1_000_000_000;
 
@@ -556,8 +556,13 @@ impl Faucet {
             .collect()
     }
 
-    /// Whether the operator's balance of the faucet's asset has fallen below
+    /// Whether the operator's balance of the chain's fee asset has fallen below
     /// [`OPERATOR_FUNDING_THRESHOLD`] and no funding request is already in flight.
+    ///
+    /// The operator spends the fee asset on the transactions it submits, so that is the balance
+    /// that has to be kept up. The faucet can only mint its own asset, so it can only fund the
+    /// operator on a chain that charges fees in that asset; elsewhere a mint would never raise the
+    /// balance, and every batch would request another one.
     ///
     /// The funding reaches the operator as a P2ID note that a later batch consumes, so the operator
     /// stays below the threshold until then. Without
@@ -568,13 +573,16 @@ impl Faucet {
             return Ok(false);
         }
 
-        let balance = self
-            .client
-            .account_reader(self.operator_account_id)
-            .get_balance(self.id.account_id)
+        let fee_parameters = self.fee_parameters().await?;
+        if fee_parameters.fee_faucet_id() != self.id.account_id {
+            return Ok(false);
+        }
+
+        let operator = self.client.account_reader(self.operator_account_id);
+        let balance = fee_asset_balance(&operator, &fee_parameters)
             .await
-            .context("failed to read the operator's balance of the faucet's asset")?;
-        Ok(balance.as_u64() < OPERATOR_FUNDING_THRESHOLD)
+            .context("failed to read the operator's fee asset balance")?;
+        Ok(balance < OPERATOR_FUNDING_THRESHOLD)
     }
 
     /// The request that funds the operator with the faucet's own asset.
@@ -1498,9 +1506,9 @@ mod tests {
         }
     }
 
-    /// The faucet tops its own operator up: a batch minted while the operator sits below the
-    /// funding threshold carries one MINT note per request plus one payable to the operator, and a
-    /// funding request already in flight suppresses a second one.
+    /// On a chain that charges fees in the faucet's own asset, a batch minted while the operator
+    /// sits below the funding threshold carries one MINT note per request plus one payable to the
+    /// operator, and a funding request already in flight suppresses a second one.
     #[tokio::test]
     async fn mint_funds_the_operator_when_its_balance_is_low() {
         let store = Arc::new(
@@ -1508,11 +1516,21 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        let mut faucet = build_faucet_on_chain(store.clone(), 0, 0, 0).await;
+        let mut faucet = build_faucet_on_chain(store.clone(), 0, 0, true).await;
+
+        // The premise of the mechanism: the operator pays transaction fees in the very asset the
+        // faucet mints, so minting to it raises the balance that has to stay above the threshold.
+        let fee_parameters = faucet.fee_parameters().await.unwrap();
+        assert_eq!(fee_parameters.fee_faucet_id(), faucet.faucet_id().account_id);
         assert!(
             faucet.operator_requires_funding().await.unwrap(),
-            "the operator holds none of the faucet's asset"
+            "the operator holds none of the chain's fee asset"
         );
+
+        // The request mints the faucet's asset, which is the chain's fee asset, to the operator.
+        let request = faucet.get_mint_request_for_operator().unwrap();
+        assert_eq!(request.account_id, faucet.operator_id());
+        assert_eq!(request.asset_amount.base_units(), OPERATOR_FUNDING_AMOUNT);
 
         let response = run_one_batch(&mut faucet).await;
         assert_eq!(
@@ -1543,7 +1561,7 @@ mod tests {
                 .unwrap(),
         );
         let mut faucet =
-            build_faucet_on_chain(store.clone(), 0, 0, OPERATOR_FUNDING_THRESHOLD).await;
+            build_faucet_on_chain(store.clone(), 0, OPERATOR_FUNDING_THRESHOLD, true).await;
         assert!(!faucet.operator_requires_funding().await.unwrap());
 
         let response = run_one_batch(&mut faucet).await;
@@ -1617,13 +1635,11 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        // The operator also starts above the funding threshold, so the batch mints only the
-        // request's MINT note and this test's note counts stay about fees alone.
         let mut faucet = build_faucet_on_chain(
             store.clone(),
             TEST_VERIFICATION_BASE_FEE,
             operator_fee_balance,
-            OPERATOR_FUNDING_THRESHOLD,
+            false,
         )
         .await;
         let fee_parameters = faucet.fee_parameters().await.unwrap();
@@ -1738,20 +1754,21 @@ mod tests {
             .remove(0)
     }
 
-    /// Builds a faucet using a mock client on a chain that charges no fees, with an operator
-    /// already above the funding threshold.
+    /// Builds a faucet using a mock client on a chain that charges no fees.
     async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
-        build_faucet_on_chain(store, 0, 0, OPERATOR_FUNDING_THRESHOLD).await
+        build_faucet_on_chain(store, 0, 0, false).await
     }
 
     /// Builds a faucet using a mock client on a chain charging `verification_base_fee`, with the
-    /// operator holding `operator_fee_balance` base units of the chain's fee asset and
-    /// `operator_faucet_balance` base units of the faucet's own asset at genesis.
+    /// operator holding `operator_fee_balance` base units of the chain's fee asset at genesis.
+    ///
+    /// `faucet_is_chain_fee_faucet` makes the chain charge fees in the faucet's own asset, the only
+    /// arrangement in which the faucet can fund its operator.
     async fn build_faucet_on_chain(
         store: Arc<dyn Store>,
         verification_base_fee: u32,
         operator_fee_balance: u64,
-        operator_faucet_balance: u64,
+        faucet_is_chain_fee_faucet: bool,
     ) -> Faucet {
         let (mut operator_account, operator_secret) = create_faucet_operator_account().unwrap();
         let symbol = "TEST";
@@ -1779,19 +1796,20 @@ mod tests {
         deployed_faucet.set_nonce(Felt::new_unchecked(1)).unwrap();
         // The operator is committed as well, with its fee asset balance, mirroring an operator
         // funded on chain before the faucet starts.
+        let chain_fee_faucet_id = if faucet_is_chain_fee_faucet {
+            faucet_account.id()
+        } else {
+            fee_faucet_id
+        };
         if operator_fee_balance > 0 {
-            let fee_asset = FungibleAsset::new(fee_faucet_id, operator_fee_balance).unwrap();
+            let fee_asset = FungibleAsset::new(chain_fee_faucet_id, operator_fee_balance).unwrap();
             operator_account.vault_mut().add_asset(fee_asset.into()).unwrap();
-        }
-        if operator_faucet_balance > 0 {
-            let asset = FungibleAsset::new(faucet_account.id(), operator_faucet_balance).unwrap();
-            operator_account.vault_mut().add_asset(asset.into()).unwrap();
         }
         operator_account.set_nonce(Felt::new_unchecked(1)).unwrap();
         let mock_chain =
             MockChainBuilder::with_accounts([deployed_faucet, operator_account.clone()])
                 .unwrap()
-                .fee_faucet_id(fee_faucet_id)
+                .fee_faucet_id(chain_fee_faucet_id)
                 .verification_base_fee(verification_base_fee)
                 .build()
                 .unwrap();
