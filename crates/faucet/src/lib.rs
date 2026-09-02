@@ -396,12 +396,12 @@ impl Faucet {
         let issuance_value = Self::read_issuance_from_store(&client, account.id()).await?;
         let (issuance, _) = watch::channel(issuance_value);
 
-        let fee_parameters = read_fee_parameters(&client).await?;
         let note_screener = NoteScreener::new(sqlite_store.clone());
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component = StateSync::new(grpc_client, Arc::new(note_screener), None);
 
+        let fee_parameters = read_fee_parameters(&client).await?;
         if fee_parameters.verification_base_fee() != 0 {
             // Both accounts are public, so a sync picks up funding that happened on chain after
             // `init` (for example the operator being funded out of band).
@@ -1428,6 +1428,7 @@ mod tests {
         ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE,
     };
     use miden_client::testing::mock::MockRpcApi;
+    use miden_client::transaction::RawOutputNote;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
@@ -1535,15 +1536,20 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        let mut faucet = build_faucet_on_chain(store.clone(), 0, 0, true).await;
+        let (mut faucet, mock_rpc) =
+            build_faucet_on_chain(store.clone(), 0, OPERATOR_FUNDING_THRESHOLD - 1, true).await;
 
         // The premise of the mechanism: the operator pays transaction fees in the very asset the
         // faucet mints, so minting to it raises the balance that has to stay above the threshold.
         let fee_parameters = faucet.fee_parameters().await.unwrap();
         assert_eq!(fee_parameters.fee_faucet_id(), faucet.faucet_id().account_id);
+        assert_eq!(
+            operator_fee_balance(&faucet, &fee_parameters).await,
+            OPERATOR_FUNDING_THRESHOLD - 1,
+        );
         assert!(
             faucet.operator_requires_funding().await.unwrap(),
-            "the operator holds none of the chain's fee asset"
+            "the operator sits one base unit below the threshold"
         );
 
         // The request mints the faucet's asset, which is the chain's fee asset, to the operator.
@@ -1552,14 +1558,22 @@ mod tests {
         assert_eq!(request.asset_amount.base_units(), OPERATOR_FUNDING_AMOUNT);
 
         let response = run_one_batch(&mut faucet).await;
+        let funding_tx_id = response.tx_id;
         assert_eq!(
-            output_note_count(&faucet, response.tx_id).await,
+            output_note_count(&faucet, funding_tx_id).await,
             2,
             "the batch should carry the request's MINT note and one funding the operator"
         );
 
-        // The funding only reaches the operator once the network mints its P2ID note, so the
-        // operator is still below the threshold. The in-flight marker is what stops a second one.
+        // The batch only creates the MINT note; the network mints the P2ID note that carries the
+        // asset, which the mock node does not do, so the operator's balance has not moved yet.
+        assert_eq!(
+            operator_fee_balance(&faucet, &fee_parameters).await,
+            OPERATOR_FUNDING_THRESHOLD - 1,
+        );
+
+        // The operator is therefore still below the threshold, and the in-flight marker is what
+        // stops a second request.
         assert!(faucet.funding_request_in_flight);
         assert!(
             !faucet.operator_requires_funding().await.unwrap(),
@@ -1573,14 +1587,32 @@ mod tests {
             "the next batch should not fund the operator a second time"
         );
 
+        // Play the network: mint the P2ID notes the first batch's MINT notes describe.
+        execute_network_tx_from_output_notes(&faucet, &mock_rpc, funding_tx_id).await;
+
+        // The next batch finds the operator's P2ID note and consumes it.
+        run_one_batch(&mut faucet).await;
+        assert_eq!(
+            operator_fee_balance(&faucet, &fee_parameters).await,
+            OPERATOR_FUNDING_THRESHOLD - 1 + OPERATOR_FUNDING_AMOUNT,
+            "consuming the funding note should raise the operator's balance"
+        );
+        assert!(!faucet.funding_request_in_flight, "the funding request is no longer in flight");
+
         // An operator above the threshold is left alone.
         let store = Arc::new(
             SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
                 .await
                 .unwrap(),
         );
-        let mut faucet =
+        let (mut faucet, _) =
             build_faucet_on_chain(store.clone(), 0, OPERATOR_FUNDING_THRESHOLD, true).await;
+        // A different faucet account, so the chain it runs on charges in a different asset.
+        let fee_parameters = faucet.fee_parameters().await.unwrap();
+        assert_eq!(
+            operator_fee_balance(&faucet, &fee_parameters).await,
+            OPERATOR_FUNDING_THRESHOLD,
+        );
         assert!(!faucet.operator_requires_funding().await.unwrap());
 
         let response = run_one_batch(&mut faucet).await;
@@ -1695,7 +1727,7 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        let mut faucet = build_faucet_on_chain(
+        let (mut faucet, _) = build_faucet_on_chain(
             store.clone(),
             TEST_VERIFICATION_BASE_FEE,
             operator_fee_balance,
@@ -1816,7 +1848,7 @@ mod tests {
 
     /// Builds a faucet using a mock client on a chain that charges no fees.
     async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
-        build_faucet_on_chain(store, 0, 0, false).await
+        build_faucet_on_chain(store, 0, 0, false).await.0
     }
 
     /// Builds a faucet using a mock client on a chain charging `verification_base_fee`, with the
@@ -1829,7 +1861,7 @@ mod tests {
         verification_base_fee: u32,
         operator_fee_balance: u64,
         faucet_is_chain_fee_faucet: bool,
-    ) -> Faucet {
+    ) -> (Faucet, Arc<MockRpcApi>) {
         let (mut operator_account, operator_secret) = create_faucet_operator_account().unwrap();
         let symbol = "TEST";
         let decimals = 6;
@@ -1887,6 +1919,16 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&faucet_account, false).await.unwrap();
         client.add_account(&operator_account, false).await.unwrap();
+        // `Faucet::init` records both accounts as settings; the note screener reads the operator
+        // from there.
+        client
+            .set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), faucet_account.id())
+            .await
+            .unwrap();
+        client
+            .set_setting(DEFAULT_OPERATOR_ACCOUNT_ID_SETTING.to_owned(), operator_account.id())
+            .await
+            .unwrap();
 
         // The mock RPC serves no transaction encryption key, so seed an unattested one:
         // submission seals against it and the mock node ignores the sealed payload.
@@ -1907,7 +1949,7 @@ mod tests {
             .unwrap();
 
         let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
-        Faucet {
+        let faucet = Faucet {
             id: FaucetId::new(faucet_account.id(), NetworkId::Testnet),
             client,
             state_sync_component: StateSync::new(
@@ -1921,7 +1963,8 @@ mod tests {
             operator_account_id: operator_account.id(),
             p2id_notes: P2idNoteCache::default(),
             funding_request_in_flight: false,
-        }
+        };
+        (faucet, mock_rpc)
     }
 
     /// Runs a single-request batch and returns the mint response.
@@ -1933,6 +1976,52 @@ mod tests {
 
         faucet.run(rx_mint_requests, 1).await.unwrap();
         receiver.await.unwrap().unwrap()
+    }
+
+    /// Plays the part of the network for one mint batch: commits the batch's block, then executes
+    /// the network transaction that consumes the MINT notes the batch produced, minting the P2ID
+    /// notes they describe. The mock node runs no network transactions of its own.
+    ///
+    /// The batch's output notes therefore become this transaction's input notes.
+    async fn execute_network_tx_from_output_notes(
+        faucet: &Faucet,
+        mock_rpc: &MockRpcApi,
+        tx_id: TransactionId,
+    ) {
+        // The MINT notes have to be committed before they can be consumed as authenticated inputs.
+        mock_rpc.prove_block();
+
+        let input_note_ids: Vec<NoteId> = faucet
+            .client
+            .get_transactions(TransactionFilter::Ids(vec![tx_id]))
+            .await
+            .unwrap()
+            .pop()
+            .expect("the mint transaction is tracked")
+            .details
+            .output_notes
+            .iter()
+            .map(RawOutputNote::id)
+            .collect();
+
+        let network_tx = {
+            let chain = mock_rpc.mock_chain.read();
+            chain
+                .build_transaction(faucet.faucet_id().account_id)
+                .authenticated_input_notes(input_note_ids)
+                .build()
+                .unwrap()
+        };
+        let executed = network_tx.execute().await.unwrap();
+
+        mock_rpc.mock_chain.write().add_pending_executed_transaction(&executed).unwrap();
+        mock_rpc.prove_block();
+    }
+
+    /// Returns the operator's balance of the chain's fee asset, as tracked by the faucet's client.
+    async fn operator_fee_balance(faucet: &Faucet, fee_parameters: &FeeParameters) -> u64 {
+        let operator = faucet.client.account_reader(faucet.operator_id());
+        fee_asset_balance(&operator, fee_parameters).await.unwrap()
     }
 
     /// Returns how many notes the given transaction created. On a fee-free chain a mint batch
