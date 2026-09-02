@@ -542,7 +542,7 @@ impl Faucet {
     ///
     /// [`NoteFilter::Unspent`] is not used here because it also returns notes in the processing
     /// state, which a previous mint is already consuming.
-    async fn get_p2id_notes_targetted_to_operator(&self) -> anyhow::Result<Vec<Note>> {
+    async fn get_p2id_notes_targeted_to_operator(&self) -> anyhow::Result<Vec<Note>> {
         let operator_id = self.operator_id();
         self.client
             .get_input_notes(NoteFilter::Committed)
@@ -577,53 +577,14 @@ impl Faucet {
         Ok(balance.as_u64() < OPERATOR_FUNDING_THRESHOLD)
     }
 
-    /// Appends a request that tops the operator up when it needs funding, and clears the in-flight
-    /// marker once the previous top-up has arrived in `funding_notes`.
-    ///
-    /// The two are exclusive: a top-up is only requested when none is in flight, and only an
-    /// in-flight one can arrive. A top-up that has arrived is consumed by this batch's
-    /// transaction, so the marker is cleared even though the operator's balance only rises once
-    /// that transaction lands.
-    async fn fund_operator(
-        &mut self,
-        valid_requests: &mut Vec<MintRequest>,
-        funding_notes: &[Note],
-    ) -> anyhow::Result<()> {
-        let funding_arrived = self.funding_request_in_flight && !funding_notes.is_empty();
-
-        if self.operator_requires_funding().await? {
-            let request = MintRequest {
-                account_id: self.operator_account_id,
-                // The operator's client finds the note by syncing, which only rebuilds public
-                // notes.
-                note_type: NoteType::Public,
-                asset_amount: AssetAmount::new(OPERATOR_FUNDING_AMOUNT)?,
-            };
-            info!(
-                target: COMPONENT,
-                {
-                    operator.account.id = %self.operator_account_id,
-                    amount = request.asset_amount.base_units()
-                },
-                "Operator balance is below the funding threshold, minting to it",
-            );
-            valid_requests.push(request);
-            self.funding_request_in_flight = true;
-        }
-
-        if funding_arrived {
-            info!(
-                target: COMPONENT,
-                {
-                    operator.account.id = %self.operator_account_id,
-                    notes.num = funding_notes.len()
-                },
-                "Operator top-up arrived, consuming it",
-            );
-            self.funding_request_in_flight = false;
-        }
-
-        Ok(())
+    /// The request that tops the operator up with the faucet's own asset.
+    fn get_mint_request_for_operator(&self) -> anyhow::Result<MintRequest> {
+        Ok(MintRequest {
+            account_id: self.operator_account_id,
+            // The operator's client finds the note by syncing, which only rebuilds public notes.
+            note_type: NoteType::Public,
+            asset_amount: AssetAmount::new(OPERATOR_FUNDING_AMOUNT)?,
+        })
     }
 
     /// Mints a batch of requests.
@@ -661,8 +622,10 @@ impl Faucet {
         // asset. The top-up rides along with this batch as one more request; it carries no response
         // sender, so it must be appended after the user's requests, which `send_responses` pairs
         // with their notes by position.
-        let operator_funding_notes = self.get_p2id_notes_targetted_to_operator().await?;
-        self.fund_operator(&mut valid_requests, &operator_funding_notes).await?;
+        if self.operator_requires_funding().await? {
+            valid_requests.push(self.get_mint_request_for_operator()?);
+            self.funding_request_in_flight = true;
+        }
 
         let faucet_account = self.faucet_account().await.map_err(|error| *error)?;
 
@@ -699,6 +662,17 @@ impl Faucet {
                 "Built mint request",
             );
         }
+
+        // The store is only read while a top-up is in flight. Finding its notes clears the marker,
+        // so once this batch has consumed them a later one can request the next top-up.
+        let operator_funding_notes = if self.funding_request_in_flight {
+            let funding_notes = self.get_p2id_notes_targeted_to_operator().await?;
+            // The marker only clears once the top-up has arrived, which this batch then consumes.
+            self.funding_request_in_flight = funding_notes.is_empty();
+            funding_notes
+        } else {
+            vec![]
+        };
 
         // Build and submit transaction
         let fee_parameters = read_fee_parameters(&self.client).await?;
