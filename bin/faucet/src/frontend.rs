@@ -1,11 +1,13 @@
 //! This file explicitly embeds each of the frontend files into the binary using `include_str!` and
 //! `include_bytes!`.
+use std::sync::LazyLock;
+
 use anyhow::Context;
 use axum::extract::Request;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use axum_extra::response::{Css, JavaScript};
+use axum_extra::response::Css;
 use base64::Engine;
 use http::header::{self};
 use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
@@ -19,20 +21,17 @@ use crate::COMPONENT;
 
 /// Serves the frontend API endpoints.
 pub async fn serve_frontend(url: Url, api_public_url: Url, node_url: String) -> anyhow::Result<()> {
-    let config_json = Json(
-        serde_json::json!({
-            "api_url": api_public_url.to_string().trim_end_matches('/'),
-            "node_url": node_url.trim_end_matches('/'),
-        })
-        .to_string(),
-    );
+    let config_json = Json(serde_json::json!({
+        "api_url": api_public_url.to_string().trim_end_matches('/'),
+        "node_url": node_url.trim_end_matches('/'),
+    }));
 
     let app = Router::new()
         .route("/", get(get_index_html))
         .route("/bundle.js", get(get_bundle_js))
         .route("/index.css", get(get_index_css))
         .route("/wallet-icon.png", get(get_wallet_icon))
-        .route("/header.png", get(get_header))
+        .route("/header.webp", get(get_header))
         .route("/favicon.ico", get(get_favicon))
         .route("/assets/miden_client_web.wasm", get(get_miden_client_web_wasm))
         .route("/config.json", get(config_json))
@@ -60,19 +59,28 @@ pub async fn get_miden_client_web_wasm(request: Request) -> Response {
         env!("OUT_DIR"),
         "/frontend/node_modules/@miden-sdk/miden-sdk/dist/st/assets/miden_client_web.wasm"
     ));
+    const WASM_BR_BYTES: &[u8] = include_bytes!(concat!(
+        env!("OUT_DIR"),
+        "/frontend/node_modules/@miden-sdk/miden-sdk/dist/st/assets/miden_client_web.wasm.br"
+    ));
+    static WASM_ETAG: LazyLock<String> = LazyLock::new(|| compute_etag(WASM_BYTES));
+    static WASM_BR_ETAG: LazyLock<String> = LazyLock::new(|| compute_etag(WASM_BR_BYTES));
 
-    let etag = compute_etag(WASM_BYTES);
-    if let Some(response) = check_if_none_match(&request, &etag) {
-        return response;
-    }
+    let mut response = if accepts_brotli(&request) {
+        let mut response =
+            static_response(&request, "application/wasm", WASM_BR_BYTES, &WASM_BR_ETAG);
+        response
+            .headers_mut()
+            .insert(header::CONTENT_ENCODING, HeaderValue::from_static("br"));
+        response
+    } else {
+        // The compression layer gzips this on the fly for clients without brotli support.
+        static_response(&request, "application/wasm", WASM_BYTES, &WASM_ETAG)
+    };
 
-    let mut response = (
-        [(header::CONTENT_TYPE, header::HeaderValue::from_static("application/wasm"))],
-        WASM_BYTES,
-    )
-        .into_response();
-
-    add_cache_headers(response.headers_mut(), &etag);
+    response
+        .headers_mut()
+        .insert(header::VARY, HeaderValue::from_static("accept-encoding"));
     response
 }
 
@@ -81,50 +89,71 @@ pub async fn get_not_found_html() -> Html<&'static str> {
 }
 
 pub async fn get_bundle_js(request: Request) -> Response {
-    const BUNDLE_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/frontend/bundle.js"));
-    const BUNDLE_BYTES: &[u8] = BUNDLE_JS.as_bytes();
+    const BUNDLE_BYTES: &[u8] =
+        include_str!(concat!(env!("OUT_DIR"), "/frontend/bundle.js")).as_bytes();
+    static ETAG: LazyLock<String> = LazyLock::new(|| compute_etag(BUNDLE_BYTES));
 
-    let etag = compute_etag(BUNDLE_BYTES);
-    if let Some(response) = check_if_none_match(&request, &etag) {
-        return response;
-    }
-
-    let mut response = (
-        [(header::CONTENT_TYPE, header::HeaderValue::from_static("application/javascript"))],
-        JavaScript(BUNDLE_JS),
-    )
-        .into_response();
-
-    add_cache_headers(response.headers_mut(), &etag);
-    response
+    static_response(&request, "application/javascript", BUNDLE_BYTES, &ETAG)
 }
 
 pub async fn get_index_css() -> Css<&'static str> {
     Css(include_str!(concat!(env!("OUT_DIR"), "/frontend/index.css")))
 }
 
-pub async fn get_wallet_icon() -> Response {
-    (
-        [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/png"))],
-        include_bytes!(concat!(env!("OUT_DIR"), "/frontend/wallet-icon.png"),),
-    )
-        .into_response()
+pub async fn get_wallet_icon(request: Request) -> Response {
+    const BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/frontend/wallet-icon.png"));
+    static ETAG: LazyLock<String> = LazyLock::new(|| compute_etag(BYTES));
+
+    static_response(&request, "image/png", BYTES, &ETAG)
 }
 
-pub async fn get_header() -> Response {
-    (
-        [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/png"))],
-        include_bytes!(concat!(env!("OUT_DIR"), "/frontend/header.png"),),
-    )
-        .into_response()
+pub async fn get_header(request: Request) -> Response {
+    const BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/frontend/header.webp"));
+    static ETAG: LazyLock<String> = LazyLock::new(|| compute_etag(BYTES));
+
+    static_response(&request, "image/webp", BYTES, &ETAG)
 }
 
-pub async fn get_favicon() -> Response {
-    (
-        [(header::CONTENT_TYPE, header::HeaderValue::from_static("image/x-icon"))],
-        include_bytes!(concat!(env!("OUT_DIR"), "/frontend/favicon.ico"),),
-    )
-        .into_response()
+pub async fn get_favicon(request: Request) -> Response {
+    const BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/frontend/favicon.ico"));
+    static ETAG: LazyLock<String> = LazyLock::new(|| compute_etag(BYTES));
+
+    static_response(&request, "image/x-icon", BYTES, &ETAG)
+}
+
+/// Build a cacheable response for an embedded static asset, answering with 304 Not Modified
+/// when the client already holds the current version.
+fn static_response(
+    request: &Request,
+    content_type: &'static str,
+    bytes: &'static [u8],
+    etag: &str,
+) -> Response {
+    if let Some(response) = check_if_none_match(request, etag) {
+        return response;
+    }
+
+    let mut response =
+        ([(header::CONTENT_TYPE, HeaderValue::from_static(content_type))], bytes).into_response();
+
+    add_cache_headers(response.headers_mut(), etag);
+    response
+}
+
+/// Whether the client advertises brotli support in its `Accept-Encoding` header.
+fn accepts_brotli(request: &Request) -> bool {
+    request
+        .headers()
+        .get(header::ACCEPT_ENCODING)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|encodings| {
+            encodings.split(',').any(|encoding| {
+                let mut parts = encoding.trim().split(';');
+                let name = parts.next().unwrap_or_default().trim();
+                let rejected = parts.any(|param| param.trim().replace(' ', "") == "q=0");
+                name.eq_ignore_ascii_case("br") && !rejected
+            })
+        })
 }
 
 // CACHE HEADERS HELPERS
@@ -170,4 +199,70 @@ fn check_if_none_match(request: &Request, etag: &str) -> Option<Response> {
         );
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::Body;
+
+    use super::*;
+
+    fn request(headers: &[(HeaderName, &str)]) -> Request {
+        let mut builder = Request::builder().uri("/assets/miden_client_web.wasm");
+        for (name, value) in headers {
+            builder = builder.header(name, *value);
+        }
+        builder.body(Body::empty()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn wasm_is_served_brotli_compressed_when_accepted() {
+        let response = get_miden_client_web_wasm(request(&[(
+            header::ACCEPT_ENCODING,
+            "gzip, deflate, br, zstd",
+        )]))
+        .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get(header::CONTENT_ENCODING).unwrap(), "br");
+        assert_eq!(response.headers().get(header::CONTENT_TYPE).unwrap(), "application/wasm");
+        assert_eq!(response.headers().get(header::VARY).unwrap(), "accept-encoding");
+        assert!(response.headers().contains_key(header::ETAG));
+        assert!(response.headers().contains_key(header::CACHE_CONTROL));
+    }
+
+    #[tokio::test]
+    async fn wasm_is_served_identity_without_brotli_support() {
+        let response =
+            get_miden_client_web_wasm(request(&[(header::ACCEPT_ENCODING, "gzip, deflate")])).await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.headers().get(header::CONTENT_ENCODING).is_none());
+    }
+
+    #[tokio::test]
+    async fn wasm_brotli_is_rejected_with_zero_quality() {
+        let response =
+            get_miden_client_web_wasm(request(&[(header::ACCEPT_ENCODING, "gzip, br;q=0")])).await;
+
+        assert!(response.headers().get(header::CONTENT_ENCODING).is_none());
+    }
+
+    #[tokio::test]
+    async fn wasm_etag_roundtrip_returns_not_modified() {
+        let response = get_miden_client_web_wasm(request(&[(
+            header::ACCEPT_ENCODING,
+            "gzip, deflate, br, zstd",
+        )]))
+        .await;
+        let etag = response.headers().get(header::ETAG).unwrap().to_str().unwrap().to_owned();
+
+        let revalidation = get_miden_client_web_wasm(request(&[
+            (header::ACCEPT_ENCODING, "gzip, deflate, br, zstd"),
+            (header::IF_NONE_MATCH, &etag),
+        ]))
+        .await;
+
+        assert_eq!(revalidation.status(), StatusCode::NOT_MODIFIED);
+    }
 }

@@ -8,8 +8,11 @@ export class UIController {
         this.publicButton = document.getElementById('send-public-button');
         this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
+        this.faucetAddressLoader = document.getElementById('faucet-address-loader');
         this.issuanceFill = document.getElementById('issuance-fill');
         this.issuance = document.getElementById('issuance');
+        this.issuanceLoader = document.getElementById('issuance-loader');
+        this.issuanceValues = document.getElementById('issuance-values');
         this.tokensSupply = document.getElementById('tokens-supply');
         this.tokenAmountHint = document.getElementById('token-amount-hint');
         this.explorerUrl = null;
@@ -307,10 +310,13 @@ export class UIController {
             option.textContent = amount;
             this.tokenSelect.appendChild(option);
         }
+        this.tokenSelect.disabled = false;
     }
 
     setFaucetId(id) {
         this.faucetAddress.textContent = id;
+        this.faucetAddressLoader.hidden = true;
+        this.faucetAddress.hidden = false;
     }
 
     setExplorerUrl(url) {
@@ -321,5 +327,19 @@ export class UIController {
         this.issuance.textContent = Utils.baseUnitsToTokens(issuance, decimals);
         this.tokensSupply.textContent = Utils.baseUnitsToTokens(max_supply, decimals);
         this.issuanceFill.style.width = (issuance / max_supply) * 100 + '%';
+        this.issuanceLoader.hidden = true;
+        this.issuanceValues.hidden = false;
+    }
+
+    // Swap the loading placeholders for the "-" placeholders when the data can't be loaded.
+    showFooterPlaceholders() {
+        this.faucetAddressLoader.hidden = true;
+        this.faucetAddress.hidden = false;
+        this.issuanceLoader.hidden = true;
+        this.issuanceValues.hidden = false;
+        // The token select is still showing its "Loading…" placeholder if the options never came.
+        if (this.tokenSelect.disabled && this.tokenSelect.options.length > 0) {
+            this.tokenSelect.options[0].textContent = '-';
+        }
     }
 }

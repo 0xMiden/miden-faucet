@@ -12,7 +12,7 @@ export async function getConfig() {
     if (!response.ok) {
         throw new ApiError(response.statusText, response.status);
     }
-    return JSON.parse(await response.json());
+    return await response.json();
 }
 
 export async function getMetadata(backendUrl) {

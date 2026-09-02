@@ -47,6 +47,31 @@ miden-faucet start \
   --network testnet
 ```
 
+## Running on a chain that charges fees (devnet)
+
+On a chain that charges transaction fees, every transaction pays in the chain's native asset out of
+the executing account's vault. The operator account is the one that pays: it covers each MINT
+transaction and prepays the network transaction that turns the MINT note into the P2ID note, so it
+must be funded with the native asset and topped up as its balance drains. `start` refuses to run
+while the operator holds none of it, and requests are answered with HTTP 503 while its balance is
+too low to cover a transaction.
+
+`init` cannot create a new faucet account on such a chain, since the account would have to pay for
+its own deployment out of an empty vault. Import an existing one with `--import` and
+`--faucet-account-id`.
+
+On devnet the operator is funded at genesis, so no manual funding is needed to get started. The
+faucet account id is the one `miden-validator genesis` prints when the network is bootstrapped:
+
+```bash
+miden-faucet init \
+  --import faucet_operator.mac \
+  --faucet-account-id 0x<faucet_account_id> \
+  --network devnet
+
+miden-faucet start --network devnet --remote-tx-prover-url https://tx-prover.devnet.miden.io
+```
+
 ## Docker
 
 Every release is published as an image tagged with that release's version. Replace `<version>` below with a tag
@@ -58,7 +83,7 @@ docker pull ghcr.io/0xmiden/miden-faucet:<version>
 
 **Data dir:** Store defaults to `/faucet/store.sqlite`. Mount a volume at `/faucet` for persistence.
 
-Run `init` first, then `start`. 
+Run `init` first, then `start`.
 
 **1. Init — new account (testnet):**
 
