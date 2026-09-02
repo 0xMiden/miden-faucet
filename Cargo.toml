@@ -23,12 +23,12 @@ miden-faucet-lib       = { path = "crates/faucet", version = "0.16.0-rc.2" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.16.0-rc.2" }
 
 # Miden dependencies.
-miden-client              = { version = "0.16.0-rc.3" }
-miden-client-cli          = { version = "0.16.0-rc.3" }
-miden-client-sqlite-store = { version = "0.16.0-rc.3" }
+miden-client              = { branch = "igamigo/address-pr-2465-review", git = "https://github.com/0xMiden/rust-sdk" }
+miden-client-cli          = { branch = "igamigo/address-pr-2465-review", git = "https://github.com/0xMiden/rust-sdk" }
+miden-client-sqlite-store = { branch = "igamigo/address-pr-2465-review", git = "https://github.com/0xMiden/rust-sdk" }
 # TODO: drop once miden-client re-exports `NetworkNotePricer`, the only thing this is pulled in for.
 # Pinned to the version miden-client resolves to.
-miden-tx = { default-features = false, version = "0.16.0-rc.6" }
+miden-tx = { default-features = false, version = "0.16.0-rc.9" }
 
 # External dependencies
 anyhow                = { version = "1.0" }

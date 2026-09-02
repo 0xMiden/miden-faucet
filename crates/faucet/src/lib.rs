@@ -9,7 +9,6 @@ use miden_client::account::component::{
     BasicConstantFeePolicy,
     BasicWallet,
     BurnPolicy,
-    FeeConversionInfo,
     FeePolicyManager,
     FungibleFaucet,
     MintPolicy,
@@ -101,15 +100,6 @@ const SPONSORSHIP_RECLAIM_DELTA: u32 = 1_000;
 
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
 const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
-
-/// Salt under which the operator commits its fee conversion info through the auth args.
-///
-/// It is a constant on purpose: the signed transaction summary covers the auth args, so a random
-/// salt would give an otherwise identical request a different summary on every execution.
-/// `AuthSingleSig` does not rely on the salt for replay protection, the account nonce already
-/// provides it. This is also the salt miden-client uses once it commits native conversion info on
-/// its own.
-const FEE_CONVERSION_SALT: Word = Word::empty();
 
 // FAUCET CLIENT
 // ================================================================================================
@@ -590,12 +580,8 @@ impl Faucet {
             after_block_num + SPONSORSHIP_RECLAIM_DELTA,
             &mut rng,
         )?);
-        let tx_request = Faucet::create_transaction(
-            &notes,
-            faucet_foreign_account(&faucet_account)?,
-            FeeConversionInfo::one_to_one(fee_parameters.fee_faucet_id()),
-        )
-        .context("faucet failed to create transaction")?;
+        let tx_request = Faucet::create_transaction(&notes, faucet_foreign_account(&faucet_account)?)
+            .context("faucet failed to create transaction")?;
         // The MINT notes are sent by the operator, so the operator must be the executing account.
         let tx_id = Box::pin(self.submit_new_transaction(self.operator_account_id, tx_request))
             .await
@@ -689,21 +675,18 @@ impl Faucet {
     ///
     /// The MINT notes target the faucet, a network account, so creating them prices each note
     /// through an FPI into the faucet's fee policy. `faucet_account` supplies the faucet as a
-    /// foreign account for that call. `fee_conversion_info` is committed through the auth args so
-    /// the operator's auth procedure can pay the transaction fee. It is always committed: on a
-    /// chain that charges no fees the auth procedure ignores it.
+    /// foreign account for that call. The fee conversion info the operator's auth procedure needs
+    /// to pay the transaction fee is committed by miden-client when it prepares the transaction.
     #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err)]
     fn create_transaction(
         notes: &[Note],
         faucet_account: ForeignAccount,
-        fee_conversion_info: FeeConversionInfo,
     ) -> Result<TransactionRequest, TransactionRequestError> {
         let notes: Vec<Note> = notes.to_vec();
         TransactionRequestBuilder::new()
             .own_output_notes(notes)
             .expiration_delta(MINT_TX_EXPIRATION_DELTA)
             .foreign_accounts([faucet_account])
-            .fee_conversion_info(fee_conversion_info, FEE_CONVERSION_SALT)
             .build()
     }
 
@@ -1399,11 +1382,9 @@ mod tests {
     const TEST_VERIFICATION_BASE_FEE: u32 = 500;
 
     /// The MINT transaction declares the faucet as a foreign account, requesting every entry of
-    /// each of its map slots, and commits the conversion info through the auth args.
+    /// each of its map slots.
     #[test]
     fn mint_transaction_request_shape() {
-        use miden_client::account::component::commit_fee_conversion_info;
-
         let fee_faucet_id = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
         let (operator, _) = create_faucet_operator_account().unwrap();
         let faucet =
@@ -1428,14 +1409,8 @@ mod tests {
             );
         }
 
-        let info = FeeConversionInfo::one_to_one(fee_faucet_id);
         let request =
-            Faucet::create_transaction(std::slice::from_ref(&mint_note), foreign_account, info)
-                .unwrap();
-        assert!(request.declares_fee_conversion_info());
-        let (auth_arg, preimage) = commit_fee_conversion_info(info, FEE_CONVERSION_SALT);
-        assert_eq!(*request.auth_arg(), Some(auth_arg));
-        assert_eq!(request.advice_map().get(&auth_arg).map(|value| value.to_vec()), Some(preimage));
+            Faucet::create_transaction(std::slice::from_ref(&mint_note), foreign_account).unwrap();
         assert!(request.foreign_accounts().contains_key(&faucet.id()));
         assert_eq!(request.expected_output_own_notes(), vec![mint_note.clone()]);
     }
