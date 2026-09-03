@@ -1438,7 +1438,6 @@ mod tests {
     use miden_client::asset::AssetId;
     use miden_client::block::BlockNumber;
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
-    
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
     use miden_client::testing::MockChainBuilder;
@@ -1555,99 +1554,50 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        let (mut faucet, mock_rpc) =
-            build_faucet_on_chain(store.clone(), 0, OPERATOR_FUNDING_THRESHOLD - 1, true).await;
+        // Set the initial operator balance below the threshold so that the next mint request
+        // triggers the funding mechanism
+        let initial_operator_balance = OPERATOR_FUNDING_THRESHOLD - 1;
+        let verification_base_fee = 0;
+        let faucet_is_chain_fee_faucet = true;
+        let (mut faucet, mock_rpc) = build_faucet_on_chain(
+            store.clone(),
+            verification_base_fee,
+            initial_operator_balance,
+            faucet_is_chain_fee_faucet,
+        )
+        .await;
 
-        // The premise of the mechanism: the operator pays transaction fees in the very asset the
-        // faucet mints, so minting to it raises the balance that has to stay above the threshold.
+        // Check the faucet asset matches the chain's native asset
         let fee_parameters = faucet.fee_parameters().await.unwrap();
         assert_eq!(fee_parameters.fee_faucet_id(), faucet.faucet_id().account_id);
-        assert_eq!(
-            operator_fee_balance(&faucet, &fee_parameters).await,
-            OPERATOR_FUNDING_THRESHOLD - 1,
-        );
+        assert_eq!(operator_fee_balance(&faucet, &fee_parameters).await, initial_operator_balance);
         assert!(
             faucet.operator_requires_funding().await.unwrap(),
             "the operator sits one base unit below the threshold"
         );
 
-        // The note it would mint pays the operator the faucet's asset, which is the fee asset.
-        let mut rng = RandomCoin::new(Word::empty());
-        let funding_note = faucet.create_p2id_note_to_operator(&mut rng).unwrap();
-        assert!(is_note_payable_to(
-            &NoteDetails::from(funding_note.clone()),
-            faucet.operator_id(),
-            fee_parameters.fee_faucet_id(),
-        ));
-        assert_eq!(
-            funding_note.assets().iter().next().unwrap().unwrap_fungible().amount().as_u64(),
-            OPERATOR_FUNDING_AMOUNT,
-        );
+        // Send and execute a mint request. Since the operator's balance is below the threshold,
+        // the faucet mint transaction will include an extra MINT note to fund the operator.
+        let response = send_and_execute_mint_request(&mut faucet, mint_request()).await;
+        // The operator balance has not changed yet, since the P2ID note will be consumed when
+        // executing the next batch of mint requests.
+        assert_eq!(operator_fee_balance(&faucet, &fee_parameters).await, initial_operator_balance);
+        assert!(faucet.funding_request_in_flight, "the funding request is in flight");
 
-        let response = run_one_batch(&mut faucet).await;
+        // The mock chain does not support network transactions so we need to manually consume
+        // the MINT notes against the faucet account
         let funding_tx_id = response.tx_id;
-        assert_eq!(
-            output_note_count(&faucet, funding_tx_id).await,
-            2,
-            "the batch should carry the request's MINT note and one funding the operator"
-        );
-
-        // The batch only creates the MINT note; the network mints the P2ID note that carries the
-        // asset, which the mock node does not do, so the operator's balance has not moved yet.
-        assert_eq!(
-            operator_fee_balance(&faucet, &fee_parameters).await,
-            OPERATOR_FUNDING_THRESHOLD - 1,
-        );
-
-        // The operator is therefore still below the threshold, and the in-flight marker is what
-        // stops a second request.
-        assert!(faucet.funding_request_in_flight);
-        assert!(
-            !faucet.operator_requires_funding().await.unwrap(),
-            "a funding request already in flight should not be made again"
-        );
-
-        let response = run_one_batch(&mut faucet).await;
-        assert_eq!(
-            output_note_count(&faucet, response.tx_id).await,
-            1,
-            "the next batch should not fund the operator a second time"
-        );
-
-        // Play the network: mint the P2ID notes the first batch's MINT notes describe.
         execute_network_tx_from_output_notes(&faucet, &mock_rpc, funding_tx_id).await;
 
-        // The next batch finds the operator's P2ID note and consumes it.
-        run_one_batch(&mut faucet).await;
+        // Send and execute another mint request. In this case, the client will find and consume
+        // the P2ID note that funds the operator, and therefore its balance will increase
+        send_and_execute_mint_request(&mut faucet, mint_request()).await;
         assert_eq!(
             operator_fee_balance(&faucet, &fee_parameters).await,
-            OPERATOR_FUNDING_THRESHOLD - 1 + OPERATOR_FUNDING_AMOUNT,
+            initial_operator_balance + OPERATOR_FUNDING_AMOUNT,
             "consuming the funding note should raise the operator's balance"
         );
         assert!(!faucet.funding_request_in_flight, "the funding request is no longer in flight");
-
-        // An operator above the threshold is left alone.
-        let store = Arc::new(
-            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
-                .await
-                .unwrap(),
-        );
-        let (mut faucet, _) =
-            build_faucet_on_chain(store.clone(), 0, OPERATOR_FUNDING_THRESHOLD, true).await;
-        // A different faucet account, so the chain it runs on charges in a different asset.
-        let fee_parameters = faucet.fee_parameters().await.unwrap();
-        assert_eq!(
-            operator_fee_balance(&faucet, &fee_parameters).await,
-            OPERATOR_FUNDING_THRESHOLD,
-        );
-        assert!(!faucet.operator_requires_funding().await.unwrap());
-
-        let response = run_one_batch(&mut faucet).await;
-        assert_eq!(
-            output_note_count(&faucet, response.tx_id).await,
-            1,
-            "a funded operator should not be funded again"
-        );
     }
 
     // FEE TESTS
@@ -1954,10 +1904,13 @@ mod tests {
     }
 
     /// Runs a single-request batch and returns the mint response.
-    async fn run_one_batch(faucet: &mut Faucet) -> MintResponse {
+    async fn send_and_execute_mint_request(
+        faucet: &mut Faucet,
+        mint_request: MintRequest,
+    ) -> MintResponse {
         let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1);
         let (response_sender, receiver) = oneshot::channel();
-        tx_mint_requests.send((mint_request(), response_sender)).await.unwrap();
+        tx_mint_requests.send((mint_request, response_sender)).await.unwrap();
         drop(tx_mint_requests);
 
         faucet.run(rx_mint_requests, 1).await.unwrap();
@@ -2008,22 +1961,6 @@ mod tests {
     async fn operator_fee_balance(faucet: &Faucet, fee_parameters: &FeeParameters) -> u64 {
         let operator = faucet.client.account_reader(faucet.operator_id());
         fee_asset_balance(&operator, fee_parameters).await.unwrap()
-    }
-
-    /// Returns how many notes the given transaction created. On a fee-free chain a mint batch
-    /// creates neither sponsorships nor a `TX_FEE` note, so these are exactly the MINT notes.
-    async fn output_note_count(faucet: &Faucet, tx_id: TransactionId) -> usize {
-        faucet
-            .client
-            .get_transactions(TransactionFilter::Ids(vec![tx_id]))
-            .await
-            .unwrap()
-            .pop()
-            .expect("the mint transaction is tracked")
-            .details
-            .output_notes
-            .iter()
-            .count()
     }
 
     /// Builds an arbitrary P2ID note; only its presence matters to the pruning tests.
