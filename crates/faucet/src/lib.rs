@@ -580,8 +580,9 @@ impl Faucet {
             after_block_num + SPONSORSHIP_RECLAIM_DELTA,
             &mut rng,
         )?);
-        let tx_request = Faucet::create_transaction(&notes, faucet_foreign_account(&faucet_account)?)
-            .context("faucet failed to create transaction")?;
+        let tx_request =
+            Faucet::create_transaction(&notes, faucet_foreign_account(&faucet_account)?)
+                .context("faucet failed to create transaction")?;
         // The MINT notes are sent by the operator, so the operator must be the executing account.
         let tx_id = Box::pin(self.submit_new_transaction(self.operator_account_id, tx_request))
             .await
