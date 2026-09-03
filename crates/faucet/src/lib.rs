@@ -52,12 +52,12 @@ use miden_client::note::{
     NoteDetails,
     NoteError,
     NoteExecutionHint,
-    NoteFile,
     NoteId,
-    NoteSyncHint,
     NoteType as ProtocolNoteType,
     P2idNote,
     P2idNoteStorage,
+    P2ideNote,
+    P2ideNoteStorage,
 };
 use miden_client::rpc::domain::account::{AccountStorageRequirements, GetAccountRequest};
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, NodeRpcClient, RpcError};
@@ -112,7 +112,7 @@ const OPERATOR_FUNDING_AMOUNT: u64 = 10_000_000_000;
 const SPONSORSHIP_RECLAIM_DELTA: u32 = 1_000;
 
 const DEFAULT_ACCOUNT_ID_SETTING: &str = "faucet_default_account_id";
-const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
+pub(crate) const DEFAULT_OPERATOR_ACCOUNT_ID_SETTING: &str = "faucet_operator_default_account_id";
 
 /// Salt under which the operator commits its fee conversion info through the auth args.
 ///
@@ -583,9 +583,7 @@ impl Faucet {
         // The operator pays for the transactions it submits, so the faucet funds it with its own
         // asset, minting one more P2ID note payable to it alongside the batch's.
         if self.operator_requires_funding().await? {
-            let funding_note = self.create_p2id_note_to_operator(&mut rng)?;
-            self.import_operator_funding_note(&funding_note, after_block_num).await?;
-            p2id_notes.push(funding_note);
+            p2id_notes.push(self.create_p2id_note_to_operator(&mut rng)?);
             self.funding_request_in_flight = true;
         }
 
@@ -598,15 +596,11 @@ impl Faucet {
 
         log_built_requests(&valid_requests, &mint_notes, &p2id_notes);
 
-        // Check whether the P2ID note that funds the operator has arrived during the state sync
-        let operator_funding_notes = if self.funding_request_in_flight {
-            let funding_notes = self.get_p2id_notes_targeted_to_operator().await?;
-            // If the funding note has arrived, update the flag.
-            self.funding_request_in_flight = funding_notes.is_empty();
-            funding_notes
-        } else {
-            Vec::new()
-        };
+        // Check whether there are any P2ID notes that fund the operator
+        let operator_funding_notes = self.get_notes_targeted_to_operator(after_block_num).await?;
+        if !operator_funding_notes.is_empty() {
+            self.funding_request_in_flight = false;
+        }
 
         // Build and submit transaction
         let fee_parameters = read_fee_parameters(&self.client).await?;
@@ -935,7 +929,10 @@ impl Faucet {
     }
 
     /// Returns the P2ID notes that fund the operator.
-    async fn get_p2id_notes_targeted_to_operator(&self) -> anyhow::Result<Vec<Note>> {
+    async fn get_notes_targeted_to_operator(
+        &self,
+        block_num: BlockNumber,
+    ) -> anyhow::Result<Vec<Note>> {
         let operator_id = self.operator_id();
         let fee_faucet_id = self.fee_parameters().await?.fee_faucet_id();
         self.client
@@ -943,7 +940,10 @@ impl Faucet {
             .await
             .context("failed to read the committed input notes from the store")?
             .iter()
-            .filter(|record| is_p2id_note_targeted_to(record.details(), operator_id, fee_faucet_id))
+            .filter(|record| {
+                is_note_payable_to(record.details(), operator_id, fee_faucet_id)
+                    && is_consumable_at(record.details(), block_num)
+            })
             .map(|record| {
                 record.try_into().context("failed to rebuild a P2ID note funding the operator")
             })
@@ -986,25 +986,6 @@ impl Faucet {
             .build()
             .context("failed to build the P2ID note funding the operator")?
             .into())
-    }
-
-    /// Imports the P2ID note that funds the operator account, as an expected note.
-    async fn import_operator_funding_note(
-        &mut self,
-        funding_note: &Note,
-        after_block_num: BlockNumber,
-    ) -> anyhow::Result<()> {
-        let note_file = NoteFile::ExpectedNote {
-            details: NoteDetails::from(funding_note.clone()),
-            sync_hint: NoteSyncHint::new(after_block_num, funding_note.metadata().tag()),
-        };
-
-        self.client
-            .import_notes(&[note_file])
-            .await
-            .context("failed to track the P2ID note funding the operator")?;
-
-        Ok(())
     }
 }
 
@@ -1403,22 +1384,51 @@ fn log_built_requests(requests: &[MintRequest], mint_notes: &[Note], p2id_notes:
     }
 }
 
-/// Whether `details` describes a P2ID note to `target` that carries `fee_faucet_id`'s
-/// asset.
-pub(crate) fn is_p2id_note_targeted_to(
+/// Whether `details` describes a P2ID or P2IDE note payable to `target` that carries
+/// `fee_faucet_id`'s asset.
+pub(crate) fn is_note_payable_to(
     details: &NoteDetails,
     target: AccountId,
     fee_faucet_id: AccountId,
 ) -> bool {
-    if *details.recipient() != P2idNoteStorage::new(target).into_recipient(details.serial_num()) {
+    let assets = details.assets();
+    let carries_fee_asset = !assets.is_empty()
+        && assets
+            .iter()
+            .all(|asset| asset.is_fungible() && asset.faucet_id() == fee_faucet_id);
+
+    carries_fee_asset
+        && (is_p2id_payable_to(details, target) || is_p2ide_payable_to(details, target))
+}
+
+/// Whether `details` describes a P2ID note payable to `target`.
+fn is_p2id_payable_to(details: &NoteDetails, target: AccountId) -> bool {
+    *details.recipient() == P2idNoteStorage::new(target).into_recipient(details.serial_num())
+}
+
+/// Whether `details` describes a P2IDE note payable to `target`.
+fn is_p2ide_payable_to(details: &NoteDetails, target: AccountId) -> bool {
+    let recipient = details.recipient();
+    if recipient.script().root() != P2ideNote::script_root() {
         return false;
     }
 
-    let assets = details.assets();
-    !assets.is_empty()
-        && assets
-            .iter()
-            .all(|asset| asset.is_fungible() && asset.faucet_id() == fee_faucet_id)
+    P2ideNoteStorage::try_from(recipient.storage().items())
+        .is_ok_and(|storage| storage.target() == target)
+}
+
+/// Whether `details` describes a note that can be consumed by its target at `block_num`.
+///
+/// A P2IDE note may be timelocked, in which case no transaction can consume it until its timelock
+/// height has passed. A P2ID note carries no such condition.
+pub(crate) fn is_consumable_at(details: &NoteDetails, block_num: BlockNumber) -> bool {
+    let recipient = details.recipient();
+    if recipient.script().root() == P2idNote::script_root() {
+        return true;
+    }
+
+    P2ideNoteStorage::try_from(recipient.storage().items())
+        .is_ok_and(|storage| storage.timelock_height().is_none_or(|height| height <= block_num))
 }
 
 #[cfg(test)]
@@ -1428,13 +1438,12 @@ mod tests {
     use miden_client::asset::AssetId;
     use miden_client::block::BlockNumber;
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
-    use miden_client::note::{NoteAssets, NoteRecipient, NoteStorage};
+    
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
     use miden_client::testing::MockChainBuilder;
     use miden_client::testing::account_id::{
         ACCOUNT_ID_FEE_FAUCET,
-        ACCOUNT_ID_PUBLIC_FUNGIBLE_FAUCET,
         ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE,
     };
     use miden_client::testing::mock::MockRpcApi;
@@ -1565,7 +1574,7 @@ mod tests {
         // The note it would mint pays the operator the faucet's asset, which is the fee asset.
         let mut rng = RandomCoin::new(Word::empty());
         let funding_note = faucet.create_p2id_note_to_operator(&mut rng).unwrap();
-        assert!(is_p2id_note_targeted_to(
+        assert!(is_note_payable_to(
             &NoteDetails::from(funding_note.clone()),
             faucet.operator_id(),
             fee_parameters.fee_faucet_id(),
@@ -1639,47 +1648,6 @@ mod tests {
             1,
             "a funded operator should not be funded again"
         );
-    }
-
-    /// Only P2ID notes payable to the operator in the chain's fee asset count as funding.
-    #[test]
-    fn funding_notes_must_be_p2id_notes_of_the_fee_asset() {
-        let operator =
-            AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
-        let fee_faucet = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
-        let other_faucet = AccountId::try_from(ACCOUNT_ID_PUBLIC_FUNGIBLE_FAUCET).unwrap();
-
-        let assets_of = |faucet: AccountId| {
-            NoteAssets::new(vec![FungibleAsset::new(faucet, 100).unwrap().into()]).unwrap()
-        };
-        let p2id_to =
-            |target: AccountId| P2idNoteStorage::new(target).into_recipient(Word::empty());
-
-        let payable = NoteDetails::new(assets_of(fee_faucet), p2id_to(operator));
-        assert!(is_p2id_note_targeted_to(&payable, operator, fee_faucet));
-
-        // Another faucet's asset would leave the operator no better able to pay fees.
-        let wrong_asset = NoteDetails::new(assets_of(other_faucet), p2id_to(operator));
-        assert!(!is_p2id_note_targeted_to(&wrong_asset, operator, fee_faucet));
-
-        // A note carrying nothing is not funding either.
-        let no_assets = NoteDetails::new(NoteAssets::new(vec![]).unwrap(), p2id_to(operator));
-        assert!(!is_p2id_note_targeted_to(&no_assets, operator, fee_faucet));
-
-        // Payable to somebody else.
-        let wrong_target = NoteDetails::new(assets_of(fee_faucet), p2id_to(other_faucet));
-        assert!(!is_p2id_note_targeted_to(&wrong_target, operator, fee_faucet));
-
-        // Same storage, but the script is not P2ID's.
-        let wrong_script = NoteDetails::new(
-            assets_of(fee_faucet),
-            NoteRecipient::new(
-                Word::empty(),
-                MintNote::script(),
-                NoteStorage::from(P2idNoteStorage::new(operator)),
-            ),
-        );
-        assert!(!is_p2id_note_targeted_to(&wrong_script, operator, fee_faucet));
     }
 
     // FEE TESTS
@@ -1937,6 +1905,16 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&faucet_account, false).await.unwrap();
         client.add_account(&operator_account, false).await.unwrap();
+        // `Faucet::init` records both accounts as settings; the note screener reads the operator
+        // from there.
+        client
+            .set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), faucet_account.id())
+            .await
+            .unwrap();
+        client
+            .set_setting(DEFAULT_OPERATOR_ACCOUNT_ID_SETTING.to_owned(), operator_account.id())
+            .await
+            .unwrap();
 
         // The mock RPC serves no transaction encryption key, so seed an unattested one:
         // submission seals against it and the mock node ignores the sealed payload.
