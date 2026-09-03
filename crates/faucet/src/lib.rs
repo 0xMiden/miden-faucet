@@ -536,79 +536,6 @@ impl Faucet {
         Ok(())
     }
 
-    /// Returns the P2ID notes that fund the operator.
-    async fn get_p2id_notes_targeted_to_operator(&self) -> anyhow::Result<Vec<Note>> {
-        let operator_id = self.operator_id();
-        let fee_faucet_id = self.fee_parameters().await?.fee_faucet_id();
-        self.client
-            .get_input_notes(NoteFilter::Committed)
-            .await
-            .context("failed to read the committed input notes from the store")?
-            .iter()
-            .filter(|record| is_p2id_note_targeted_to(record.details(), operator_id, fee_faucet_id))
-            .map(|record| {
-                record.try_into().context("failed to rebuild a P2ID note funding the operator")
-            })
-            .collect()
-    }
-
-    /// Whether the operator's balance of the chain's fee asset is below
-    /// [`OPERATOR_FUNDING_THRESHOLD`] and no P2ID note funding the operator
-    /// is already in flight.
-    async fn operator_requires_funding(&self) -> anyhow::Result<bool> {
-        if self.funding_request_in_flight {
-            return Ok(false);
-        }
-
-        let fee_parameters = self.fee_parameters().await?;
-        if fee_parameters.fee_faucet_id() != self.id.account_id {
-            return Ok(false);
-        }
-
-        let operator = self.client.account_reader(self.operator_account_id);
-        let balance = fee_asset_balance(&operator, &fee_parameters)
-            .await
-            .context("failed to read the operator's fee asset balance")?;
-        Ok(balance < OPERATOR_FUNDING_THRESHOLD)
-    }
-
-    /// Builds the P2ID note that funds the operator with the faucet's own asset.
-    fn create_p2id_note_to_operator(&self, rng: &mut RandomCoin) -> anyhow::Result<Note> {
-        let faucet_id = self.id.account_id;
-        let asset = FungibleAsset::new(faucet_id, OPERATOR_FUNDING_AMOUNT)
-            .context("the operator funding amount is not a valid asset amount")?;
-
-        Ok(P2idNote::builder()
-            .sender(faucet_id)
-            .target(self.operator_account_id)
-            .asset(asset)
-            // The faucet finds the note by syncing, which only rebuilds public notes.
-            .note_type(ProtocolNoteType::Public)
-            .generate_serial_number(rng)
-            .build()
-            .context("failed to build the P2ID note funding the operator")?
-            .into())
-    }
-
-    /// Imports the P2ID note that funds the operator account, as an expected note.
-    async fn import_operator_funding_note(
-        &mut self,
-        funding_note: &Note,
-        after_block_num: BlockNumber,
-    ) -> anyhow::Result<()> {
-        let note_file = NoteFile::ExpectedNote {
-            details: NoteDetails::from(funding_note.clone()),
-            sync_hint: NoteSyncHint::new(after_block_num, funding_note.metadata().tag()),
-        };
-
-        self.client
-            .import_notes(&[note_file])
-            .await
-            .context("failed to track the P2ID note funding the operator")?;
-
-        Ok(())
-    }
-
     /// Mints a batch of requests.
     ///
     /// The requests size is guaranteed to be smaller or equal to the batch size set in
@@ -1005,6 +932,79 @@ impl Faucet {
             },
             "Deployed the faucet account",
         );
+        Ok(())
+    }
+
+    /// Returns the P2ID notes that fund the operator.
+    async fn get_p2id_notes_targeted_to_operator(&self) -> anyhow::Result<Vec<Note>> {
+        let operator_id = self.operator_id();
+        let fee_faucet_id = self.fee_parameters().await?.fee_faucet_id();
+        self.client
+            .get_input_notes(NoteFilter::Committed)
+            .await
+            .context("failed to read the committed input notes from the store")?
+            .iter()
+            .filter(|record| is_p2id_note_targeted_to(record.details(), operator_id, fee_faucet_id))
+            .map(|record| {
+                record.try_into().context("failed to rebuild a P2ID note funding the operator")
+            })
+            .collect()
+    }
+
+    /// Whether the operator's balance of the chain's fee asset is below
+    /// [`OPERATOR_FUNDING_THRESHOLD`] and no P2ID note funding the operator
+    /// is already in flight.
+    async fn operator_requires_funding(&self) -> anyhow::Result<bool> {
+        if self.funding_request_in_flight {
+            return Ok(false);
+        }
+
+        let fee_parameters = self.fee_parameters().await?;
+        if fee_parameters.fee_faucet_id() != self.id.account_id {
+            return Ok(false);
+        }
+
+        let operator = self.client.account_reader(self.operator_account_id);
+        let balance = fee_asset_balance(&operator, &fee_parameters)
+            .await
+            .context("failed to read the operator's fee asset balance")?;
+        Ok(balance < OPERATOR_FUNDING_THRESHOLD)
+    }
+
+    /// Builds the P2ID note that funds the operator with the faucet's own asset.
+    fn create_p2id_note_to_operator(&self, rng: &mut RandomCoin) -> anyhow::Result<Note> {
+        let faucet_id = self.id.account_id;
+        let asset = FungibleAsset::new(faucet_id, OPERATOR_FUNDING_AMOUNT)
+            .context("the operator funding amount is not a valid asset amount")?;
+
+        Ok(P2idNote::builder()
+            .sender(faucet_id)
+            .target(self.operator_account_id)
+            .asset(asset)
+            // The faucet finds the note by syncing, which only rebuilds public notes.
+            .note_type(ProtocolNoteType::Public)
+            .generate_serial_number(rng)
+            .build()
+            .context("failed to build the P2ID note funding the operator")?
+            .into())
+    }
+
+    /// Imports the P2ID note that funds the operator account, as an expected note.
+    async fn import_operator_funding_note(
+        &mut self,
+        funding_note: &Note,
+        after_block_num: BlockNumber,
+    ) -> anyhow::Result<()> {
+        let note_file = NoteFile::ExpectedNote {
+            details: NoteDetails::from(funding_note.clone()),
+            sync_hint: NoteSyncHint::new(after_block_num, funding_note.metadata().tag()),
+        };
+
+        self.client
+            .import_notes(&[note_file])
+            .await
+            .context("failed to track the P2ID note funding the operator")?;
+
         Ok(())
     }
 }
