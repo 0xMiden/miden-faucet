@@ -1584,10 +1584,16 @@ mod tests {
         assert_eq!(operator_fee_balance(&faucet, &fee_parameters).await, initial_operator_balance);
         assert!(faucet.funding_request_in_flight, "the funding request is in flight");
 
+        // Get the MINT notes from the faucet transaction
+        let mint_note_ids = get_tx_output_note_ids(&faucet.client, response.tx_id).await;
         // The mock chain does not support network transactions so we need to manually consume
         // the MINT notes against the faucet account
-        let funding_tx_id = response.tx_id;
-        execute_network_tx_from_output_notes(&faucet, &mock_rpc, funding_tx_id).await;
+        execute_network_tx_with_notes(
+            &mock_rpc,
+            mint_note_ids,
+            faucet.faucet_account().await.unwrap().id(),
+        )
+        .await;
 
         // Send and execute another mint request. In this case, the client will find and consume
         // the P2ID note that funds the operator, and therefore its balance will increase
@@ -1917,21 +1923,37 @@ mod tests {
         receiver.await.unwrap().unwrap()
     }
 
-    /// Plays the part of the network for one mint batch: commits the batch's block, then executes
-    /// the network transaction that consumes the MINT notes the batch produced, minting the P2ID
-    /// notes they describe. The mock node runs no network transactions of its own.
-    ///
-    /// The batch's output notes therefore become this transaction's input notes.
-    async fn execute_network_tx_from_output_notes(
-        faucet: &Faucet,
+    /// Executes a transaction against a network account, consuming the notes given by
+    /// `input_note_ids`. This is intended to be used in tests that require executing network
+    /// transactions.
+    async fn execute_network_tx_with_notes(
         mock_rpc: &MockRpcApi,
-        tx_id: TransactionId,
+        input_note_ids: Vec<NoteId>,
+        account_id: AccountId,
     ) {
-        // The MINT notes have to be committed before they can be consumed as authenticated inputs.
+        // The notes have to be committed before they can be consumed as authenticated inputs.
         mock_rpc.prove_block();
 
-        let input_note_ids: Vec<NoteId> = faucet
-            .client
+        let network_tx = {
+            let chain = mock_rpc.mock_chain.read();
+            chain
+                .build_transaction(account_id)
+                .authenticated_input_notes(input_note_ids)
+                .build()
+                .unwrap()
+        };
+        let executed = network_tx.execute().await.unwrap();
+
+        mock_rpc.mock_chain.write().add_pending_executed_transaction(&executed).unwrap();
+        mock_rpc.prove_block();
+    }
+
+    /// Returns the IDs of the output notes created in the transaction given by `tx_id`.
+    async fn get_tx_output_note_ids(
+        client: &Client<FilesystemKeyStore>,
+        tx_id: TransactionId,
+    ) -> Vec<NoteId> {
+        client
             .get_transactions(TransactionFilter::Ids(vec![tx_id]))
             .await
             .unwrap()
@@ -1941,20 +1963,7 @@ mod tests {
             .output_notes
             .iter()
             .map(RawOutputNote::id)
-            .collect();
-
-        let network_tx = {
-            let chain = mock_rpc.mock_chain.read();
-            chain
-                .build_transaction(faucet.faucet_id().account_id)
-                .authenticated_input_notes(input_note_ids)
-                .build()
-                .unwrap()
-        };
-        let executed = network_tx.execute().await.unwrap();
-
-        mock_rpc.mock_chain.write().add_pending_executed_transaction(&executed).unwrap();
-        mock_rpc.prove_block();
+            .collect()
     }
 
     /// Returns the operator's balance of the chain's fee asset, as tracked by the faucet's client.
