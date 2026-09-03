@@ -731,7 +731,6 @@ impl Faucet {
         fee_conversion_info: FeeConversionInfo,
     ) -> Result<TransactionRequest, TransactionRequestError> {
         let notes: Vec<Note> = notes.to_vec();
-        // TODO: check whether this can be improved
         let input_notes: Vec<(Note, Option<NoteArgs>)> =
             input_notes.iter().map(|note| (note.clone(), None)).collect();
         TransactionRequestBuilder::new()
