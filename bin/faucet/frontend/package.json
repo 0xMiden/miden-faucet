@@ -13,9 +13,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@miden-sdk/miden-wallet-adapter-base": "^0.15.3",
-    "@miden-sdk/miden-wallet-adapter-miden": "^0.15.3",
-    "@miden-sdk/miden-sdk": "0.16.0-rc.2"
+    "@miden-sdk/miden-wallet-adapter-base": "0.16.0-rc.6",
+    "@miden-sdk/miden-wallet-adapter-miden": "0.16.0-rc.6",
+    "@miden-sdk/miden-sdk": "0.16.0-rc.6"
   },
   "devDependencies": {
     "esbuild": "^0.27.0"
