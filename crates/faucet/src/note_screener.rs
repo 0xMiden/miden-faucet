@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use miden_client::account::AccountId;
 use miden_client::rpc::domain::note::CommittedNote;
-use miden_client::store::{InputNoteRecord, NoteFilter, Store, StoreError};
+use miden_client::store::{InputNoteRecord, NoteFilter, SettingScope, Store, StoreError};
 use miden_client::sync::{NoteUpdateAction, OnNoteReceived};
 use miden_client::utils::Deserializable;
 use miden_client::{ClientError, async_trait};
@@ -31,13 +31,13 @@ impl NoteScreener {
     async fn operator_account_id(&self) -> Result<AccountId, StoreError> {
         let value = self
             .store
-            .get_setting(DEFAULT_OPERATOR_ACCOUNT_ID_SETTING.to_owned())
+            .get_setting(SettingScope::User, DEFAULT_OPERATOR_ACCOUNT_ID_SETTING.to_owned())
             .await?
             .ok_or_else(|| {
-            StoreError::QueryError(format!(
-                "setting {DEFAULT_OPERATOR_ACCOUNT_ID_SETTING} is not set"
-            ))
-        })?;
+                StoreError::QueryError(format!(
+                    "setting {DEFAULT_OPERATOR_ACCOUNT_ID_SETTING} is not set"
+                ))
+            })?;
 
         Ok(AccountId::read_from_bytes(&value)?)
     }
