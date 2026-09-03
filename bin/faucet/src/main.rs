@@ -17,7 +17,7 @@ use miden_client::account::component::FungibleFaucet;
 use miden_client::account::{AccountFile, AccountId};
 use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::rpc::Endpoint;
-use miden_client::store::Store;
+use miden_client::store::{SettingScope, Store};
 use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
 use miden_faucet_lib::{
@@ -604,7 +604,10 @@ async fn load_api_keys_from_store(store: &SqliteStore) -> anyhow::Result<Vec<Api
 
 /// Lists all API keys from the store as encoded strings.
 async fn list_api_keys_from_store(store: &SqliteStore) -> anyhow::Result<Vec<String>> {
-    let all_keys = store.list_setting_keys().await.context("failed to list settings")?;
+    let all_keys = store
+        .list_setting_keys(SettingScope::User)
+        .await
+        .context("failed to list settings")?;
     Ok(all_keys
         .into_iter()
         .filter_map(|key| key.strip_prefix(api_key::API_KEY_SETTING_PREFIX).map(String::from))
@@ -614,7 +617,10 @@ async fn list_api_keys_from_store(store: &SqliteStore) -> anyhow::Result<Vec<Str
 /// Stores a single API key in the settings table.
 async fn add_api_key_to_store(store: &SqliteStore, key: &ApiKey) -> anyhow::Result<()> {
     let setting_key = format!("{}{}", api_key::API_KEY_SETTING_PREFIX, key.encode());
-    store.set_setting(setting_key, vec![]).await.context("failed to store API key")
+    store
+        .set_setting(SettingScope::User, setting_key, vec![])
+        .await
+        .context("failed to store API key")
 }
 
 /// Removes a single API key from the settings table.
@@ -622,7 +628,10 @@ async fn add_api_key_to_store(store: &SqliteStore, key: &ApiKey) -> anyhow::Resu
 /// Fails if the key is not present in the store, so a typo does not report a successful removal.
 async fn remove_api_key_from_store(store: &SqliteStore, key: &ApiKey) -> anyhow::Result<()> {
     let setting_key = format!("{}{}", api_key::API_KEY_SETTING_PREFIX, key.encode());
-    let removed = store.remove_setting(setting_key).await.context("failed to remove API key")?;
+    let removed = store
+        .remove_setting(SettingScope::User, setting_key)
+        .await
+        .context("failed to remove API key")?;
     anyhow::ensure!(removed, "API key not found in the store");
     Ok(())
 }
