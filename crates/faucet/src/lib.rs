@@ -100,10 +100,10 @@ const MINT_TX_EXPIRATION_DELTA: u16 = 10;
 
 /// The operator is funded once its balance of the chain's fee asset falls below this many base
 /// units.
-const OPERATOR_FUNDING_THRESHOLD: u64 = 1_000_000_000;
+const OPERATOR_FUNDING_THRESHOLD: u64 = 100_000_000;
 
 /// How many base units of the faucet's asset a funding request mints to the operator.
-const OPERATOR_FUNDING_AMOUNT: u64 = 10_000_000_000;
+const OPERATOR_FUNDING_AMOUNT: u64 = 900_000_000;
 
 /// Blocks after which the operator may reclaim a sponsorship whose MINT note was never consumed.
 /// Generous compared to `MINT_TX_EXPIRATION_DELTA`, since reclaiming a sponsorship of a note that
@@ -1421,23 +1421,26 @@ pub(crate) fn is_consumable_at(details: &NoteDetails, block_num: BlockNumber) ->
 mod tests {
     use std::env::temp_dir;
 
-    use miden_client::asset::AssetId;
+    use miden_client::asset::{Asset, AssetId};
     use miden_client::block::BlockNumber;
     use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
     use miden_client::rpc::encryption::TransactionEncryptionKey;
     use miden_client::store::Store;
-    use miden_client::testing::MockChainBuilder;
     use miden_client::testing::account_id::{
         ACCOUNT_ID_FEE_FAUCET,
         ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE,
     };
     use miden_client::testing::mock::MockRpcApi;
+    use miden_client::testing::{Auth, MockChainBuilder};
     use miden_client::transaction::RawOutputNote;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
     use super::*;
     use crate::types::NoteType;
+
+    /// How many base units of the chain's fee asset the test sender wallet holds at genesis.
+    const SENDER_BALANCE: u64 = 1_000_000_000_000;
 
     /// Only notes older than the retention window are pruned, and the boundary itself is kept.
     #[test]
@@ -1545,7 +1548,7 @@ mod tests {
         let initial_operator_balance = OPERATOR_FUNDING_THRESHOLD - 1;
         let verification_base_fee = 0;
         let faucet_is_chain_fee_faucet = true;
-        let (mut faucet, mock_rpc) = build_faucet_on_chain(
+        let (mut faucet, mock_rpc, _) = build_faucet_on_chain(
             store.clone(),
             verification_base_fee,
             initial_operator_balance,
@@ -1590,6 +1593,34 @@ mod tests {
             "consuming the funding note should raise the operator's balance"
         );
         assert!(!faucet.funding_request_in_flight, "the funding request is no longer in flight");
+    }
+
+    /// A P2IDE note anyone sends the operator in the chain's fee asset is picked up by the sync
+    /// and consumed by the next mint, raising the operator's balance.
+    #[tokio::test]
+    async fn operator_consumes_a_p2ide_note_sent_to_it() {
+        let transferred = 250_000;
+        let store = Arc::new(
+            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
+                .await
+                .unwrap(),
+        );
+        // The operator starts at the threshold, so the faucet does not fund it and the balance can
+        // only move because of the note the sender pays it.
+        let (mut faucet, mock_rpc, sender) =
+            build_faucet_on_chain(store.clone(), 0, OPERATOR_FUNDING_THRESHOLD, true).await;
+        let fee_parameters = faucet.fee_parameters().await.unwrap();
+        assert!(!faucet.operator_requires_funding().await.unwrap());
+
+        send_p2ide_note_to_operator(&mut faucet, &mock_rpc, &sender, transferred).await;
+
+        send_and_execute_mint_request(&mut faucet, mint_request()).await;
+
+        assert_eq!(
+            operator_fee_balance(&faucet, &fee_parameters).await,
+            OPERATOR_FUNDING_THRESHOLD + transferred,
+            "the mint should have consumed the P2IDE note paying the operator"
+        );
     }
 
     // FEE TESTS
@@ -1648,7 +1679,7 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        let (mut faucet, _) = build_faucet_on_chain(
+        let (mut faucet, ..) = build_faucet_on_chain(
             store.clone(),
             TEST_VERIFICATION_BASE_FEE,
             operator_fee_balance,
@@ -1737,6 +1768,10 @@ mod tests {
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
 
+    /// The faucet's max supply in the tests, with room for several funding mints on top of the
+    /// requests a batch carries.
+    const TEST_MAX_SUPPLY: u64 = OPERATOR_FUNDING_AMOUNT * 10;
+
     /// A mint request for a public note to a fixed account.
     fn mint_request() -> MintRequest {
         MintRequest {
@@ -1782,11 +1817,11 @@ mod tests {
         verification_base_fee: u32,
         operator_fee_balance: u64,
         faucet_is_chain_fee_faucet: bool,
-    ) -> (Faucet, Arc<MockRpcApi>) {
+    ) -> (Faucet, Arc<MockRpcApi>, Account) {
         let (mut operator_account, operator_secret) = create_faucet_operator_account().unwrap();
         let symbol = "TEST";
         let decimals = 6;
-        let max_supply = 1_000_000_000_000;
+        let max_supply = TEST_MAX_SUPPLY;
         let fee_faucet_id = AccountId::try_from(ACCOUNT_ID_FEE_FAUCET).unwrap();
         let faucet_account = create_network_faucet_account(
             symbol,
@@ -1819,13 +1854,19 @@ mod tests {
             operator_account.vault_mut().add_asset(fee_asset.into()).unwrap();
         }
         operator_account.set_nonce(Felt::new_unchecked(1)).unwrap();
-        let mock_chain =
+        let mut chain_builder =
             MockChainBuilder::with_accounts([deployed_faucet, operator_account.clone()])
                 .unwrap()
                 .fee_faucet_id(chain_fee_faucet_id)
-                .verification_base_fee(verification_base_fee)
-                .build()
-                .unwrap();
+                .verification_base_fee(verification_base_fee);
+        // A wallet holding the chain's fee asset, so tests can send notes to the operator.
+        let sender = chain_builder
+            .add_existing_wallet_with_assets(
+                Auth::IncrNonce,
+                [Asset::from(FungibleAsset::new(chain_fee_faucet_id, SENDER_BALANCE).unwrap())],
+            )
+            .unwrap();
+        let mock_chain = chain_builder.build().unwrap();
         let fee_parameters = mock_chain.latest_block_header().fee_parameters().clone();
         assert_eq!(fee_parameters.verification_base_fee(), verification_base_fee);
         let mock_rpc = Arc::new(MockRpcApi::new(mock_chain));
@@ -1840,6 +1881,7 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&faucet_account, false).await.unwrap();
         client.add_account(&operator_account, false).await.unwrap();
+        client.add_account(&sender, false).await.unwrap();
         // `Faucet::init` records both accounts as settings; the note screener reads the operator
         // from there.
         client
@@ -1880,12 +1922,12 @@ mod tests {
             ),
             tx_prover: Arc::new(LocalTransactionProver::default()),
             issuance,
-            max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
+            max_supply: AssetAmount::new(TEST_MAX_SUPPLY).unwrap(),
             operator_account_id: operator_account.id(),
             p2id_notes: P2idNoteCache::default(),
             funding_request_in_flight: false,
         };
-        (faucet, mock_rpc)
+        (faucet, mock_rpc, sender)
     }
 
     /// Runs a single-request batch and returns the mint response.
@@ -1943,6 +1985,39 @@ mod tests {
             .iter()
             .map(RawOutputNote::id)
             .collect()
+    }
+
+    /// Commits a P2IDE note paying the operator `amount` of the chain's fee asset, in a new block.
+    ///
+    /// The transaction is executed through the faucet's client, since it is the only client the
+    /// test has, but it is never applied to its store. The note therefore reaches the faucet only
+    /// through the sync, like a transfer made by anyone else would.
+    async fn send_p2ide_note_to_operator(
+        faucet: &mut Faucet,
+        mock_rpc: &MockRpcApi,
+        sender: &Account,
+        amount: u64,
+    ) {
+        let fee_faucet_id = faucet.fee_parameters().await.unwrap().fee_faucet_id();
+        let note: Note = P2ideNote::builder()
+            .sender(sender.id())
+            .target(faucet.operator_id())
+            .asset(FungibleAsset::new(fee_faucet_id, amount).unwrap())
+            .note_type(ProtocolNoteType::Public)
+            .serial_number(Word::from([9u32; 4]))
+            .build()
+            .unwrap()
+            .into();
+
+        let tx_request = TransactionRequestBuilder::new().own_output_notes([note]).build().unwrap();
+        let tx = faucet.client.execute_transaction(sender.id(), tx_request).await.unwrap();
+
+        mock_rpc
+            .mock_chain
+            .write()
+            .add_pending_executed_transaction(tx.executed_transaction())
+            .unwrap();
+        mock_rpc.prove_block();
     }
 
     /// Returns the operator's balance of the chain's fee asset, as tracked by the faucet's client.
