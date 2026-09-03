@@ -676,8 +676,7 @@ impl Faucet {
     ///
     /// The MINT notes target the faucet, a network account, so creating them prices each note
     /// through an FPI into the faucet's fee policy. `faucet_account` supplies the faucet as a
-    /// foreign account for that call. The fee conversion info the operator's auth procedure needs
-    /// to pay the transaction fee is committed by miden-client when it prepares the transaction.
+    /// foreign account for that call.
     #[instrument(target = COMPONENT, name = "faucet.mint.create_tx", skip_all, err)]
     fn create_transaction(
         notes: &[Note],
