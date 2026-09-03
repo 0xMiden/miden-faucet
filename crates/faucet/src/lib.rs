@@ -173,10 +173,7 @@ pub struct Faucet {
     max_supply: AssetAmount,
     p2id_notes: P2idNoteCache,
     operator_account_id: AccountId,
-    /// Whether the operator has been sent a funding request whose P2ID note has not been seen
-    /// yet. It suppresses further requests while the operator is still below the threshold.
-    ///
-    /// Only held in memory: a restart forgets an in-flight request and may make a second one.
+    /// Whether there is an in-flight P2ID note to fund the operator account.
     funding_request_in_flight: bool,
 }
 
@@ -539,11 +536,7 @@ impl Faucet {
         Ok(())
     }
 
-    /// Returns the P2ID notes that fund the operator: those payable to it that are committed on
-    /// chain and not already being consumed by an earlier transaction.
-    ///
-    /// [`NoteFilter::Unspent`] is not used here because it also returns notes in the processing
-    /// state, which a previous mint is already consuming.
+    /// Returns the P2ID notes that fund the operator.
     async fn get_p2id_notes_targeted_to_operator(&self) -> anyhow::Result<Vec<Note>> {
         let operator_id = self.operator_id();
         let fee_faucet_id = self.fee_parameters().await?.fee_faucet_id();
@@ -552,25 +545,16 @@ impl Faucet {
             .await
             .context("failed to read the committed input notes from the store")?
             .iter()
-            .filter(|record| is_p2id_payable_to(record.details(), operator_id, fee_faucet_id))
+            .filter(|record| is_p2id_note_targeted_to(record.details(), operator_id, fee_faucet_id))
             .map(|record| {
                 record.try_into().context("failed to rebuild a P2ID note funding the operator")
             })
             .collect()
     }
 
-    /// Whether the operator's balance of the chain's fee asset has fallen below
-    /// [`OPERATOR_FUNDING_THRESHOLD`] and no funding request is already in flight.
-    ///
-    /// The operator spends the fee asset on the transactions it submits, so that is the balance
-    /// that has to be kept up. The faucet can only mint its own asset, so it can only fund the
-    /// operator on a chain that charges fees in that asset; elsewhere a mint would never raise the
-    /// balance, and every batch would request another one.
-    ///
-    /// The funding reaches the operator as a P2ID note that a later batch consumes, so the operator
-    /// stays below the threshold until then. Without
-    /// [`funding_request_in_flight`](Self::funding_request_in_flight) every batch in that window
-    /// would mint to the operator again.
+    /// Whether the operator's balance of the chain's fee asset is below
+    /// [`OPERATOR_FUNDING_THRESHOLD`] and no P2ID note funding the operator
+    /// is already in flight.
     async fn operator_requires_funding(&self) -> anyhow::Result<bool> {
         if self.funding_request_in_flight {
             return Ok(false);
@@ -687,15 +671,14 @@ impl Faucet {
 
         log_built_requests(&valid_requests, &mint_notes, &p2id_notes);
 
-        // The store is only read while a funding request is in flight. Finding its notes clears
-        // the marker, so once this batch has consumed them a later one can make the next request.
+        // Check whether the P2ID note that funds the operator has arrived during the state sync
         let operator_funding_notes = if self.funding_request_in_flight {
             let funding_notes = self.get_p2id_notes_targeted_to_operator().await?;
-            // The marker only clears once the funding note has arrived, which this batch consumes.
+            // If the funding note has arrived, update the flag.
             self.funding_request_in_flight = funding_notes.is_empty();
             funding_notes
         } else {
-            vec![]
+            Vec::new()
         };
 
         // Build and submit transaction
@@ -1421,12 +1404,9 @@ fn log_built_requests(requests: &[MintRequest], mint_notes: &[Note], p2id_notes:
     }
 }
 
-/// Whether `details` describes a P2ID note payable to `target` that carries `fee_faucet_id`'s
-/// asset and nothing else.
-///
-/// The recipient is rebuilt from [`P2idNote::script()`], so matching it also pins the note's script
-/// root.
-pub(crate) fn is_p2id_payable_to(
+/// Whether `details` describes a P2ID note to `target` that carries `fee_faucet_id`'s
+/// asset.
+pub(crate) fn is_p2id_note_targeted_to(
     details: &NoteDetails,
     target: AccountId,
     fee_faucet_id: AccountId,
@@ -1586,7 +1566,7 @@ mod tests {
         // The note it would mint pays the operator the faucet's asset, which is the fee asset.
         let mut rng = RandomCoin::new(Word::empty());
         let funding_note = faucet.create_p2id_note_to_operator(&mut rng).unwrap();
-        assert!(is_p2id_payable_to(
+        assert!(is_p2id_note_targeted_to(
             &NoteDetails::from(funding_note.clone()),
             faucet.operator_id(),
             fee_parameters.fee_faucet_id(),
@@ -1677,19 +1657,19 @@ mod tests {
             |target: AccountId| P2idNoteStorage::new(target).into_recipient(Word::empty());
 
         let payable = NoteDetails::new(assets_of(fee_faucet), p2id_to(operator));
-        assert!(is_p2id_payable_to(&payable, operator, fee_faucet));
+        assert!(is_p2id_note_targeted_to(&payable, operator, fee_faucet));
 
         // Another faucet's asset would leave the operator no better able to pay fees.
         let wrong_asset = NoteDetails::new(assets_of(other_faucet), p2id_to(operator));
-        assert!(!is_p2id_payable_to(&wrong_asset, operator, fee_faucet));
+        assert!(!is_p2id_note_targeted_to(&wrong_asset, operator, fee_faucet));
 
         // A note carrying nothing is not funding either.
         let no_assets = NoteDetails::new(NoteAssets::new(vec![]).unwrap(), p2id_to(operator));
-        assert!(!is_p2id_payable_to(&no_assets, operator, fee_faucet));
+        assert!(!is_p2id_note_targeted_to(&no_assets, operator, fee_faucet));
 
         // Payable to somebody else.
         let wrong_target = NoteDetails::new(assets_of(fee_faucet), p2id_to(other_faucet));
-        assert!(!is_p2id_payable_to(&wrong_target, operator, fee_faucet));
+        assert!(!is_p2id_note_targeted_to(&wrong_target, operator, fee_faucet));
 
         // Same storage, but the script is not P2ID's.
         let wrong_script = NoteDetails::new(
@@ -1700,7 +1680,7 @@ mod tests {
                 NoteStorage::from(P2idNoteStorage::new(operator)),
             ),
         );
-        assert!(!is_p2id_payable_to(&wrong_script, operator, fee_faucet));
+        assert!(!is_p2id_note_targeted_to(&wrong_script, operator, fee_faucet));
     }
 
     // FEE TESTS
