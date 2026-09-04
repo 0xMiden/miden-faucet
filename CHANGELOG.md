@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.0 (TBD)
+
+- `/get_note` and `/send_note` now answer with a status code that matches the failure: a note that is not cached is `404` instead of `400`, a faucet started without a note transport URL is `501`, and a transport layer that is unreachable or answers unusably is `502`. Previously every one of these was reported as a `400`, so an outage of the note transport service looked like a client error ([#297](https://github.com/0xMiden/faucet/pull/297)).
+
 ## 0.16.0 (2026-09-08)
 
 - Updated `miden-client` and `miden-node-proto-build` dependencies to v0.16.0, bumped the workspace version to 0.16.0, and updated the declared `rust-version` and the Docker builder image to 1.98.1 ([#300](https://github.com/0xMiden/faucet/pull/300)).
