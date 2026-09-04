@@ -584,7 +584,21 @@ impl Faucet {
             self.operator_account_id,
         )?;
 
-        log_built_requests(&valid_requests, &mint_notes, &p2id_notes);
+        // Log the P2id note ids along with their corresponding MINT note ids.
+        for ((request, mint_note), p2id_note) in
+            valid_requests.iter().zip(&mint_notes).zip(&p2id_notes)
+        {
+            info!(
+                target: COMPONENT,
+                {
+                    mint_note.id = %mint_note.id().to_hex(),
+                    p2id_note.id = %p2id_note.id().to_hex(),
+                    target_account.id = %request.account_id,
+                    note.type = ?request.note_type
+                },
+                "Built mint request",
+            );
+        }
 
         // Check whether there are any P2ID notes that fund the operator
         let operator_funding_notes = self.get_notes_targeted_to_operator(after_block_num).await?;
@@ -1352,22 +1366,6 @@ pub fn create_faucet_operator_account() -> anyhow::Result<(Account, AuthSecretKe
         .build()?;
 
     Ok((account, AuthSecretKey::Falcon512Poseidon2(secret_key)))
-}
-
-/// Logs each request's P2ID note id alongside the MINT note id it is derived from.
-fn log_built_requests(requests: &[MintRequest], mint_notes: &[Note], p2id_notes: &[Note]) {
-    for ((request, mint_note), p2id_note) in requests.iter().zip(mint_notes).zip(p2id_notes) {
-        info!(
-            target: COMPONENT,
-            {
-                mint_note.id = %mint_note.id().to_hex(),
-                p2id_note.id = %p2id_note.id().to_hex(),
-                target_account.id = %request.account_id,
-                note.type = ?request.note_type
-            },
-            "Built mint request",
-        );
-    }
 }
 
 /// Whether `details` describes a P2ID or P2IDE note payable to `target` that carries
