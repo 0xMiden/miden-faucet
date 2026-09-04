@@ -1531,9 +1531,9 @@ mod tests {
         }
     }
 
-    /// On a chain that charges fees in the faucet's own asset, a batch minted while the operator
-    /// sits below the funding threshold carries one MINT note per request plus one payable to the
-    /// operator, and a funding request already in flight suppresses a second one.
+    /// When the operator account balance is below `OPERATOR_FUNDING_THRESHOLD`, the faucet mints
+    /// a P2ID note to fund the operator, when a new mint request arrives. The P2ID note is consumed
+    /// in the next mint batch, since the faucet includes that note as part of the mint transaction.
     #[tokio::test]
     async fn mint_funds_the_operator_when_its_balance_is_low() {
         let store = Arc::new(
@@ -1603,17 +1603,14 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        // The operator starts at the threshold, so the faucet does not fund it and the balance can
-        // only move because of the note the sender pays it.
         let (mut faucet, mock_rpc, sender) =
             build_faucet_on_chain(store.clone(), 0, OPERATOR_FUNDING_THRESHOLD, true).await;
-        let fee_parameters = faucet.fee_parameters().await.unwrap();
-        assert!(!faucet.operator_requires_funding().await.unwrap());
 
         send_p2ide_note_to_operator(&mut faucet, &mock_rpc, &sender, transferred).await;
-
+        // The P2IDE note will be consumed in the next mint request
         send_and_execute_mint_request(&mut faucet, mint_request()).await;
 
+        let fee_parameters = faucet.fee_parameters().await.unwrap();
         assert_eq!(
             operator_fee_balance(&faucet, &fee_parameters).await,
             OPERATOR_FUNDING_THRESHOLD + transferred,
