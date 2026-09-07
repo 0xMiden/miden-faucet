@@ -630,6 +630,7 @@ impl Faucet {
         let tx_id = Box::pin(self.submit_new_transaction(self.operator_account_id, tx_request))
             .await
             .map_err(|error| *error)
+            .inspect_err(|_| self.funding_request_in_flight = false)
             .context("faucet failed to submit transaction")?;
         span.record("tx_id", tx_id.to_string());
         info!(
