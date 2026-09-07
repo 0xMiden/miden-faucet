@@ -42,8 +42,8 @@ impl NoteScreener {
         Ok(AccountId::read_from_bytes(&value)?)
     }
 
-    /// Reads the chain's fee faucet from the latest block header the store holds.
-    async fn fee_faucet_id(&self) -> Result<AccountId, StoreError> {
+    /// Reads the chain's native fee faucet from the latest block header the store holds.
+    async fn native_fee_faucet_id(&self) -> Result<AccountId, StoreError> {
         let sync_height = self.store.get_sync_height().await?;
         let (block_header, _) = self
             .store
@@ -76,8 +76,8 @@ impl OnNoteReceived for NoteScreener {
         if let Some(note) = public_note {
             // Track the P2ID notes that fund the operator account
             let operator_account_id = self.operator_account_id().await?;
-            let fee_faucet_id = self.fee_faucet_id().await?;
-            if is_p2id_note_payable_to(note.details(), operator_account_id, fee_faucet_id) {
+            let native_fee_faucet_id = self.native_fee_faucet_id().await?;
+            if is_p2id_note_payable_to(note.details(), operator_account_id, native_fee_faucet_id) {
                 return Ok(NoteUpdateAction::Insert(note));
             }
         }

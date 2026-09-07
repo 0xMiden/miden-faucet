@@ -934,14 +934,16 @@ impl Faucet {
     /// first, capped at [`MAX_OPERATOR_FUNDING_NOTES`].
     async fn get_notes_targeted_to_operator(&self) -> anyhow::Result<Vec<Note>> {
         let operator_id = self.operator_id();
-        let fee_faucet_id = self.fee_parameters().await?.fee_faucet_id();
+        let native_fee_faucet_id = self.fee_parameters().await?.fee_faucet_id();
         let mut notes: Vec<Note> = self
             .client
             .get_input_notes(NoteFilter::Committed)
             .await
             .context("failed to read the committed input notes from the store")?
             .iter()
-            .filter(|record| is_p2id_note_payable_to(record.details(), operator_id, fee_faucet_id))
+            .filter(|record| {
+                is_p2id_note_payable_to(record.details(), operator_id, native_fee_faucet_id)
+            })
             .map(|record| {
                 record.try_into().context("failed to rebuild a P2ID note funding the operator")
             })
@@ -962,7 +964,8 @@ impl Faucet {
         }
 
         let fee_parameters = self.fee_parameters().await?;
-        if fee_parameters.fee_faucet_id() != self.id.account_id {
+        let native_fee_faucet_id = fee_parameters.fee_faucet_id();
+        if self.id.account_id != native_fee_faucet_id {
             return Ok(false);
         }
 
