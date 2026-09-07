@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -53,6 +53,7 @@ use miden_client::note::{
     NoteError,
     NoteExecutionHint,
     NoteId,
+    NoteTag,
     NoteType as ProtocolNoteType,
     P2idNote,
     P2idNoteStorage,
@@ -60,7 +61,7 @@ use miden_client::note::{
 use miden_client::rpc::domain::account::{AccountStorageRequirements, GetAccountRequest};
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, NodeRpcClient, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
-use miden_client::sync::{NoteTagSource, StateSync, StateSyncInput, SyncSummary};
+use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
     ForeignAccount,
     LocalTransactionProver,
@@ -460,15 +461,10 @@ impl Faucet {
             client.get_transactions(TransactionFilter::Uncommitted).await?;
 
         // The node matches note inclusions by tag, and skips the query altogether when no tag is
-        // given. `add_account` registers a tag per tracked account, so passing the operator note
-        // tag makes the sync return the P2ID notes payable to the operator
-        let note_tags = client
-            .get_note_tags()
-            .await?
-            .into_iter()
-            .filter(|record| record.source == NoteTagSource::Account(operator_account_id))
-            .map(|record| record.tag)
-            .collect();
+        // given. Passing the operator note tag makes the sync return the P2ID notes payable to the
+        // operator
+        let operator_note_tag = NoteTag::with_account_target(operator_account_id);
+        let note_tags = BTreeSet::from([operator_note_tag]);
         // Tracked unspent notes must be followed too, so the funding notes the faucet consumes are
         // moved out of the committed state once their nullifiers show up on chain.
         let input_notes = client.get_input_notes(NoteFilter::Unspent).await?;
