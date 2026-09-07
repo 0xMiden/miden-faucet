@@ -60,7 +60,7 @@ use miden_client::note::{
 use miden_client::rpc::domain::account::{AccountStorageRequirements, GetAccountRequest};
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, NodeRpcClient, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
-use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
+use miden_client::sync::{NoteTagSource, StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
     ForeignAccount,
     LocalTransactionProver,
@@ -217,11 +217,12 @@ impl Faucet {
         operator_account: Account,
     ) -> anyhow::Result<()> {
         let faucet_account_id = faucet_account.id();
+        let operator_id = operator_account.id();
         let deploy = matches!(faucet_account, FaucetAccount::New(_));
 
         let keystore =
             FilesystemKeyStore::new(KEYSTORE_PATH.into()).context("failed to create keystore")?;
-        keystore.add_key(operator_secret_key, operator_account.id()).await?;
+        keystore.add_key(operator_secret_key, operator_id).await?;
 
         let sqlite_store = Arc::new(SqliteStore::new(config.store_path.clone()).await?);
 
@@ -262,7 +263,7 @@ impl Faucet {
             );
         }
 
-        Self::sync_state(&[operator_account.id()], &mut client, &state_sync_component).await?;
+        Self::sync_state(&[operator_id], operator_id, &mut client, &state_sync_component).await?;
 
         let add_result = match &faucet_account {
             FaucetAccount::New(account) => client.add_account(account, false).await,
@@ -291,7 +292,7 @@ impl Faucet {
             .await
             .context("failed to read the faucet account from the store")?
             .with_context(|| format!("faucet account {faucet_account_id} is not tracked"))?;
-        check_faucet_owner_matches_operator(&faucet_account, operator_account.id())?;
+        check_faucet_owner_matches_operator(&faucet_account, operator_id)?;
 
         client
             .set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), faucet_account_id)
@@ -304,7 +305,7 @@ impl Faucet {
                 warn!(
                     target: COMPONENT,
                     {
-                        account.id = %operator_account.id(),
+                        account.id = %operator_id,
                         kind = "operator"
                     },
                     "Operator account already tracked, skipping import",
@@ -313,7 +314,7 @@ impl Faucet {
             Err(error) => anyhow::bail!("failed to add operator account: {error}"),
         }
         client
-            .set_setting(DEFAULT_OPERATOR_ACCOUNT_ID_SETTING.to_owned(), operator_account.id())
+            .set_setting(DEFAULT_OPERATOR_ACCOUNT_ID_SETTING.to_owned(), operator_id)
             .await?;
 
         // A newly created faucet account is deployed by its first transaction. An imported one is
@@ -326,7 +327,7 @@ impl Faucet {
             target: COMPONENT,
             {
                 faucet.account.id = %faucet_account_id,
-                operator.account.id = %operator_account.id(),
+                operator.account.id = %operator_id,
                 faucet_account.status = if deploy { "created" } else { "imported" },
                 store.path = %config.store_path.display(),
                 node.endpoint = %config.node_endpoint
@@ -398,6 +399,7 @@ impl Faucet {
             // `init` (for example the operator being funded out of band).
             Self::sync_state(
                 &[account.id(), operator_account_id],
+                operator_account_id,
                 &mut client,
                 &state_sync_component,
             )
@@ -435,6 +437,7 @@ impl Faucet {
     #[instrument(target = COMPONENT, name = "faucet.sync_state", skip_all, err)]
     async fn sync_state(
         account_ids: &[AccountId],
+        operator_account_id: AccountId,
         client: &mut Client<FilesystemKeyStore>,
         state_sync: &StateSync,
     ) -> anyhow::Result<SyncSummary> {
@@ -457,10 +460,15 @@ impl Faucet {
             client.get_transactions(TransactionFilter::Uncommitted).await?;
 
         // The node matches note inclusions by tag, and skips the query altogether when no tag is
-        // given. `add_account` registers a tag per tracked account, so passing them makes the sync
-        // return the P2ID notes payable to the operator.
-        let note_tags =
-            client.get_note_tags().await?.into_iter().map(|record| record.tag).collect();
+        // given. `add_account` registers a tag per tracked account, so passing the operator note
+        // tag makes the sync return the P2ID notes payable to the operator
+        let note_tags = client
+            .get_note_tags()
+            .await?
+            .into_iter()
+            .filter(|record| record.source == NoteTagSource::Account(operator_account_id))
+            .map(|record| record.tag)
+            .collect();
         // Tracked unspent notes must be followed too, so the funding notes the faucet consumes are
         // moved out of the committed state once their nullifiers show up on chain.
         let input_notes = client.get_input_notes(NoteFilter::Unspent).await?;
@@ -544,6 +552,7 @@ impl Faucet {
         // and the faucet holds the token supply that `refresh_issuance` reads.
         let sync_summary = Self::sync_state(
             &[self.id.account_id, self.operator_account_id],
+            self.operator_account_id,
             &mut self.client,
             &self.state_sync_component,
         )
