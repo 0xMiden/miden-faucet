@@ -1767,7 +1767,7 @@ mod tests {
     /// `faucet_is_chain_fee_faucet` makes the chain charge fees in the faucet's own asset, the only
     /// arrangement in which the faucet can fund its operator.
     ///
-    /// Returns a tuple containing the faucet, the RPC api, and a funded account.
+    /// Returns a tuple containing the faucet and the RPC api.
     async fn build_faucet_on_chain(
         store: Arc<dyn Store>,
         verification_base_fee: u32,
