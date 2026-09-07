@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -99,6 +100,9 @@ const MINT_TX_EXPIRATION_DELTA: u16 = 10;
 /// The operator is funded once its balance of the chain's fee asset falls below this many base
 /// units.
 const OPERATOR_FUNDING_THRESHOLD: u64 = 100_000_000;
+
+/// How many notes funding the operator a single mint transaction consumes.
+const MAX_OPERATOR_FUNDING_NOTES: usize = 5;
 
 /// How many base units of the faucet's asset a funding request mints to the operator.
 const OPERATOR_FUNDING_AMOUNT: u64 = 900_000_000;
@@ -926,11 +930,13 @@ impl Faucet {
         Ok(())
     }
 
-    /// Returns the P2ID notes that fund the operator.
+    /// Returns the P2ID notes that fund the operator, the ones carrying the most of the fee asset
+    /// first, capped at [`MAX_OPERATOR_FUNDING_NOTES`].
     async fn get_notes_targeted_to_operator(&self) -> anyhow::Result<Vec<Note>> {
         let operator_id = self.operator_id();
         let fee_faucet_id = self.fee_parameters().await?.fee_faucet_id();
-        self.client
+        let mut notes: Vec<Note> = self
+            .client
             .get_input_notes(NoteFilter::Committed)
             .await
             .context("failed to read the committed input notes from the store")?
@@ -939,7 +945,12 @@ impl Faucet {
             .map(|record| {
                 record.try_into().context("failed to rebuild a P2ID note funding the operator")
             })
-            .collect()
+            .collect::<anyhow::Result<Vec<Note>>>()?;
+
+        notes.sort_unstable_by_key(|note| Reverse(asset_amount(note)));
+        notes.truncate(MAX_OPERATOR_FUNDING_NOTES);
+
+        Ok(notes)
     }
 
     /// Whether the operator's balance of the chain's fee asset is below
@@ -1358,6 +1369,11 @@ pub fn create_faucet_operator_account() -> anyhow::Result<(Account, AuthSecretKe
         .build()?;
 
     Ok((account, AuthSecretKey::Falcon512Poseidon2(secret_key)))
+}
+
+/// The amount of fungible assets a note carries.
+fn asset_amount(note: &Note) -> u64 {
+    note.assets().iter_fungible().map(|asset| asset.amount().as_u64()).sum()
 }
 
 /// Whether `details` describes a P2ID note payable to `target` that carries `fee_faucet_id`'s
