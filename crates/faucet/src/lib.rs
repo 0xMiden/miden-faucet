@@ -591,21 +591,7 @@ impl Faucet {
             self.operator_account_id,
         )?;
 
-        // Log the P2id note ids along with their corresponding MINT note ids.
-        for ((request, mint_note), p2id_note) in
-            valid_requests.iter().zip(&mint_notes).zip(&p2id_notes)
-        {
-            info!(
-                target: COMPONENT,
-                {
-                    mint_note.id = %mint_note.id().to_hex(),
-                    p2id_note.id = %p2id_note.id().to_hex(),
-                    target_account.id = %request.account_id,
-                    note.type = ?request.note_type
-                },
-                "Built mint request",
-            );
-        }
+        log_built_requests(&valid_requests, &mint_notes, &p2id_notes);
 
         // Check whether there are any P2ID notes that fund the operator
         let operator_funding_notes = self.get_notes_targeted_to_operator().await?;
@@ -744,6 +730,7 @@ impl Faucet {
         let notes: Vec<Note> = notes.to_vec();
         let input_notes: Vec<(Note, Option<NoteArgs>)> =
             input_notes.iter().map(|note| (note.clone(), None)).collect();
+
         TransactionRequestBuilder::new()
             .input_notes(input_notes)
             .own_output_notes(notes)
@@ -1180,6 +1167,22 @@ fn grpc_status_code(kind: &GrpcError) -> i64 {
         GrpcError::Unavailable => 14,
         GrpcError::DataLoss => 15,
         GrpcError::Unauthenticated => 16,
+    }
+}
+
+/// Logs each request's P2ID note id alongside the MINT note id it is derived from.
+fn log_built_requests(requests: &[MintRequest], mint_notes: &[Note], p2id_notes: &[Note]) {
+    for ((request, mint_note), p2id_note) in requests.iter().zip(mint_notes).zip(p2id_notes) {
+        info!(
+            target: COMPONENT,
+            {
+                mint_note.id = %mint_note.id().to_hex(),
+                p2id_note.id = %p2id_note.id().to_hex(),
+                target_account.id = %request.account_id,
+                note.type = ?request.note_type
+            },
+            "Built mint request",
+        );
     }
 }
 
