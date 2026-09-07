@@ -1538,7 +1538,7 @@ mod tests {
         // Set the initial operator balance below the threshold so that the next mint request
         // triggers the funding mechanism
         let initial_operator_balance = OPERATOR_FUNDING_THRESHOLD - 1;
-        let verification_base_fee = 0;
+        let verification_base_fee = 100;
         let faucet_is_chain_fee_faucet = true;
         let (mut faucet, mock_rpc) = build_faucet_on_chain(
             store.clone(),
@@ -1562,11 +1562,11 @@ mod tests {
         let response = send_and_execute_mint_request(&mut faucet, mint_request()).await;
         // The operator balance has not changed yet, since the P2ID note will be consumed when
         // executing the next batch of mint requests.
-        assert_eq!(operator_fee_balance(&faucet, &fee_parameters).await, initial_operator_balance);
+        assert!(operator_fee_balance(&faucet, &fee_parameters).await < initial_operator_balance);
         assert!(faucet.funding_request_in_flight, "the funding request is in flight");
 
         // Get the MINT notes from the faucet transaction
-        let mint_note_ids = get_tx_output_note_ids(&faucet.client, response.tx_id).await;
+        let mint_note_ids = get_tx_mint_note_ids(&faucet.client, response.tx_id).await;
         // The mock chain does not support network transactions so we need to manually consume
         // the MINT notes against the faucet account
         execute_network_tx_with_notes(
@@ -1579,11 +1579,15 @@ mod tests {
         // Send and execute another mint request. In this case, the client will find and consume
         // the P2ID note that funds the operator, and therefore its balance will increase
         send_and_execute_mint_request(&mut faucet, mint_request()).await;
-        assert_eq!(
-            operator_fee_balance(&faucet, &fee_parameters).await,
-            initial_operator_balance + OPERATOR_FUNDING_AMOUNT,
+        let balance = operator_fee_balance(&faucet, &fee_parameters).await;
+        assert!(
+            balance > initial_operator_balance,
             "consuming the funding note should raise the operator's balance"
         );
+        // The balance falls short of the funded amount only by the fees the operator paid for the
+        // batches it submitted, which the kernel charges per verification cycle.
+        let fees_paid = initial_operator_balance + OPERATOR_FUNDING_AMOUNT - balance;
+        assert!(fees_paid > 0 && fees_paid.is_multiple_of(u64::from(verification_base_fee)));
         assert!(!faucet.funding_request_in_flight, "the funding request is no longer in flight");
     }
 
@@ -1819,6 +1823,14 @@ mod tests {
             let fee_asset = FungibleAsset::new(chain_fee_faucet_id, operator_fee_balance).unwrap();
             operator_account.vault_mut().add_asset(fee_asset.into()).unwrap();
         }
+
+        // The faucet account is funded so it can consume the MINT notes.
+        // This is required because MockChain does not support network transactions so
+        // we need to execute them manually.
+        if verification_base_fee > 0 {
+            let fee_asset = FungibleAsset::new(chain_fee_faucet_id, 1_000_000_000).unwrap();
+            deployed_faucet.vault_mut().add_asset(fee_asset.into()).unwrap();
+        }
         operator_account.set_nonce(Felt::new_unchecked(1)).unwrap();
         let mock_chain =
             MockChainBuilder::with_accounts([deployed_faucet, operator_account.clone()])
@@ -1928,8 +1940,8 @@ mod tests {
         mock_rpc.prove_block();
     }
 
-    /// Returns the IDs of the output notes created in the transaction given by `tx_id`.
-    async fn get_tx_output_note_ids(
+    /// Returns the IDs of the MINT notes created in the transaction given by `tx_id`.
+    async fn get_tx_mint_note_ids(
         client: &Client<FilesystemKeyStore>,
         tx_id: TransactionId,
     ) -> Vec<NoteId> {
@@ -1942,6 +1954,9 @@ mod tests {
             .details
             .output_notes
             .iter()
+            .filter(|note| {
+                note.recipient().is_some_and(|r| r.script().root() == MintNote::script_root())
+            })
             .map(RawOutputNote::id)
             .collect()
     }
