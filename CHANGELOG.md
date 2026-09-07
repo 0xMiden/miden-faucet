@@ -2,7 +2,7 @@
 
 ## 0.16.0 (TBD)
 
-- Bumped workspace version to 0.16.0 ([#300](https://github.com/0xMiden/faucet/pull/300)).
+- Updated `miden-client` and `miden-node-proto-build` dependencies to v0.16.0, bumped the workspace version to 0.16.0, and updated the declared `rust-version` and the Docker builder image to 1.98.1 ([#300](https://github.com/0xMiden/faucet/pull/300)).
 - Updated miden-client dependency to v0.16.0-rc.4 (miden-protocol / miden-standards / miden-testing v0.16.0-rc.9) and `miden-node-proto-build` to v0.16.0-rc.5, bumped the workspace version to 0.16.0-rc.3, and updated the declared `rust-version` and the Docker builder image to 1.98 ([#293](https://github.com/0xMiden/faucet/pull/293)).
 - Updated the frontend `@miden-sdk/miden-sdk` and wallet adapter dependencies to `v0.16.0-rc.6` ([#293](https://github.com/0xMiden/faucet/pull/293)).
 - Updated miden-client dependency to v0.16.0-rc.3 (miden-protocol / miden-standards / miden-testing v0.16.0-rc.6) and `miden-node-proto-build` to v0.16.0-rc.2, and bumped the workspace version to 0.16.0-rc.2 ([#286](https://github.com/0xMiden/faucet/pull/286)).
