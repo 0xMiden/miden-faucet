@@ -9,11 +9,11 @@ use miden_client::sync::{NoteUpdateAction, OnNoteReceived};
 use miden_client::utils::Deserializable;
 use miden_client::{ClientError, async_trait};
 
-use crate::{DEFAULT_OPERATOR_ACCOUNT_ID_SETTING, is_note_payable_to};
+use crate::{DEFAULT_OPERATOR_ACCOUNT_ID_SETTING, is_p2id_note_payable_to};
 
 /// Provides functionality for testing whether a note is relevant to the faucet.
 ///
-/// A note is relevant if it is a tracked output note, or a public P2ID or P2IDE note payable to
+/// A note is relevant if it is a tracked output note, or a public P2ID note payable to
 /// the operator in the chain's fee asset.
 #[derive(Clone)]
 pub struct NoteScreener {
@@ -77,7 +77,7 @@ impl OnNoteReceived for NoteScreener {
             // Track the P2ID notes that fund the operator account
             let operator_account_id = self.operator_account_id().await?;
             let fee_faucet_id = self.fee_faucet_id().await?;
-            if is_note_payable_to(note.details(), operator_account_id, fee_faucet_id) {
+            if is_p2id_note_payable_to(note.details(), operator_account_id, fee_faucet_id) {
                 return Ok(NoteUpdateAction::Insert(note));
             }
         }
