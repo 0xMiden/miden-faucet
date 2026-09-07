@@ -89,7 +89,7 @@ use crate::note_screener::NoteScreener;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
-const COMPONENT: &str = "miden-faucet-client";
+pub(crate) const COMPONENT: &str = "miden-faucet-client";
 
 const KEYSTORE_PATH: &str = "keystore";
 /// How long a P2ID note is kept in the cache, in blocks, before it is pruned.
@@ -610,6 +610,14 @@ impl Faucet {
         // Check whether there are any P2ID notes that fund the operator
         let operator_funding_notes = self.get_notes_targeted_to_operator().await?;
         if !operator_funding_notes.is_empty() {
+            info!(
+                target: COMPONENT,
+                {
+                    notes.num = operator_funding_notes.len(),
+                    amount = operator_funding_notes.iter().map(asset_amount).sum::<u64>()
+                },
+                "Consuming P2ID notes that fund the operator",
+            );
             self.funding_request_in_flight = false;
         }
 

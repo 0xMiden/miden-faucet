@@ -8,8 +8,9 @@ use miden_client::store::{InputNoteRecord, NoteFilter, SettingScope, Store, Stor
 use miden_client::sync::{NoteUpdateAction, OnNoteReceived};
 use miden_client::utils::Deserializable;
 use miden_client::{ClientError, async_trait};
+use tracing::info;
 
-use crate::{DEFAULT_OPERATOR_ACCOUNT_ID_SETTING, is_p2id_note_payable_to};
+use crate::{COMPONENT, DEFAULT_OPERATOR_ACCOUNT_ID_SETTING, is_p2id_note_payable_to};
 
 /// Provides functionality for testing whether a note is relevant to the faucet.
 ///
@@ -78,6 +79,14 @@ impl OnNoteReceived for NoteScreener {
             let operator_account_id = self.operator_account_id().await?;
             let native_fee_faucet_id = self.native_fee_faucet_id().await?;
             if is_p2id_note_payable_to(note.details(), operator_account_id, native_fee_faucet_id) {
+                info!(
+                    target: COMPONENT,
+                    {
+                        note.id = %note_id.to_hex(),
+                        operator.account.id = %operator_account_id
+                    },
+                    "Found a P2ID note that funds the operator",
+                );
                 return Ok(NoteUpdateAction::Insert(note));
             }
         }
