@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.16.0 (TBD)
+## 0.16.0 (2026-09-08)
 
 - Updated `miden-client` and `miden-node-proto-build` dependencies to v0.16.0, bumped the workspace version to 0.16.0, and updated the declared `rust-version` and the Docker builder image to 1.98.1 ([#300](https://github.com/0xMiden/faucet/pull/300)).
 - Updated the frontend `@miden-sdk/miden-sdk` and wallet adapter dependencies to `v0.16.0` ([#300](https://github.com/0xMiden/faucet/pull/300)).
