@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# The 1.98.1 image is not published yet, so upgrade the toolchain in place.
+RUN rustup default 1.98.1
+
 # Copy source
 COPY . .
 
