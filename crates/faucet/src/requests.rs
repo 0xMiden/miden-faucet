@@ -65,12 +65,13 @@ pub struct MintRequest {
     pub asset_amount: AssetAmount,
 }
 
+#[derive(Debug, Clone)]
 pub struct MintResponse {
     pub tx_id: TransactionId,
     pub note_id: NoteId,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum MintError {
     #[error("faucet supply exceeded")]
     AvailableSupplyExceeded,

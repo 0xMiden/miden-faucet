@@ -26,3 +26,4 @@ bin/faucet/frontend/bundle.js
 
 # Ignore mdbook build files
 book/
+*.sqlite3

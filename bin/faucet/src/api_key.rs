@@ -1,7 +1,7 @@
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use miden_pow_rate_limiter::ChallengeError;
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
 // API KEY
@@ -22,7 +22,7 @@ pub struct ApiKey([u8; 32]);
 
 impl ApiKey {
     /// Generates a random API key.
-    pub fn generate(rng: &mut impl Rng) -> Self {
+    pub fn generate(rng: &mut impl RngExt) -> Self {
         let mut api_key = [0u8; 32];
         rng.fill(&mut api_key);
         Self(api_key)
@@ -60,7 +60,7 @@ impl From<ApiKey> for [u8; 32] {
 #[cfg(test)]
 mod tests {
     use rand::SeedableRng;
-    use rand_chacha::ChaCha20Rng;
+    use rand::rngs::ChaCha20Rng;
 
     use crate::api_key::{API_KEY_PREFIX, ApiKey};
 

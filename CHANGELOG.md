@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.16.0 (2026-09-08)
+
+- Updated `miden-client` and `miden-node-proto-build` dependencies to v0.16.0, bumped the workspace version to 0.16.0, and updated the declared `rust-version` and the Docker builder image to 1.98.1 ([#300](https://github.com/0xMiden/faucet/pull/300)).
+- Updated the frontend `@miden-sdk/miden-sdk` and wallet adapter dependencies to `v0.16.0` ([#300](https://github.com/0xMiden/faucet/pull/300)).
+- The faucet mints assets to the operator when its balance is below a threshold. The notes that fund the operator account (P2ID notes carrying the chain's native asset) are consumed in the mint transactions ([#292](https://github.com/0xMiden/faucet/pull/292)).
+- Updated miden-client dependency to v0.16.0-rc.4 (miden-protocol / miden-standards / miden-testing v0.16.0-rc.9) and `miden-node-proto-build` to v0.16.0-rc.5, bumped the workspace version to 0.16.0-rc.3, and updated the declared `rust-version` and the Docker builder image to 1.98 ([#293](https://github.com/0xMiden/faucet/pull/293)).
+- Updated the frontend `@miden-sdk/miden-sdk` and wallet adapter dependencies to `v0.16.0-rc.6` ([#293](https://github.com/0xMiden/faucet/pull/293)).
+- Updated miden-client dependency to v0.16.0-rc.3 (miden-protocol / miden-standards / miden-testing v0.16.0-rc.6) and `miden-node-proto-build` to v0.16.0-rc.2, and bumped the workspace version to 0.16.0-rc.2 ([#286](https://github.com/0xMiden/faucet/pull/286)).
+- The operator now attaches a `FEE_SPONSORSHIP` note to every MINT note on a fee-charging chain, prepaying the network transaction that consumes it, so the faucet no longer needs a funded vault. Sponsorships are only attached for a faucet that collects fees in the chain's native fee asset ([#289](https://github.com/0xMiden/faucet/pull/289)).
+- Added fee support for chains with a non-zero `verification_base_fee`: the operator's MINT transaction commits native fee conversion info (rate 1/1) through its auth args, declares the faucet as a foreign account so the MINT note pricing FPI is served in one RPC call, and the faucet warns at startup when the faucet account holds none of the chain's fee asset ([#286](https://github.com/0xMiden/faucet/pull/286)).
+- [BREAKING] `init` refuses to create a new faucet account on a fee-charging chain, since the account cannot pay for its own deployment and nothing sponsors a deployment transaction; import an existing faucet account instead ([#286](https://github.com/0xMiden/faucet/pull/286)).
+- `api-key remove` now fails when the key is not present in the store instead of reporting a removal ([#286](https://github.com/0xMiden/faucet/pull/286)).
+- Updated miden-client dependency to v0.16.0-rc.1 ([#285](https://github.com/0xMiden/faucet/pull/285)). 
+- Migrate faucet to using a network account ([#262](https://github.com/0xMiden/faucet/pull/262)).
+- [BREAKING] `init --import` now takes an operator account file instead of a faucet account file, and requires the new `--faucet-account-id` param ([#262](https://github.com/0xMiden/faucet/pull/262)).
+- [BREAKING] Renamed the `MIDEN_FAUCET_IMPORT_ACCOUNT_PATH` env var to `MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH` ([#262](https://github.com/0xMiden/faucet/pull/262)).
+- [BREAKING] Removed the `--deploy` param and `MIDEN_FAUCET_DEPLOY` env var; a newly created faucet account is always deployed ([#262](https://github.com/0xMiden/faucet/pull/262)).
+- Improved the faucet logging ([#267](https://github.com/0xMiden/faucet/pull/267)).
+- Improved mint failure observability: emit the full error chain in the `faucet.mint` span by recording errors with their `Debug` implementation ([#267](https://github.com/0xMiden/faucet/pull/267)).
+- Fixed a one second window in which an already solved `PoW` challenge could be redeemed a second time, because a challenge was still considered valid at the exact moment its solver stopped being rate limited ([#275](https://github.com/0xMiden/faucet/pull/275)).
+- Updated `rand` to v0.10 and removed the direct `rand_chacha` dependency and updated the declared `rust-version` to `1.96.1` ([#284](https://github.com/0xMiden/faucet/pull/284)).
+- Improved frontend loading: the SDK WASM download is deferred until the page finishes loading and served brotli pre-compressed, the JS bundle is minified, the header image was converted to lossless WebP, and all static assets are served with cache headers ([#288](https://github.com/0xMiden/faucet/pull/288)).
+- Fixed the issuance counter staying empty until the next mint, the value is now cached and rendered once the metadata arrives.
+- Added loading spinners for the footer values (faucet address, tokens claimed) and disabled the token amount selector until its options load ([#288](https://github.com/0xMiden/faucet/pull/288)).
+- The frontend `/config.json` endpoint now returns a JSON object instead of a double-encoded JSON string ([#288](https://github.com/0xMiden/faucet/pull/288)).
+
+## 0.16.0-alpha.1 (2026-07-20)
+
+- Updated miden-client dependency to v0.16.0-alpha.1 ([#259](https://github.com/0xMiden/faucet/pull/259))
+
 ## 0.15.1 (2026-06-15)
 
 - Fixed faucet minting to stamp generated assets with the callback flag derived from the faucet account.

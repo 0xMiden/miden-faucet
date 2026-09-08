@@ -307,6 +307,26 @@ body {
     }
 }
 
+/* Small variant of the loader, for values that load asynchronously */
+.inline-loader {
+    width: 12px;
+    height: 12px;
+    border: 2px solid #ff5500;
+    border-bottom-color: rgb(255, 85, 0, 0.36);
+    border-right-color: rgb(255, 85, 0, 0.36);
+    border-top-color: rgb(255, 85, 0, 0.36);
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    vertical-align: middle;
+    animation: spin 2s linear infinite;
+}
+
+/* `display: inline-block` above beats the browser's `[hidden]` rule, so restore it */
+.inline-loader[hidden] {
+    display: none;
+}
+
 .minting-text {
     margin-top: 15px;
     margin-bottom: 15px;
@@ -650,6 +670,8 @@ body {
 .header-image {
     width: 100%;
     max-width: 550px;
+    /* Keep the aspect ratio from the width/height attributes when CSS scales the width */
+    height: auto;
     color: #888;
 }
 

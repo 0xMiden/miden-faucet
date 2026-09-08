@@ -4,7 +4,7 @@ Token faucet application for Miden testnet.
 
 ## Documentation
 
-For comprehensive guides, API reference, and examples, see the [Miden Faucet Documentation](https://0xmiden.github.io/miden-faucet).
+For comprehensive guides, API reference, and examples, see the [Miden Faucet Documentation](https://0xmiden.github.io/faucet).
 
 ## Running the faucet
 
@@ -17,7 +17,7 @@ The faucet comes with two CLI tools:
 make install-faucet
 ```
 
-2. Initialize the faucet server. This will generate a new account with the specified token configuration and save the account data to a local SQLite store:
+2. Initialize the faucet server. This will generate an new operator account and a network faucet account with the specified token configuration, and save the account data to a local SQLite store:
 
 ```bash
 miden-faucet init \
@@ -26,8 +26,19 @@ miden-faucet init \
   --max-supply 100000000000000000 \
   --network testnet
 ```
+
 > [!TIP]
-> This account will not be created on chain yet, creation on chain will happen on the first minting transaction.
+> `miden-faucet init` can also be run with existing operator and faucet accounts:
+>
+> ```bash
+> miden-faucet init \
+>   --import /path/to/operator_account.mac \
+>   --faucet-account-id 0x<faucet_account_id> \
+>   --network testnet
+> ```
+>
+> - `--import` — path to an exported operator account file
+> - `--faucet-account-id` — ID of a faucet account that already exists on the target network
 
 3. Start the faucet:
 ```bash
@@ -35,15 +46,44 @@ miden-faucet start \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
-## Docker
+
+## Running on a chain that charges fees (devnet)
+
+On a chain that charges transaction fees, every transaction pays in the chain's native asset out of
+the executing account's vault. The operator account is the one that pays: it covers each MINT
+transaction and prepays the network transaction that turns the MINT note into the P2ID note, so it
+must be funded with the native asset and topped up as its balance drains. `start` refuses to run
+while the operator holds none of it, and requests are answered with HTTP 503 while its balance is
+too low to cover a transaction.
+
+`init` cannot create a new faucet account on such a chain, since the account would have to pay for
+its own deployment out of an empty vault. Import an existing one with `--import` and
+`--faucet-account-id`.
+
+On devnet the operator is funded at genesis, so no manual funding is needed to get started. The
+faucet account id is the one `miden-validator genesis` prints when the network is bootstrapped:
 
 ```bash
-docker pull ghcr.io/0xmiden/miden-faucet:latest
+miden-faucet init \
+  --import faucet_operator.mac \
+  --faucet-account-id 0x<faucet_account_id> \
+  --network devnet
+
+miden-faucet start --network devnet --remote-tx-prover-url https://tx-prover.devnet.miden.io
+```
+
+## Docker
+
+Every release is published as an image tagged with that release's version. Replace `<version>` below with a tag
+from the [releases](https://github.com/0xMiden/faucet/releases) page, for example `v0.16.0-rc.1`.
+
+```bash
+docker pull ghcr.io/0xmiden/miden-faucet:<version>
 ```
 
 **Data dir:** Store defaults to `/faucet/store.sqlite`. Mount a volume at `/faucet` for persistence.
 
-Run `init` first, then `start`. 
+Run `init` first, then `start`.
 
 **1. Init — new account (testnet):**
 
@@ -54,7 +94,7 @@ docker run --rm -v miden-faucet-data:/faucet \
   -e MIDEN_FAUCET_TOKEN_SYMBOL=MIDEN \
   -e MIDEN_FAUCET_DECIMALS=6 \
   -e MIDEN_FAUCET_MAX_SUPPLY=100000000000000000 \
-  ghcr.io/0xmiden/miden-faucet:latest init
+  ghcr.io/0xmiden/miden-faucet:<version> init
 ```
 
 **2. Init — import existing account:**
@@ -63,9 +103,10 @@ docker run --rm -v miden-faucet-data:/faucet \
 docker run --rm -v miden-faucet-data:/faucet \
   -e MIDEN_FAUCET_NETWORK=testnet \
   -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
-  -e MIDEN_FAUCET_IMPORT_ACCOUNT_PATH=/faucet/accounts/faucet_miden.mac \
+  -e MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH=/faucet/accounts/faucet_operator_miden.mac \
+  -e MIDEN_FAUCET_FAUCET_ACCOUNT_ID=<FAUCET_ACCOUNT_ID> \
   -v /path/to/your/accounts:/faucet/accounts:ro \
-  ghcr.io/0xmiden/miden-faucet:latest init
+  ghcr.io/0xmiden/miden-faucet:<version> init
 ```
 
 Put `faucet_miden.mac` in your local `./accounts` dir before running.
@@ -75,7 +116,7 @@ Put `faucet_miden.mac` in your local `./accounts` dir before running.
 ```bash
 docker run --rm -p 8000:8000 -p 8080:8080 \
   -v miden-faucet-data:/faucet \
-  ghcr.io/0xmiden/miden-faucet:latest
+  ghcr.io/0xmiden/miden-faucet:<version>
 ```
 
 See `bin/faucet/.env` for all options.

@@ -5,7 +5,15 @@ permissions:
 
 on:
   push:
-    branches: [main, next]
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+# Limits workflow concurrency to only the latest commit.
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+  cancel-in-progress: true
 
 jobs:
   cargo-publish-dry-run:

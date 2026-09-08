@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.93-bookworm AS builder
+FROM rust:1.98-bookworm AS builder
 
 WORKDIR /app
 
@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# The 1.98.1 image is not published yet, so upgrade the toolchain in place.
+RUN rustup default 1.98.1
 
 # Copy source
 COPY . .
@@ -33,6 +36,18 @@ COPY --from=builder /app/target/release/miden-faucet /usr/local/bin/miden-faucet
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+LABEL org.opencontainers.image.source=https://github.com/0xMiden/faucet \
+    org.opencontainers.image.documentation=https://github.com/0xMiden/faucet \
+    org.opencontainers.image.vendor=Miden \
+    org.opencontainers.image.licenses=MIT
+
+ARG CREATED
+ARG VERSION
+ARG COMMIT
+LABEL org.opencontainers.image.created=$CREATED \
+    org.opencontainers.image.version=$VERSION \
+    org.opencontainers.image.revision=$COMMIT
 
 EXPOSE 8000 8080
 

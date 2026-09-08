@@ -24,7 +24,7 @@ build-faucet-client: ## Build triple-specific miden-faucet-client binary
 
 .PHONY: clippy
 clippy: ## Runs Clippy with configs
-	cargo clippy --locked --all-targets --all-features --workspace
+	cargo clippy --locked --all-targets --all-features --workspace -- -D warnings
 
 
 .PHONY: fix

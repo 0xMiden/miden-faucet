@@ -9,8 +9,8 @@ use axum::routing::{get, post};
 use http::HeaderValue;
 use miden_client::account::{AccountId, AccountIdError, AddressError};
 use miden_client::note_transport::grpc::GrpcNoteTransportClient;
-use miden_client::store::Store;
 use miden_client::utils::hex_to_bytes;
+use miden_faucet_lib::P2idNoteCache;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
@@ -51,8 +51,8 @@ pub struct ApiServer {
     issuance_receiver: watch::Receiver<AssetAmount>,
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
-    store: Arc<dyn Store>,
     note_transport_client: Option<Arc<GrpcNoteTransportClient>>,
+    p2id_notes: P2idNoteCache,
 }
 
 impl ApiServer {
@@ -64,9 +64,9 @@ impl ApiServer {
         pow_secret: [u8; 32],
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
-        store: Arc<dyn Store>,
         note_transport_client: Option<Arc<GrpcNoteTransportClient>>,
         issuance_receiver: watch::Receiver<AssetAmount>,
+        p2id_notes: P2idNoteCache,
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
 
@@ -78,8 +78,8 @@ impl ApiServer {
             issuance_receiver,
             rate_limiter,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
-            store,
             note_transport_client,
+            p2id_notes,
         }
     }
 

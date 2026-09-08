@@ -1,14 +1,75 @@
+use std::sync::Arc;
+
 use anyhow::Context;
-use miden_node_proto::generated::rpc::api_server;
-use miden_node_proto::generated::{self as proto};
+use miden_client::block::{BlockHeader, FeeParameters, ValidatorKeys};
+use miden_client::crypto::ecdsa_k256_keccak::SigningKey;
+use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
+use miden_client::rpc::encryption::attestation_commitment;
+use miden_client::utils::Serializable;
 use miden_testing::MockChain;
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{Request, Response, Status};
 use tonic_web::GrpcWebLayer;
-use url::Url;
 
-pub struct StubRpcApi;
+use super::proto;
+use super::proto::rpc::api_server;
+use super::proto::to_proto_block_header;
+
+/// Wire identifier of `IES_SCHEME_X25519_XCHACHA20_POLY1305`, the scheme the client seals for.
+const IES_SCHEME_X25519_XCHACHA20_POLY1305: i32 = 1;
+
+/// Chain state served by the stub.
+///
+/// The header is stable across requests and commits to a validator signing key the stub holds,
+/// so the transaction encryption key it serves carries an attestation the client can verify
+/// against the header it previously stored.
+struct StubChain {
+    genesis: BlockHeader,
+    validator_signer: SigningKey,
+    encryption_key: KeyExchangeKey,
+}
+
+impl StubChain {
+    /// Builds a chain whose genesis header charges `verification_base_fee` per verification
+    /// cycle. A base fee of zero is a fee-free chain.
+    fn new(verification_base_fee: u32) -> Self {
+        let validator_signer = SigningKey::new();
+        let encryption_key = KeyExchangeKey::new();
+        let validator_keys = ValidatorKeys::new(vec![validator_signer.public_key()])
+            .expect("a single-key validator set is valid");
+
+        // Only the validator set and the fee parameters matter to the stub's consumers; every
+        // other field is taken from a mock header so the roots stay well-formed.
+        let template = MockChain::new().latest_block_header();
+        let fee_parameters =
+            FeeParameters::new(template.fee_parameters().fee_faucet_id(), verification_base_fee);
+        let genesis = BlockHeader::new(
+            template.version(),
+            template.prev_block_commitment(),
+            template.block_num(),
+            template.chain_commitment(),
+            template.account_root(),
+            template.nullifier_root(),
+            template.note_root(),
+            template.tx_commitment(),
+            template.tx_kernel_commitment(),
+            validator_keys,
+            fee_parameters,
+            template.timestamp(),
+        );
+
+        StubChain {
+            genesis,
+            validator_signer,
+            encryption_key,
+        }
+    }
+}
+
+pub struct StubRpcApi {
+    chain: Arc<StubChain>,
+}
 
 #[tonic::async_trait]
 impl api_server::Api for StubRpcApi {
@@ -16,12 +77,41 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc::BlockHeaderByNumberRequest>,
     ) -> Result<Response<proto::rpc::BlockHeaderByNumberResponse>, Status> {
-        let mock_chain = MockChain::new();
-
         Ok(Response::new(proto::rpc::BlockHeaderByNumberResponse {
-            block_header: Some(mock_chain.latest_block_header().into()),
+            block_header: Some(to_proto_block_header(&self.chain.genesis)),
             mmr_path: None,
             chain_length: None,
+        }))
+    }
+
+    async fn get_transaction_encryption_key(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<proto::transaction::TransactionEncryptionKey>, Status> {
+        let chain = &self.chain;
+        let key_id = b"stub-key-id".to_vec();
+        let public_key = chain.encryption_key.public_key().to_bytes();
+
+        // The commitment layout is mirrored from the validator; signing it with the key
+        // committed in the stub's header makes the attestation verify on the client.
+        let commitment = attestation_commitment(
+            IES_SCHEME_X25519_XCHACHA20_POLY1305 as u32,
+            &key_id,
+            chain.genesis.commitment(),
+            &public_key,
+            None,
+        );
+        let signature = chain.validator_signer.sign(commitment);
+
+        Ok(Response::new(proto::transaction::TransactionEncryptionKey {
+            scheme: IES_SCHEME_X25519_XCHACHA20_POLY1305,
+            key_id,
+            public_key,
+            attestations: vec![proto::transaction::ValidatorKeyAttestation {
+                validator_public_key: chain.validator_signer.public_key().to_bytes(),
+                signature: signature.to_bytes(),
+            }],
+            next_key: None,
         }))
     }
 
@@ -168,13 +258,11 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<proto::rpc::SyncChainMmrRequest>,
     ) -> Result<Response<proto::rpc::SyncChainMmrResponse>, Status> {
-        let mock_chain = MockChain::new();
-
         Ok(Response::new(proto::rpc::SyncChainMmrResponse {
             block_range: Some(proto::rpc::BlockRange { block_from: 0, block_to: 0 }),
             mmr_delta: Some(proto::primitives::MmrDelta { forest: 0, data: vec![] }),
-            block_header: Some(mock_chain.latest_block_header().into()),
-            block_signature: None,
+            block_header: Some(to_proto_block_header(&self.chain.genesis)),
+            block_signatures: vec![],
         }))
     }
 
@@ -186,16 +274,23 @@ impl api_server::Api for StubRpcApi {
     }
 }
 
-pub async fn serve_stub(endpoint: &Url) -> anyhow::Result<()> {
-    let addr = endpoint
-        .socket_addrs(|| None)
-        .context("failed to convert endpoint to socket address")?
-        .into_iter()
-        .next()
-        .unwrap();
+/// Serves a fee-free stub chain on an already-bound listener.
+///
+/// The listener is bound by the caller so the port is accepting connections before the caller
+/// hands out its URL; binding it here instead would leave a window where clients are refused.
+pub async fn serve_stub(listener: TcpListener) -> anyhow::Result<()> {
+    serve_stub_with_fee(listener, 0).await
+}
 
-    let listener = TcpListener::bind(addr).await?;
-    let api_service = api_server::ApiServer::new(StubRpcApi);
+/// Serves a stub chain whose genesis charges `verification_base_fee` on an already-bound
+/// listener. See [`serve_stub`].
+pub async fn serve_stub_with_fee(
+    listener: TcpListener,
+    verification_base_fee: u32,
+) -> anyhow::Result<()> {
+    let api_service = api_server::ApiServer::new(StubRpcApi {
+        chain: Arc::new(StubChain::new(verification_base_fee)),
+    });
 
     tonic::transport::Server::builder()
         .accept_http1(true)

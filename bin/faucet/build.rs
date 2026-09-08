@@ -5,6 +5,13 @@ use std::{env, fs};
 fn main() {
     println!("cargo:rerun-if-changed=frontend");
 
+    // Generate the node RPC protobuf bindings used by the stub node in tests. The generated code
+    // is only referenced from the `#[cfg(test)]` testing module.
+    tonic_prost_build::configure()
+        .build_client(false)
+        .compile_fds(miden_node_proto_build::rpc_api_descriptor())
+        .expect("node RPC protos should compile");
+
     let build_dir = env::var("OUT_DIR").expect("OUT_DIR should be set");
     let target_dir = Path::new(&build_dir).join("frontend");
 
@@ -28,6 +35,24 @@ fn main() {
         .expect("npm run build should succeed");
 
     assert!(npm_build.success(), "npm run build failed");
+
+    compress_wasm(&target_dir);
+}
+
+/// Pre-compress the SDK WASM so the server can serve the compressed bytes directly.
+fn compress_wasm(target_dir: &Path) {
+    let wasm_path =
+        target_dir.join("node_modules/@miden-sdk/miden-sdk/dist/st/assets/miden_client_web.wasm");
+    let wasm = fs::read(&wasm_path).expect("SDK wasm should be readable");
+
+    //.Quality 9 gets close to the maximum ratio while keeping the build step fast.
+    let params = brotli::enc::BrotliEncoderParams { quality: 9, ..Default::default() };
+    let mut compressed = Vec::new();
+    brotli::BrotliCompress(&mut wasm.as_slice(), &mut compressed, &params)
+        .expect("wasm brotli compression should succeed");
+
+    fs::write(wasm_path.with_extension("wasm.br"), compressed)
+        .expect("compressed wasm should be written");
 }
 
 /// Copy all files from source directory to destination directory. Skips inner directories.

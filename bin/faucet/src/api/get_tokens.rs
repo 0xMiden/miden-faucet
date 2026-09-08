@@ -118,7 +118,9 @@ impl GetTokenError {
             Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited(_))) => {
                 StatusCode::TOO_MANY_REQUESTS
             },
-            Self::InvalidRequest(_) | Self::MintError(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidRequest(_) | Self::MintError(MintError::AvailableSupplyExceeded) => {
+                StatusCode::BAD_REQUEST
+            },
             Self::FaucetOverloaded | Self::FaucetClosed => StatusCode::SERVICE_UNAVAILABLE,
             Self::FaucetReturnChannelClosed => StatusCode::INTERNAL_SERVER_ERROR,
         }
