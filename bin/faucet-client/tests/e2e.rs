@@ -122,21 +122,24 @@ async fn start_faucet(faucet_url: &str, node_url: &str, funding_service_url: &st
         token_amounts: vec![1, 10, 100],
     };
 
-    std::thread::spawn(move || {
+    let faucet = std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("the faucet runtime should build");
 
-        runtime.block_on(async {
-            Box::pin(run_faucet_command(Cli { command }))
-                .await
-                .expect("the faucet should serve");
-        });
+        runtime.block_on(Box::pin(run_faucet_command(Cli { command })))
     });
 
     let metadata_url = format!("{faucet_url}/get_metadata");
     for attempt in 1..=FAUCET_ATTEMPTS {
+        // A faucet that fails to start, e.g. because the funding service is unreachable, stops
+        // right away, so there is no point in waiting for it to answer.
+        if faucet.is_finished() {
+            let result = faucet.join().expect("the faucet thread should not panic");
+            panic!("the faucet stopped before serving: {result:?}");
+        }
+
         if reqwest::get(&metadata_url)
             .await
             .is_ok_and(|response| response.status().is_success())
